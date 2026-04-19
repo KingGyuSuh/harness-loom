@@ -4,7 +4,7 @@
 
 [English](README.md) | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [Español](docs/README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Status:** 0.1.3 — early release. The public surface may iterate before 1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
+> **Status:** 0.1.4 — early release. The public surface may iterate before 1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
 
 `harness-loom` is a factory plugin that installs a runtime harness into a target repository and grows it pair by pair.
 
@@ -101,7 +101,7 @@ Public git repo (GitHub shorthand):
 Pin a specific tag:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # pin a tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.3
+codex marketplace add KingGyuSuh/harness-loom@v0.1.4
 ```
 
 Then, inside the Codex TUI, run `/plugins`, open the `Harness Loom` marketplace entry, and install the plugin.

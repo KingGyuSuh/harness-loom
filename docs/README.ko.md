@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#멀티-플랫폼)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.1.3 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
+> **상태:** 0.1.4 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
 
 `harness-loom`은 대상 리포지토리에 런타임 하네스를 설치하고, 프로젝트에 맞는 pair를 하나씩 키워 가는 팩토리 플러그인입니다.
 
@@ -101,7 +101,7 @@ claude --plugin-dir ./plugins/harness-loom
 특정 태그 고정:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # 태그 고정
-codex marketplace add KingGyuSuh/harness-loom@v0.1.3
+codex marketplace add KingGyuSuh/harness-loom@v0.1.4
 ```
 
 그다음 Codex TUI 안에서 `/plugins` 를 실행하고, `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.

@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Weave Producer-Reviewer agent harnesses with auto-execution hooks and self-improving skill loops.",
-    "version": "0.1.3"
+    "version": "0.1.4"
   },
   "plugins": [
     {
       "name": "harness-loom",
       "source": "./plugins/harness-loom",
       "description": "Producer-Reviewer harness generator for Claude Code, Codex CLI, and Gemini CLI.",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "tags": ["harness", "agent-team", "producer-reviewer", "orchestration", "multi-platform"],
       "category": "productivity"
     }

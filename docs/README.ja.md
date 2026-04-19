@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#マルチプラットフォーム)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **ステータス:** 0.1.3 — 初期公開版です。1.0 までは公開インターフェースが変わる可能性があります。重要な変更は [CHANGELOG](../CHANGELOG.md) を確認してください。
+> **ステータス:** 0.1.4 — 初期公開版です。1.0 までは公開インターフェースが変わる可能性があります。重要な変更は [CHANGELOG](../CHANGELOG.md) を確認してください。
 
 `harness-loom` は、対象リポジトリにランタイムハーネスを導入し、pair ごとに少しずつ育てていくファクトリプラグインです。
 
@@ -101,7 +101,7 @@ claude --plugin-dir ./plugins/harness-loom
 特定タグを固定:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # タグを固定
-codex marketplace add KingGyuSuh/harness-loom@v0.1.3
+codex marketplace add KingGyuSuh/harness-loom@v0.1.4
 ```
 
 その後、Codex TUI で `/plugins` を実行し、`Harness Loom` marketplace エントリを開いてプラグインをインストールします。
