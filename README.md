@@ -1,11 +1,11 @@
-<img src="./assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
+<img src="./plugins/harness-loom/assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
 
 # harness-loom
 
 [English](README.md) | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [Español](docs/README.es.md)
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](./CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multi-platform)
 
 **Tune a production-specific harness on top of the generic harness shipped by modern coding assistants.**
@@ -221,6 +221,17 @@ Use `harness-loom` when:
 
 Do not reach for it if you are still evaluating whether the underlying model stack can handle your work at all. This project assumes the generic harness is already useful and focuses on shaping it into a production-specific system.
 
+## Roadmap
+
+Live plan is tracked in [GitHub Milestones](https://github.com/KingGyuSuh/harness-loom/milestones). In short:
+
+- **[v0.2.0](https://github.com/KingGyuSuh/harness-loom/milestone/1)** — break out of the "mirror `.claude/` verbatim" constraint for more authoring flexibility, and add automated docs management.
+- **[v0.3.0](https://github.com/KingGyuSuh/harness-loom/milestone/2)** — auto-recommend and generate producer-reviewer agent sets from goal + repo analysis.
+- **[v0.4.0](https://github.com/KingGyuSuh/harness-loom/milestone/3)** — execution logging and feedback-loop-driven self-improvement suggestions.
+- **[v0.5.0](https://github.com/KingGyuSuh/harness-loom/milestone/4)** — parallel execution mode and a token-efficient mode.
+
+Surface may still iterate pre-1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
+
 ## Contributing
 
 Issues, bug fixes, and rubric refinements are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for the dev loop, smoke-test commands, and scope guidance (new user-invocable skills or orchestrator-rhythm changes start as a discussion). For security reports, see [SECURITY.md](./SECURITY.md). All participation is governed by the [Code of Conduct](./CODE_OF_CONDUCT.md).
@@ -231,4 +242,5 @@ Issues, bug fixes, and rubric refinements are welcome. See [CONTRIBUTING.md](./C
 - [CONTRIBUTING.md](./CONTRIBUTING.md) - development setup and PR flow
 - [SECURITY.md](./SECURITY.md) - responsible disclosure
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) - community expectations
-- [LICENSE](./LICENSE) - MIT
+- [LICENSE](./LICENSE) - Apache 2.0
+- [NOTICE](./NOTICE) - required attribution notice per Apache 2.0

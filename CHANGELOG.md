@@ -6,6 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **License changed from MIT to Apache License 2.0** ahead of the
+  public flip. Apache 2.0 adds an explicit patent grant, a
+  patent-retaliation clause, and the NOTICE attribution mechanism, which
+  fits a methodology-heavy OSS project and aligns with the licensing of
+  adjacent assistant-platform ecosystems. Safe to relicense because the
+  repo is still private and has no external contributors. Plugin
+  manifests (`plugins/harness-loom/.claude-plugin/plugin.json`,
+  `.codex-plugin/plugin.json`) now declare `"license": "Apache-2.0"`,
+  and all READMEs / `TERMS.md` reference the new license.
+
+### Added
+
+- **`NOTICE` file** at repo root, required by Apache 2.0.
+- **Public roadmap.** GitHub Milestones `v0.2.0`–`v0.5.0` opened as the
+  single source of truth for forward-looking work, and `README.md` now
+  carries a short `## Roadmap` section linking to them.
+- **Branching and merge policy** documented in `CONTRIBUTING.md`
+  (trunk-based, one-issue-per-branch, squash-merge, rebase-on-main).
+
+### Fixed
+
+- **Broken logo paths in all READMEs.** After the 0.1.3 monorepo
+  relocation, `assets/` lives under `plugins/harness-loom/assets/`, but
+  the five READMEs still pointed at the old root-level path. Image
+  references in `README.md` and `docs/README.{ko,ja,zh-CN,es}.md` now
+  resolve correctly on GitHub.
+
 ## [0.1.3] — 2026-04-19
 
 ### Changed

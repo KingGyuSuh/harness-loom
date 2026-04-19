@@ -1,11 +1,11 @@
-<img src="../assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
+<img src="../plugins/harness-loom/assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
 
 # harness-loom
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multiplataforma)
 
 **Construye un harness orientado a producción sobre el harness genérico que ya traen los asistentes de código modernos.**
@@ -231,4 +231,5 @@ Se agradecen issues, correcciones de errores y mejoras de la rúbrica. Consulta 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - entorno de desarrollo y flujo de PR
 - [SECURITY.md](../SECURITY.md) - divulgación responsable
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) - expectativas de la comunidad
-- [LICENSE](../LICENSE) - MIT
+- [LICENSE](../LICENSE) - Apache 2.0
+- [NOTICE](../NOTICE) - aviso de atribución requerido por Apache 2.0

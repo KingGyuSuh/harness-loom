@@ -1,11 +1,11 @@
-<img src="../assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
+<img src="../plugins/harness-loom/assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
 
 # harness-loom
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#멀티-플랫폼)
 
 **최신 코딩 어시스턴트가 제공하는 범용 harness 위에, 프로덕션에 맞는 하네스를 입히세요.**
@@ -231,4 +231,5 @@ plugins/harness-loom/skills/harness-init/references/runtime/ 시드 -> .claude/s
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - 개발 설정 및 PR 흐름
 - [SECURITY.md](../SECURITY.md) - 책임 있는 공개
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) - 커뮤니티 기대 사항
-- [LICENSE](../LICENSE) - MIT
+- [LICENSE](../LICENSE) - Apache 2.0
+- [NOTICE](../NOTICE) - Apache 2.0 귀속 고지

@@ -1,11 +1,11 @@
-<img src="../assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
+<img src="../plugins/harness-loom/assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
 
 # harness-loom
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#マルチプラットフォーム)
 
 **最新のコーディングアシスタントが備える汎用ハーネスの上に、本番運用向けのハーネスを重ねていくためのツールです。**
@@ -231,4 +231,5 @@ Issue、バグ修正、ルーブリック改善の提案を歓迎します。開
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - 開発設定と PR フロー
 - [SECURITY.md](../SECURITY.md) - 脆弱性の責任ある開示
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) - コミュニティの期待事項
-- [LICENSE](../LICENSE) - MIT
+- [LICENSE](../LICENSE) - Apache 2.0
+- [NOTICE](../NOTICE) - Apache 2.0 に基づく帰属表示

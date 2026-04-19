@@ -67,9 +67,18 @@ project it initializes, and `gemini` auto-loads that workspace-scope tree.
 - Changes to the orchestrator rhythm (pair / response contract).
 - New platform targets beyond Claude / Codex / Gemini.
 
+## Branching and merge policy
+
+- **Trunk-based.** Branch off `main`, PR back into `main`. Don't merge feature branches into each other.
+- **One issue per branch, one PR per branch.** Keep branches short-lived; delete after merge.
+- **Naming:** `feat/<slug>`, `fix/<slug>`, `docs/<slug>`, `chore/<slug>`. Prefix with the issue number if one exists (`feat/12-parallel-mode`).
+- **Rebase on `main`, don't merge `main` into your branch.** Resolve conflicts by rebasing so history stays linear.
+- **Squash merge only.** Each PR lands as a single commit on `main`; the PR title becomes the commit subject and should match the [commit style](#making-a-change) below.
+- **Parallel work is fine** — milestone items that touch different files (CI, `install.ts`, `examples/`, docs) can ship out of order. Coordinate only when two PRs edit the same file.
+
 ## Making a change
 
-1. **Fork and branch.** Branch name should be a short slug (`fix/codex-toml-schema`, `feat/pair-hint-flag`).
+1. **Fork and branch.** Follow the naming rules above (e.g. `feat/pair-hint-flag`, `fix/codex-toml-schema`).
 2. **Run the test suite.**
    ```bash
    node --test tests/*.test.mjs

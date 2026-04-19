@@ -1,11 +1,11 @@
-<img src="../assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
+<img src="../plugins/harness-loom/assets/harness-loom-small.png" alt="harness-loom logo" width="96" align="left" style="margin-right:16px" />
 
 # harness-loom
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
 [![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#多平台)
 
 **在现代编码助手自带的通用 harness 之上，搭建一套更贴合生产环境的工作台。**
@@ -231,4 +231,5 @@ plugins/harness-loom/skills/harness-init/references/runtime/ 播种 -> .claude/s
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - 开发设置与 PR 流程
 - [SECURITY.md](../SECURITY.md) - 负责任披露
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) - 社区行为预期
-- [LICENSE](../LICENSE) - MIT
+- [LICENSE](../LICENSE) - Apache 2.0
+- [NOTICE](../NOTICE) - Apache 2.0 要求的归属声明

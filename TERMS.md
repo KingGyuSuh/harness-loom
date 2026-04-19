@@ -1,6 +1,6 @@
 # Terms of Service
 
-Harness Loom is provided under the MIT License included in this repository.
+Harness Loom is provided under the Apache License, Version 2.0 included in this repository (see [LICENSE](./LICENSE) and [NOTICE](./NOTICE)).
 
 It is offered "as is" without warranty. You are responsible for reviewing and validating generated code, prompts, scripts, and repository changes before use.
 

@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/KingGyuSuh/harness-loom",
   "repository": "https://github.com/KingGyuSuh/harness-loom",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": [
     "agents",
     "harness",
