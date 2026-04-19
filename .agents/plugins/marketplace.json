@@ -1,0 +1,20 @@
+{
+  "name": "harness-loom-marketplace",
+  "interface": {
+    "displayName": "Harness Loom"
+  },
+  "plugins": [
+    {
+      "name": "harness-loom",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Coding"
+    }
+  ]
+}

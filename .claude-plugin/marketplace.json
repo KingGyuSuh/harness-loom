@@ -1,0 +1,20 @@
+{
+  "name": "harness-loom",
+  "owner": {
+    "name": "KingGyuSuh"
+  },
+  "metadata": {
+    "description": "Weave Producer-Reviewer agent harnesses with auto-execution hooks and self-improving skill loops.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "harness-loom",
+      "source": "./",
+      "description": "Producer-Reviewer harness generator for Claude Code, Codex CLI, and Gemini CLI.",
+      "version": "0.1.0",
+      "tags": ["harness", "agent-team", "producer-reviewer", "orchestration", "multi-platform"],
+      "category": "productivity"
+    }
+  ]
+}

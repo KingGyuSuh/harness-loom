@@ -1,0 +1,24 @@
+{
+  "name": "harness-loom",
+  "version": "0.1.0",
+  "description": "Seed a planner + producer-reviewer pair harness into any repository, then grow it pair by pair.",
+  "author": {
+    "name": "KingGyuSuh",
+    "email": "tjdhkdrb@gmail.com",
+    "url": "https://github.com/KingGyuSuh"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/KingGyuSuh/harness-loom",
+  "repository": "https://github.com/KingGyuSuh/harness-loom",
+  "keywords": [
+    "agents",
+    "harness",
+    "orchestration",
+    "producer-reviewer",
+    "workflow",
+    "claude-code",
+    "codex",
+    "gemini",
+    "multi-platform"
+  ]
+}

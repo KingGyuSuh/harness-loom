@@ -1,0 +1,45 @@
+{
+  "name": "harness-loom",
+  "version": "0.1.0",
+  "description": "Install and grow producer-reviewer harnesses for repository work.",
+  "author": {
+    "name": "KingGyuSuh",
+    "email": "tjdhkdrb@gmail.com",
+    "url": "https://github.com/KingGyuSuh"
+  },
+  "homepage": "https://github.com/KingGyuSuh/harness-loom",
+  "repository": "https://github.com/KingGyuSuh/harness-loom",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "harness",
+    "orchestration",
+    "producer-reviewer",
+    "workflow",
+    "coding"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Harness Loom",
+    "shortDescription": "Install and grow producer-reviewer harnesses in repos",
+    "longDescription": "Harness Loom seeds a planning and orchestration harness into a target repository, then helps you add, improve, and split project-specific producer-reviewer pairs.",
+    "developerName": "KingGyuSuh",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/KingGyuSuh/harness-loom",
+    "privacyPolicyURL": "https://github.com/KingGyuSuh/harness-loom/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/KingGyuSuh/harness-loom/blob/main/TERMS.md",
+    "defaultPrompt": [
+      "Install the harness foundation into this repository.",
+      "Add a producer-reviewer pair for a new project workflow.",
+      "Improve or split an overloaded harness pair."
+    ],
+    "brandColor": "#0F766E",
+    "composerIcon": "./assets/harness-loom-small.png",
+    "logo": "./assets/harness-loom.png",
+    "screenshots": []
+  }
+}
