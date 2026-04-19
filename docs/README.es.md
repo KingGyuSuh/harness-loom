@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multiplataforma)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Estado:** 0.1.2 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
+> **Estado:** 0.1.3 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
 
 `harness-loom` es un plugin de fábrica que instala un harness de ejecución en un repositorio de destino y lo va ampliando pair a pair.
 
@@ -74,33 +74,35 @@ Después puedes añadir pairs específicos del dominio con `/harness-pair-dev` y
 
 ## Instalación
 
+La fábrica se distribuye con el layout monorepo estándar `plugins/<name>/`: la raíz del repositorio contiene `.claude-plugin/marketplace.json` y `.agents/plugins/marketplace.json`, y el árbol real del plugin vive bajo `plugins/harness-loom/`. **La fábrica se ejecuta en Claude Code o Codex CLI.** Gemini CLI está soportado como *consumidor de runtime* (ver la sección "Gemini CLI (runtime only)" más abajo).
+
 ### Claude Code
 
 Prueba rápida local (sesión única, sin marketplace):
 
 ```bash
-claude --plugin-dir ./harness-loom
+claude --plugin-dir ./plugins/harness-loom
 ```
 
 Instalación persistente desde el marketplace dentro de la sesión de Claude Code. Checkout local:
 
 ```text
-/plugin marketplace add ./harness-loom
-/plugin install harness-loom@harness-loom
+/plugin marketplace add ./
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 Repositorio git público (GitHub shorthand):
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
-/plugin install harness-loom@harness-loom
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 Fijar un tag específico:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
-/plugin install harness-loom@harness-loom
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 ### Codex CLI
@@ -115,20 +117,18 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # fijar un tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.2
+codex marketplace add KingGyuSuh/harness-loom@v0.1.3
 ```
 
 Después, dentro del TUI de Codex, ejecuta `/plugins`, abre la entrada `Harness Loom` del marketplace e instala el plugin.
 
-### Gemini CLI
+### Gemini CLI (runtime only)
 
-Instala como extensión de Gemini (si aún no estás autenticado, usa `gemini auth` primero):
+La **fábrica** de harness-loom **no puede instalarse como extensión de Gemini** — el loader de extensiones de Gemini hardcodea la raíz del repositorio como raíz de la extensión, lo cual choca con la convención monorepo `plugins/<name>/` que adopta la fábrica. En cambio, Gemini CLI está soportado como **consumidor del runtime harness** desplegado en un proyecto objetivo:
 
-```bash
-gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
-```
-
-Gemini registra automáticamente los tres skills de fábrica (`harness-init`, `harness-pair-dev`, `harness-sync`) mediante `/skills`. Activa el que necesites y úsalo desde el prompt. Los alias de slash (`/harness-init` etc., al mismo nivel que Claude / Codex) llegarán en una release posterior.
+1. Desde Claude Code o Codex CLI, instala la fábrica y ejecuta `/harness-init` + `/harness-sync --provider gemini` dentro de tu proyecto objetivo. Esto despliega el runtime del lado del objetivo (`.harness/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` con el hook `AfterAgent`).
+2. Haz `cd` a ese proyecto objetivo y ejecuta `gemini`. La CLI autoflea los agents/skills/hooks workspace-scope bajo `.gemini/`.
+3. Tu ciclo orchestrator corre end-to-end en Gemini — el authoring de la fábrica sigue en Claude / Codex, la ejecución puede ser en cualquiera de las tres.
 
 ## Inicio rápido
 
@@ -183,10 +183,10 @@ Hay varios términos que aparecen una y otra vez en comandos, archivos y estados
 ```text
 factory (este repositorio)                       target project
 -----------------------------------------      ----------------------------------
-skills/harness-init/          instala ->       .harness/{state,events,hook,epics}/
-skills/harness-pair-dev/      escribe ->       .claude/agents/<slug>-producer.md
-skills/harness-sync/          deriva  ->       .claude/agents/<reviewer>.md
-skills/harness-init/references/runtime/ siembra -> .claude/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-init/          instala ->       .harness/{state,events,hook,epics}/
+plugins/harness-loom/skills/harness-pair-dev/      escribe ->       .claude/agents/<slug>-producer.md
+plugins/harness-loom/skills/harness-sync/          deriva  ->       .claude/agents/<reviewer>.md
+plugins/harness-loom/skills/harness-init/references/runtime/ siembra -> .claude/skills/<slug>/SKILL.md
                                                .claude/settings.json
                                                      |
                                                      +-- /harness-sync (opcional)

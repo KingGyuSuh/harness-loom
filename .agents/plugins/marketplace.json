@@ -8,7 +8,7 @@
       "name": "harness-loom",
       "source": {
         "source": "local",
-        "path": "./"
+        "path": "./plugins/harness-loom"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#マルチプラットフォーム)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **ステータス:** 0.1.2 — 初期公開版です。1.0 までは公開インターフェースが変わる可能性があります。重要な変更は [CHANGELOG](../CHANGELOG.md) を確認してください。
+> **ステータス:** 0.1.3 — 初期公開版です。1.0 までは公開インターフェースが変わる可能性があります。重要な変更は [CHANGELOG](../CHANGELOG.md) を確認してください。
 
 `harness-loom` は、対象リポジトリにランタイムハーネスを導入し、pair ごとに少しずつ育てていくファクトリプラグインです。
 
@@ -74,33 +74,35 @@ target project
 
 ## インストール
 
+ファクトリは標準の `plugins/<name>/` モノレポレイアウトで配布されます。リポジトリ root に `.claude-plugin/marketplace.json` と `.agents/plugins/marketplace.json` があり、実際のプラグインツリーは `plugins/harness-loom/` 配下に置かれます。**ファクトリ自体は Claude Code または Codex CLI で動かします。** Gemini CLI は *ランタイム消費者* として対応しています (下の「Gemini CLI (runtime only)」セクション)。
+
 ### Claude Code
 
-ローカル動作確認用 (単一セッション、marketplace なしで即ロード):
+ローカル動作確認用 (単一セッション、marketplace なし):
 
 ```bash
-claude --plugin-dir ./harness-loom
+claude --plugin-dir ./plugins/harness-loom
 ```
 
 永続インストールはセッション内 marketplace フローを使います。ローカル checkout:
 
 ```text
-/plugin marketplace add ./harness-loom
-/plugin install harness-loom@harness-loom
+/plugin marketplace add ./
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 公開 git リポジトリ (GitHub shorthand):
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
-/plugin install harness-loom@harness-loom
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 特定タグを固定:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
-/plugin install harness-loom@harness-loom
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 ### Codex CLI
@@ -115,20 +117,18 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # タグを固定
-codex marketplace add KingGyuSuh/harness-loom@v0.1.2
+codex marketplace add KingGyuSuh/harness-loom@v0.1.3
 ```
 
 その後、Codex TUI で `/plugins` を実行し、`Harness Loom` marketplace エントリを開いてプラグインをインストールします。
 
-### Gemini CLI
+### Gemini CLI (runtime only)
 
-Gemini extension としてインストールします (未認証なら先に `gemini auth`):
+harness-loom の **ファクトリ自体は Gemini extension としてインストールできません** — Gemini の extension ローダーはリポジトリ root を extension root にハードコードしており、ファクトリが採用している Codex / Claude の `plugins/<name>/` モノレポ規約と衝突します。代わりに Gemini CLI は **ターゲットプロジェクトに配置されたランタイムハーネスを消費する** プラットフォームとして対応します。
 
-```bash
-gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
-```
-
-Gemini は 3 つのファクトリ skill (`harness-init`, `harness-pair-dev`, `harness-sync`) を `/skills` に自動登録します。必要な skill を有効化してプロンプトから呼び出してください。Claude / Codex と同じ slash コマンド別名 (`/harness-init` など) は将来のリリースで対応予定です。
+1. Claude Code または Codex CLI でファクトリをインストールし、ターゲットプロジェクトで `/harness-init` + `/harness-sync --provider gemini` を実行します。これによりターゲット側ランタイム (`.harness/`, `.gemini/agents/`, `.gemini/skills/`, `AfterAgent` フック付きの `.gemini/settings.json`) が導入されます。
+2. そのターゲットプロジェクトへ `cd` して `gemini` を起動します。CLI が workspace スコープの `.gemini/agents/*.md`, `.gemini/skills/<slug>/SKILL.md`, `.gemini/settings.json` の `AfterAgent` フックを自動ロードします。
+3. オーケストレータサイクルがそのまま Gemini で回ります — ファクトリ著作は Claude / Codex、実行は三プラットフォームどれでも。
 
 ## クイックスタート
 
@@ -183,10 +183,10 @@ echo "curses を使った軽量なターミナル Snake ゲームを出荷する
 ```text
 factory (このリポジトリ)                          target project
 -----------------------------------------      ----------------------------------
-skills/harness-init/          installs ->      .harness/{state,events,hook,epics}/
-skills/harness-pair-dev/      authors  ->      .claude/agents/<slug>-producer.md
-skills/harness-sync/          derives  ->      .claude/agents/<reviewer>.md
-skills/harness-init/references/runtime/ seeds -> .claude/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-init/          installs ->      .harness/{state,events,hook,epics}/
+plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .claude/agents/<slug>-producer.md
+plugins/harness-loom/skills/harness-sync/          derives  ->      .claude/agents/<reviewer>.md
+plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .claude/skills/<slug>/SKILL.md
                                                .claude/settings.json
                                                      |
                                                      +-- /harness-sync (opt-in)

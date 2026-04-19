@@ -6,6 +6,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] — 2026-04-19
+
+### Changed
+
+- **Factory relocated to `plugins/harness-loom/` monorepo layout.** The repo
+  now follows the Codex/Claude standard layout: `.claude-plugin/marketplace.json`
+  and `.agents/plugins/marketplace.json` at the root point at
+  `./plugins/harness-loom`, and the actual plugin tree (skills, assets,
+  `.claude-plugin/plugin.json`, `.codex-plugin/plugin.json`) lives under
+  `plugins/harness-loom/`. This aligns with the 227-plugin
+  [`openai/plugins`](https://github.com/openai/plugins) standard and fixes
+  the `codex marketplace add ... → local plugin source path must not be
+  empty` error caused by the previous root-as-plugin layout.
+- **Gemini CLI reclassified as runtime-only.** Because Gemini's extension
+  loader hardcodes the repo root as the extension root, it is incompatible
+  with the `plugins/<name>/` monorepo layout adopted above. The factory's
+  own `gemini-extension.json` has been removed. Gemini is still fully
+  supported as a consumer of harnesses installed into target projects:
+  `/harness-sync --provider gemini` deploys the target-side `.gemini/` tree
+  that `gemini` auto-loads from workspace scope (agents, skills, hooks).
+
+### Fixed
+
+- **Gemini hook shape in `sync.ts`** aligned to the official 2-layer
+  nested schema (`hooks.AfterAgent[].hooks[].type|command|timeout`). The
+  prior flat shorthand `{ AfterAgent: [{ command }] }` was invalid per
+  [`docs/hooks/reference.md`](https://github.com/google-gemini/gemini-cli/blob/main/docs/hooks/reference.md)
+  and would have been rejected by Gemini's hook loader.
+- **Claude marketplace install slug** — READMEs now correctly reference
+  `harness-loom@harness-loom-marketplace` (the name from
+  `.claude-plugin/marketplace.json`) instead of the earlier incorrect
+  `harness-loom@harness-loom`.
+- **Claude local-dir install path** updated to
+  `claude --plugin-dir ./plugins/harness-loom` to match the new layout.
+
 ## [0.1.2] — 2026-04-19
 
 ### Added
@@ -98,7 +133,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.3
 [0.1.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.2
 [0.1.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.1
 [0.1.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.0

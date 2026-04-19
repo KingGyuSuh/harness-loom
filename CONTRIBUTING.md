@@ -31,21 +31,32 @@ claude --plugin-dir /absolute/path/to/harness-loom
 ## Project layout
 
 ```
-skills/
-  harness-init/          # /harness-init (user-invocable)
-  harness-pair-dev/      # /harness-pair-dev (user-invocable)
-  harness-sync/          # /harness-sync (user-invocable)
-skills/harness-init/references/runtime/  # target-side runtime templates (`*.template.md`)
-.claude-plugin/          # Claude Code manifest
-.codex-plugin/           # Codex CLI manifest
-.agents/plugins/         # Gemini CLI marketplace
+.claude-plugin/marketplace.json     # Claude Code marketplace (source: ./plugins/harness-loom)
+.agents/plugins/marketplace.json    # Codex marketplace (source: {local, ./plugins/harness-loom})
+plugins/
+  harness-loom/                     # factory plugin root (standard monorepo layout)
+    .claude-plugin/plugin.json      # Claude plugin manifest
+    .codex-plugin/plugin.json       # Codex plugin manifest
+    assets/                         # logos referenced by plugin.json
+    skills/
+      harness-init/                 # /harness-init (user-invocable)
+      harness-pair-dev/             # /harness-pair-dev (user-invocable)
+      harness-sync/                 # /harness-sync (user-invocable)
+      harness-init/references/runtime/   # target-side runtime templates (`*.template.md`)
+tests/                              # node:test integration suite
+docs/README.*.md                    # translated READMEs
 ```
+
+Gemini CLI has no factory-level manifest: Gemini's extension loader expects the
+manifest at repo root, which conflicts with the monorepo layout. Gemini support
+exists at the *runtime* layer — `sync.ts` deploys `.gemini/` into each target
+project it initializes, and `gemini` auto-loads that workspace-scope tree.
 
 ## What changes are in scope
 
 **Happy to accept:**
 - Bug fixes with a minimal reproducing E2E case.
-- Factory rubric improvements (`skills/harness-pair-dev/references/example-skills/*.md`).
+- Factory rubric improvements (`plugins/harness-loom/skills/harness-pair-dev/references/example-skills/*.md`).
 - Documentation polish, especially in English-facing materials.
 - Platform spec conformance fixes (Codex TOML, Gemini frontmatter).
 - Additional runtime template refinements that don't break existing
@@ -90,8 +101,8 @@ skills/harness-init/references/runtime/  # target-side runtime templates (`*.tem
 
 ## Skill authoring discipline
 
-Skills under `skills/` and runtime templates under
-`skills/harness-init/references/runtime/` follow the
+Skills under `plugins/harness-loom/skills/` and runtime templates under
+`plugins/harness-loom/skills/harness-init/references/runtime/` follow the
 factory's own rubric:
 
 - Description acts as a trigger mechanism. "Use when X / Invoke whenever Y"
@@ -102,14 +113,14 @@ factory's own rubric:
 - Sections are ordered `Design Thinking → Methodology → Evaluation Criteria → Taboos`.
 - Body explains *why*, not just what. Avoid oppressive MUSTs; give
   reasoning so agents can judge edge cases.
-- Files under `skills/harness-init/references/runtime/` are written from the
+- Files under `plugins/harness-loom/skills/harness-init/references/runtime/` are written from the
   deployed harness's
   point of view only. They should describe live runtime contracts
   (orchestrator, planner, pair, `.harness/`, state/events, dispatch, review),
   not factory operations such as `/harness-init`, `/harness-pair-dev`,
   `/harness-sync`, plugin installation, or marketplace/distribution concerns.
 
-See `skills/harness-pair-dev/references/example-skills/skill-authoring.md`
+See `plugins/harness-loom/skills/harness-pair-dev/references/example-skills/skill-authoring.md`
 and `agent-authoring.md` for the full rubric (it's the same rubric applied
 to target-generated pairs).
 

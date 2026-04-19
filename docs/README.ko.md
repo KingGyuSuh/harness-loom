@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#멀티-플랫폼)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.1.2 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
+> **상태:** 0.1.3 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
 
 `harness-loom`은 대상 리포지토리에 런타임 하네스를 설치하고, 프로젝트에 맞는 pair를 하나씩 키워 가는 팩토리 플러그인입니다.
 
@@ -74,38 +74,40 @@ target project
 
 ## 설치
 
+팩토리는 표준 `plugins/<name>/` 모노리포 레이아웃으로 배포됩니다. 저장소 루트에 `.claude-plugin/marketplace.json` 과 `.agents/plugins/marketplace.json` 이 있고, 실제 플러그인 트리는 `plugins/harness-loom/` 하위에 있습니다. **팩토리 자체는 Claude Code 또는 Codex CLI 에서 실행**되며, Gemini CLI 는 *런타임 소비자* 로 지원됩니다 (아래 "Gemini CLI (runtime only)" 참조).
+
 ### Claude Code
 
-로컬 동작 확인용 (1회용 세션, 마켓플레이스 없이 즉시 로드):
+로컬 동작 확인용 (1회용, 마켓플레이스 없이):
 
 ```bash
-claude --plugin-dir ./harness-loom
+claude --plugin-dir ./plugins/harness-loom
 ```
 
 영구 설치는 세션 안 마켓플레이스 흐름을 씁니다. 로컬 체크아웃:
 
 ```text
-/plugin marketplace add ./harness-loom
-/plugin install harness-loom@harness-loom
+/plugin marketplace add ./
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 공개 git 리포지토리 (GitHub shorthand):
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
-/plugin install harness-loom@harness-loom
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 특정 태그 고정:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
-/plugin install harness-loom@harness-loom
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 ### Codex CLI
 
-마켓플레이스 소스를 등록합니다. 인자는 저장소 루트(= `.agents/plugins/marketplace.json` 이 있는 곳)를 가리킵니다.
+마켓플레이스 소스를 등록합니다. 인자는 저장소 루트(`.agents/plugins/marketplace.json` 이 있는 곳)를 가리킵니다.
 
 ```bash
 # 로컬 체크아웃
@@ -115,20 +117,18 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # 태그 고정
-codex marketplace add KingGyuSuh/harness-loom@v0.1.2
+codex marketplace add KingGyuSuh/harness-loom@v0.1.3
 ```
 
-그다음 Codex TUI 안에서 `/plugins`를 실행하고, `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.
+그다음 Codex TUI 안에서 `/plugins` 를 실행하고, `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.
 
-### Gemini CLI
+### Gemini CLI (runtime only)
 
-Gemini extension 으로 설치합니다 (이미 인증되어 있지 않다면 먼저 `gemini auth`):
+harness-loom **팩토리 자체는 Gemini extension 으로 설치할 수 없습니다** — Gemini 의 extension 로더가 repo 루트를 extension 루트로 하드코드하는데, 팩토리가 따르는 Codex / Claude `plugins/<name>/` 모노리포 규약과 충돌합니다. 대신 Gemini CLI 는 **타겟 프로젝트에 배포된 런타임 하네스를 소비**하는 플랫폼으로 지원됩니다.
 
-```bash
-gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
-```
-
-Gemini 가 세 팩토리 skill (`harness-init`, `harness-pair-dev`, `harness-sync`) 을 `/skills` 로 자동 등록합니다. 필요한 skill 을 활성화하고 프롬프트에서 사용하세요. Claude / Codex 와 같은 슬래시 명령 별칭(`/harness-init` 등) 은 이후 릴리스에서 다룰 예정입니다.
+1. Claude Code 또는 Codex CLI 에서 팩토리를 설치하고, 타겟 프로젝트에서 `/harness-init` + `/harness-sync --provider gemini` 를 실행합니다. 이게 타겟 측 런타임 (`.harness/`, `.gemini/agents/`, `.gemini/skills/`, `AfterAgent` 훅이 들어간 `.gemini/settings.json`) 을 깔아 줍니다.
+2. 그 타겟 프로젝트로 `cd` 한 뒤 `gemini` 를 실행합니다. CLI 가 workspace 범위의 `.gemini/agents/*.md`, `.gemini/skills/<slug>/SKILL.md`, `.gemini/settings.json` 의 `AfterAgent` 훅을 자동 로드합니다.
+3. 오케스트레이터 사이클이 Gemini 에서 그대로 돌아갑니다 — 팩토리 저작은 Claude / Codex 에서, 실제 실행은 세 플랫폼 어디서나 가능.
 
 ## 빠른 시작
 
@@ -183,10 +183,10 @@ echo "curses를 사용한 가벼운 터미널 스네이크 게임 출시" > goal
 ```text
 factory (이 리포지토리)                           target project
 -----------------------------------------      ----------------------------------
-skills/harness-init/          설치  ->      .harness/{state,events,hook,epics}/
-skills/harness-pair-dev/      작성  ->      .claude/agents/<slug>-producer.md
-skills/harness-sync/          파생  ->      .claude/agents/<reviewer>.md
-skills/harness-init/references/runtime/ 시드 -> .claude/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-init/          설치  ->      .harness/{state,events,hook,epics}/
+plugins/harness-loom/skills/harness-pair-dev/      작성  ->      .claude/agents/<slug>-producer.md
+plugins/harness-loom/skills/harness-sync/          파생  ->      .claude/agents/<reviewer>.md
+plugins/harness-loom/skills/harness-init/references/runtime/ 시드 -> .claude/skills/<slug>/SKILL.md
                                                .claude/settings.json
                                                      |
                                                      +-- /harness-sync (선택)

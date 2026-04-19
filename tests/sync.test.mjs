@@ -76,8 +76,13 @@ test("sync --provider gemini writes AfterAgent settings.json with gemini argumen
     assert.equal(runNode(SYNC_SCRIPT, ["--provider", "gemini"], { cwd: target }).status, 0);
 
     const settings = JSON.parse(readFileSync(join(target, ".gemini/settings.json"), "utf8"));
-    assert.ok(Array.isArray(settings.hooks.AfterAgent));
-    assert.equal(settings.hooks.AfterAgent[0].command, "bash .harness/hook.sh gemini");
+    assert.ok(Array.isArray(settings.hooks.AfterAgent), "hooks.AfterAgent must be array");
+    const group = settings.hooks.AfterAgent[0];
+    assert.ok(Array.isArray(group.hooks), "nested group.hooks[] required by Gemini spec");
+    const item = group.hooks[0];
+    assert.equal(item.type, "command");
+    assert.equal(item.command, "bash .harness/hook.sh gemini");
+    assert.equal(item.timeout, 60000);
   } finally {
     cleanupDir(target);
   }

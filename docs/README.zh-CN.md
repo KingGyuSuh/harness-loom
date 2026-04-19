@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.3-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#多平台)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **状态：** 0.1.2 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
+> **状态：** 0.1.3 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
 
 `harness-loom` 是一个工厂型插件：它会把运行时 harness 安装到目标仓库里，并按 pair 的粒度逐步扩展。
 
@@ -74,33 +74,35 @@ target project
 
 ## 安装
 
+工厂采用标准的 `plugins/<name>/` monorepo 布局：仓库根目录放 `.claude-plugin/marketplace.json` 和 `.agents/plugins/marketplace.json`，真正的插件树放在 `plugins/harness-loom/` 下。**工厂本身在 Claude Code 或 Codex CLI 中运行。** Gemini CLI 作为*运行时消费者*被支持（见下文「Gemini CLI (runtime only)」）。
+
 ### Claude Code
 
-本地快速验证 (单会话，无需 marketplace)：
+本地快速验证（单会话，无需 marketplace）：
 
 ```bash
-claude --plugin-dir ./harness-loom
+claude --plugin-dir ./plugins/harness-loom
 ```
 
 持久化安装走 Claude Code 会话内的 marketplace 流程。本地 checkout：
 
 ```text
-/plugin marketplace add ./harness-loom
-/plugin install harness-loom@harness-loom
+/plugin marketplace add ./
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
-公开 git 仓库 (GitHub shorthand)：
+公开 git 仓库（GitHub shorthand）：
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
-/plugin install harness-loom@harness-loom
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 锁定特定 tag：
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
-/plugin install harness-loom@harness-loom
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.3
+/plugin install harness-loom@harness-loom-marketplace
 ```
 
 ### Codex CLI
@@ -115,20 +117,18 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # 锁定 tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.2
+codex marketplace add KingGyuSuh/harness-loom@v0.1.3
 ```
 
 然后在 Codex TUI 中执行 `/plugins`，打开 `Harness Loom` marketplace 条目并安装插件。
 
-### Gemini CLI
+### Gemini CLI (runtime only)
 
-作为 Gemini extension 安装（若尚未认证，请先 `gemini auth`）：
+harness-loom **工厂自身无法作为 Gemini extension 安装** —— Gemini 的 extension 加载器把 repo 根目录硬编码为 extension 根，与工厂所采用的 Codex / Claude `plugins/<name>/` monorepo 约定冲突。不过 Gemini CLI 作为**在目标项目中消费运行时 harness** 的平台是被支持的：
 
-```bash
-gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
-```
-
-Gemini 会通过 `/skills` 自动注册三个工厂 skill (`harness-init`, `harness-pair-dev`, `harness-sync`)。激活需要的 skill，直接在提示里调用即可。与 Claude / Codex 一致的 slash 命令别名 (`/harness-init` 等) 会在后续版本中补齐。
+1. 在 Claude Code 或 Codex CLI 里安装工厂，然后在目标项目中运行 `/harness-init` 和 `/harness-sync --provider gemini`。这会在目标端部署 runtime（`.harness/`、`.gemini/agents/`、`.gemini/skills/`，以及带 `AfterAgent` 钩子的 `.gemini/settings.json`）。
+2. `cd` 进入该目标项目，启动 `gemini`。CLI 会自动加载 workspace 范围的 `.gemini/agents/*.md`、`.gemini/skills/<slug>/SKILL.md`，以及 `.gemini/settings.json` 中的 `AfterAgent` 钩子。
+3. orchestrator 循环就能在 Gemini 中端到端运行——工厂侧编写仍走 Claude / Codex，执行可以在三种平台的任意一种。
 
 ## 快速开始
 
@@ -183,10 +183,10 @@ echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 ```text
 factory (本仓库)                                target project
 -----------------------------------------      ----------------------------------
-skills/harness-init/          安装    ->      .harness/{state,events,hook,epics}/
-skills/harness-pair-dev/      编写    ->      .claude/agents/<slug>-producer.md
-skills/harness-sync/          派生    ->      .claude/agents/<reviewer>.md
-skills/harness-init/references/runtime/ 播种 -> .claude/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-init/          安装    ->      .harness/{state,events,hook,epics}/
+plugins/harness-loom/skills/harness-pair-dev/      编写    ->      .claude/agents/<slug>-producer.md
+plugins/harness-loom/skills/harness-sync/          派生    ->      .claude/agents/<reviewer>.md
+plugins/harness-loom/skills/harness-init/references/runtime/ 播种 -> .claude/skills/<slug>/SKILL.md
                                                .claude/settings.json
                                                      |
                                                      +-- /harness-sync (按需)

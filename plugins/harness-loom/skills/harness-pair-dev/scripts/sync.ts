@@ -367,7 +367,16 @@ async function writeGeminiHookConfig(targetRoot: string): Promise<string> {
     }
   }
   const hooks = (existing.hooks as Record<string, unknown>) ?? {};
-  hooks.AfterAgent = [{ command: "bash .harness/hook.sh gemini" }];
+  // Gemini hook schema (docs/hooks/reference.md): 2-layer nested
+  //   { hooks: { AfterAgent: [ { hooks: [ { type, command, timeout } ] } ] } }
+  // The flat shorthand { AfterAgent: [{ command }] } is rejected by the loader.
+  hooks.AfterAgent = [
+    {
+      hooks: [
+        { type: "command", command: "bash .harness/hook.sh gemini", timeout: 60000 },
+      ],
+    },
+  ];
   existing.hooks = hooks;
   await writeFile(settingsPath, JSON.stringify(existing, null, 2) + "\n");
   return settingsPath;
