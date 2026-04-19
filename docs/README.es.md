@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multiplataforma)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Estado:** 0.1.1 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
+> **Estado:** 0.1.2 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
 
 `harness-loom` es un plugin de fábrica que instala un harness de ejecución en un repositorio de destino y lo va ampliando pair a pair.
 
@@ -76,36 +76,59 @@ Después puedes añadir pairs específicos del dominio con `/harness-pair-dev` y
 
 ### Claude Code
 
+Prueba rápida local (sesión única, sin marketplace):
+
 ```bash
-claude plugin add /path/to/harness-loom
+claude --plugin-dir ./harness-loom
 ```
 
-O desde el marketplace dentro de una sesión de Claude Code:
+Instalación persistente desde el marketplace dentro de la sesión de Claude Code. Checkout local:
 
 ```text
-/plugin marketplace add /path/to/harness-loom
+/plugin marketplace add ./harness-loom
+/plugin install harness-loom@harness-loom
+```
+
+Repositorio git público (GitHub shorthand):
+
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom
+```
+
+Fijar un tag específico:
+
+```text
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
 /plugin install harness-loom@harness-loom
 ```
 
 ### Codex CLI
 
-Checkout local:
+Añade la fuente del marketplace; el argumento apunta a la raíz del repositorio (donde está `.agents/plugins/marketplace.json`):
 
 ```bash
+# checkout local
 codex marketplace add /path/to/harness-loom
+
+# repositorio git público
+codex marketplace add KingGyuSuh/harness-loom
+
+# fijar un tag
+codex marketplace add KingGyuSuh/harness-loom@v0.1.2
 ```
 
-Repositorio git público:
-
-```bash
-codex marketplace add https://github.com/KingGyuSuh/harness-loom.git
-```
-
-Luego abre la entrada de `Harness Loom` en el marketplace e instala el plugin.
+Después, dentro del TUI de Codex, ejecuta `/plugins`, abre la entrada `Harness Loom` del marketplace e instala el plugin.
 
 ### Gemini CLI
 
-Gemini consume el mismo árbol de plugins mediante `.agents/plugins/marketplace.json`. Después de añadir este repositorio como fuente del marketplace en Gemini, instala `Harness Loom`.
+Instala como extensión de Gemini (si aún no estás autenticado, usa `gemini auth` primero):
+
+```bash
+gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
+```
+
+Gemini registra automáticamente los tres skills de fábrica (`harness-init`, `harness-pair-dev`, `harness-sync`) mediante `/skills`. Activa el que necesites y úsalo desde el prompt. Los alias de slash (`/harness-init` etc., al mismo nivel que Claude / Codex) llegarán en una release posterior.
 
 ## Inicio rápido
 

@@ -1,0 +1,5 @@
+{
+  "name": "harness-loom",
+  "version": "0.1.2",
+  "description": "Install and grow a reviewed-work harness in any repository. Ships three user-invocable skills (harness-init, harness-pair-dev, harness-sync) that seed a planner + producer-reviewer pair harness into a target project and grow it pair by pair."
+}

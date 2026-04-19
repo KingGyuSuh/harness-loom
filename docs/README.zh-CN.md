@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#多平台)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **状态：** 0.1.1 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
+> **状态：** 0.1.2 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
 
 `harness-loom` 是一个工厂型插件：它会把运行时 harness 安装到目标仓库里，并按 pair 的粒度逐步扩展。
 
@@ -76,36 +76,59 @@ target project
 
 ### Claude Code
 
+本地快速验证 (单会话，无需 marketplace)：
+
 ```bash
-claude plugin add /path/to/harness-loom
+claude --plugin-dir ./harness-loom
 ```
 
-或者在 Claude Code 会话里通过 marketplace 安装：
+持久化安装走 Claude Code 会话内的 marketplace 流程。本地 checkout：
 
 ```text
-/plugin marketplace add /path/to/harness-loom
+/plugin marketplace add ./harness-loom
+/plugin install harness-loom@harness-loom
+```
+
+公开 git 仓库 (GitHub shorthand)：
+
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom
+```
+
+锁定特定 tag：
+
+```text
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
 /plugin install harness-loom@harness-loom
 ```
 
 ### Codex CLI
 
-本地 checkout：
+添加 marketplace source，参数指向仓库根目录（包含 `.agents/plugins/marketplace.json`）：
 
 ```bash
+# 本地 checkout
 codex marketplace add /path/to/harness-loom
+
+# 公开 git 仓库
+codex marketplace add KingGyuSuh/harness-loom
+
+# 锁定 tag
+codex marketplace add KingGyuSuh/harness-loom@v0.1.2
 ```
 
-公开 git 仓库：
-
-```bash
-codex marketplace add https://github.com/KingGyuSuh/harness-loom.git
-```
-
-然后在 marketplace 中打开 `Harness Loom` 条目并安装插件。
+然后在 Codex TUI 中执行 `/plugins`，打开 `Harness Loom` marketplace 条目并安装插件。
 
 ### Gemini CLI
 
-Gemini 通过 `.agents/plugins/marketplace.json` 读取同一套插件树。把这个仓库加入 marketplace source 之后，再安装 `Harness Loom` 即可。
+作为 Gemini extension 安装（若尚未认证，请先 `gemini auth`）：
+
+```bash
+gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
+```
+
+Gemini 会通过 `/skills` 自动注册三个工厂 skill (`harness-init`, `harness-pair-dev`, `harness-sync`)。激活需要的 skill，直接在提示里调用即可。与 Claude / Codex 一致的 slash 命令别名 (`/harness-init` 等) 会在后续版本中补齐。
 
 ## 快速开始
 

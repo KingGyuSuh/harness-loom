@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.2-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#멀티-플랫폼)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.1.1 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
+> **상태:** 0.1.2 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
 
 `harness-loom`은 대상 리포지토리에 런타임 하네스를 설치하고, 프로젝트에 맞는 pair를 하나씩 키워 가는 팩토리 플러그인입니다.
 
@@ -76,36 +76,59 @@ target project
 
 ### Claude Code
 
+로컬 동작 확인용 (1회용 세션, 마켓플레이스 없이 즉시 로드):
+
 ```bash
-claude plugin add /path/to/harness-loom
+claude --plugin-dir ./harness-loom
 ```
 
-또는 Claude Code 세션 안에서 마켓플레이스를 통해 설치할 수 있습니다.
+영구 설치는 세션 안 마켓플레이스 흐름을 씁니다. 로컬 체크아웃:
 
 ```text
-/plugin marketplace add /path/to/harness-loom
+/plugin marketplace add ./harness-loom
+/plugin install harness-loom@harness-loom
+```
+
+공개 git 리포지토리 (GitHub shorthand):
+
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom
+```
+
+특정 태그 고정:
+
+```text
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.2
 /plugin install harness-loom@harness-loom
 ```
 
 ### Codex CLI
 
-로컬 체크아웃:
+마켓플레이스 소스를 등록합니다. 인자는 저장소 루트(= `.agents/plugins/marketplace.json` 이 있는 곳)를 가리킵니다.
 
 ```bash
+# 로컬 체크아웃
 codex marketplace add /path/to/harness-loom
+
+# 공개 git 리포지토리
+codex marketplace add KingGyuSuh/harness-loom
+
+# 태그 고정
+codex marketplace add KingGyuSuh/harness-loom@v0.1.2
 ```
 
-공개 git 리포지토리:
-
-```bash
-codex marketplace add https://github.com/KingGyuSuh/harness-loom.git
-```
-
-그다음 마켓플레이스에서 `Harness Loom` 항목을 열고 플러그인을 설치합니다.
+그다음 Codex TUI 안에서 `/plugins`를 실행하고, `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.
 
 ### Gemini CLI
 
-Gemini는 `.agents/plugins/marketplace.json`을 통해 같은 플러그인 트리를 사용합니다. 리포지토리를 마켓플레이스 소스로 추가한 뒤 `Harness Loom`을 설치하세요.
+Gemini extension 으로 설치합니다 (이미 인증되어 있지 않다면 먼저 `gemini auth`):
+
+```bash
+gemini extensions install https://github.com/KingGyuSuh/harness-loom --ref v0.1.2
+```
+
+Gemini 가 세 팩토리 skill (`harness-init`, `harness-pair-dev`, `harness-sync`) 을 `/skills` 로 자동 등록합니다. 필요한 skill 을 활성화하고 프롬프트에서 사용하세요. Claude / Codex 와 같은 슬래시 명령 별칭(`/harness-init` 등) 은 이후 릴리스에서 다룰 예정입니다.
 
 ## 빠른 시작
 

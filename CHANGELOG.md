@@ -6,6 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-04-19
+
+### Added
+
+- **Gemini CLI extension manifest** — `gemini-extension.json` at the
+  repo root enables `gemini extensions install
+  https://github.com/KingGyuSuh/harness-loom --ref v0.1.2`. Gemini's
+  convention-based loader auto-discovers the three factory skills
+  (`harness-init`, `harness-pair-dev`, `harness-sync`) via `/skills`;
+  no extra registration required. Slash-command aliases matching the
+  Claude/Codex UX (`/harness-init` etc.) are tracked for a later
+  release.
+
+### Fixed
+
+- **Install commands in all READMEs aligned to official docs.** The
+  previously shipped `claude plugin add <path>` syntax is not a real
+  Claude Code CLI command; replaced with `claude --plugin-dir
+  ./harness-loom` for sanity tests and the in-session `/plugin
+  marketplace add` flow for persistent install (including GitHub
+  shorthand `KingGyuSuh/harness-loom` and tag pinning
+  `@v0.1.2`). Codex install copy now references the TUI `/plugins`
+  command (not a vague "open the marketplace entry") and the public
+  `owner/repo` + `@tag` shorthand. Gemini section now shows the real
+  `gemini extensions install` command instead of pointing at
+  `.agents/plugins/marketplace.json`, which Gemini CLI never read.
+  Correction applied to `README.md`, `docs/README.ko.md`,
+  `docs/README.ja.md`, `docs/README.zh-CN.md`, `docs/README.es.md`.
+
 ## [0.1.1] — 2026-04-19
 
 ### Added
@@ -69,6 +98,7 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.2
 [0.1.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.1
 [0.1.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.0

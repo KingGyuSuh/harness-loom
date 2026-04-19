@@ -1,6 +1,6 @@
 {
   "name": "harness-loom",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Install and grow producer-reviewer harnesses for repository work.",
   "author": {
     "name": "KingGyuSuh",
