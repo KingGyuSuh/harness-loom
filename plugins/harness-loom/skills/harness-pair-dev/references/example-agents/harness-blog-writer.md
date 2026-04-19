@@ -1,8 +1,8 @@
 ---
-name: blog-writer
-description: "Use when the target's `/harness-orchestrate` dispatches the `blog-writer` producer phase. Drafts a single blog post from an outline or research brief."
+name: harness-blog-writer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-blog-writer` producer phase. Drafts a single blog post from an outline or research brief."
 skills:
-  - blog-authoring
+  - harness-blog-authoring
 model: opus
 ---
 

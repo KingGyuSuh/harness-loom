@@ -1,8 +1,8 @@
 ---
-name: research-synthesizer
-description: "Use when the target's `/harness-orchestrate` dispatches the `research-synthesizer` producer phase. Reads multiple sources and produces a structured synthesis memo."
+name: harness-research-synthesizer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-research-synthesizer` producer phase. Reads multiple sources and produces a structured synthesis memo."
 skills:
-  - research-synthesis
+  - harness-research-synthesis
 model: opus
 ---
 

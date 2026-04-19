@@ -1,8 +1,8 @@
 ---
-name: research-reviewer
-description: "Use when the target's `/harness-orchestrate` dispatches the `research-reviewer` reviewer phase. Grades citation coverage, synthesis quality, and whether open questions are surfaced clearly."
+name: harness-research-reviewer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-research-reviewer` reviewer phase. Grades citation coverage, synthesis quality, and whether open questions are surfaced clearly."
 skills:
-  - research-synthesis
+  - harness-research-synthesis
 model: opus
 ---
 

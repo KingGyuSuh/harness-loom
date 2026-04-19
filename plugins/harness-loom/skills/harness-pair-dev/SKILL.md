@@ -26,7 +26,8 @@ Shared flags: `--target <path>` (default `cwd`), `--provider <list>` (if omitted
 ### 2. `--add <pair-slug> --purpose "<text>" [--reviewer <slug> ...]`
 
 1. **Parse args and verify preconditions** — if `--purpose` is missing, stop immediately and ask for it. A slug alone cannot fill identity, principles, or the skill body. After resolving the target path, verify that `<target>/.claude/skills/{harness-orchestrate, harness-planning, harness-context}/SKILL.md` exist. If any are missing, require `/harness-init` first and stop.
-2. **Decide reviewer roster** — if no `--reviewer` flag is present, default to one reviewer named `<pair-slug>-reviewer`. If one or more flags are provided, each value becomes a reviewer slug and the pair becomes 1:M. Reviewer slugs must be kebab-case role names such as `sql-reviewer` or `server-reviewer`. Numeric suffixes are forbidden.
+   - **Normalize every slug with the `harness-` prefix.** Apply `s.startsWith("harness-") ? s : "harness-" + s` to the pair slug, each `--reviewer` value, and the derived producer and skill slugs. The rule is idempotent, so `--add foo` and `--add harness-foo` both yield `harness-foo`. From step 1 onward, every slug referenced in this skill is the already-normalized form. The downstream `register-pair.ts` hard-rejects any unprefixed slug, so authoring with the normalized form is the only valid path.
+2. **Decide reviewer roster** — if no `--reviewer` flag is present, default to one reviewer slug derived from the normalized pair slug, which is therefore `<pair-slug>-reviewer` (already carrying the `harness-` prefix via its pair base). If one or more flags are provided, each value is normalized per step 1 and becomes a reviewer slug, making the pair 1:M. Reviewer slugs must be kebab-case role names such as `harness-sql-reviewer` or `harness-server-reviewer`. Numeric suffixes are forbidden.
 3. **Read references** — Claude reads the following references in order:
    - `references/example-agents/` (7 files) for tone and structural examples.
    - `references/example-skills/agent-authoring.md` for strict rules on agent frontmatter, five principles, Task, and Output Format.
@@ -38,7 +39,7 @@ Shared flags: `--target <path>` (default `cwd`), `--provider <list>` (if omitted
    - existing test patterns, if present, to ground how the producer should self-verify.
    If the signal is insufficient, stop and ask the user for more information. **Do not author a generic pair without enough evidence.**
 5. **Design the domain contract** — use `--purpose` plus collected codebase evidence as the primary axis for the producer identity, five principles, task steps, and the shared pair skill's Design Thinking / Methodology / Evaluation Criteria / Taboos. **Every section must cite domain evidence at least once** using real file paths, function names, or pattern names. In 1:M cases, derive each reviewer axis from purpose plus codebase structure, then split and tag the pair skill Evaluation Criteria by reviewer axis.
-6. **Author agents** — replace `templates/producer-agent.md` into `<target>/.claude/agents/<pair-slug>-producer.md`. For each reviewer, replace `templates/reviewer-agent.md` into `<target>/.claude/agents/<reviewer-slug>.md`. For a single-reviewer pair, that file is `<pair-slug>-reviewer.md`; for 1:M pairs, use the user-provided slugs exactly. The identity paragraph must be codebase-specific: not "writes code" but something like "adds a new input handler following the game-loop pattern in `src/engine/snake.py`."
+6. **Author agents** — replace `templates/producer-agent.md` into `<target>/.claude/agents/<pair-slug>-producer.md`. For each reviewer, replace `templates/reviewer-agent.md` into `<target>/.claude/agents/<reviewer-slug>.md`. For a single-reviewer pair, that file is `<pair-slug>-reviewer.md`; for 1:M pairs, use the user-provided slugs exactly. Slugs here are already normalized with the `harness-` prefix from step 1, so expected file names look like `harness-<pair>-producer.md` and `harness-<reviewer>.md`, and frontmatter `name:` fields match. The identity paragraph must be codebase-specific: not "writes code" but something like "adds a new input handler following the game-loop pattern in `src/engine/snake.py`."
 7. **Author the pair skill** — replace `templates/pair-skill.md` into `<target>/.claude/skills/<pair-slug>/SKILL.md`. Design Thinking must answer, with code evidence, why this domain is hard in this codebase and what must be protected. Evaluation Criteria must be tagged by reviewer axis where applicable, such as `- [sql-reviewer] ...` and `- [server-reviewer] ...`, and every item must remain gradeable by citing codebase patterns/files rather than vague rubric language.
 8. **Attach extra skills when needed** — if the producer or a reviewer needs domain knowledge beyond the shared pair skill, append extra slugs to that agent's frontmatter `skills:` list. For example, add `data-schema` to the producer or `sql-conventions` to `sql-reviewer`. **Always keep the required two entries `<pair-slug>` and `harness-context` first**, then append extras. Extra slugs must point to real on-disk `skills/<slug>/SKILL.md`.
 9. **Run registration**:
@@ -91,11 +92,11 @@ The producer and reviewer templates always declare **two required entries** in f
 `register-pair.ts` edits two target skill bodies:
 
 - It appends one line into `<target>/.claude/skills/harness-orchestrate/SKILL.md` under `## Registered pairs`, matching the exact output shape from `register-pair.ts:174`:
-  - 1:1 example: `` - <pair-slug>: producer `<slug>-producer` ↔ reviewer `<reviewer-slug>`, skill `<slug>` ``
-  - 1:M example: `` - <pair-slug>: producer `<slug>-producer` ↔ reviewers [`r1-reviewer`, `r2-reviewer`], skill `<slug>` ``
+  - 1:1 example: `` - harness-sql: producer `harness-sql-producer` ↔ reviewer `harness-sql-reviewer`, skill `harness-sql` ``
+  - 1:M example: `` - harness-api: producer `harness-api-producer` ↔ reviewers [`harness-api-reviewer`, `harness-security-reviewer`], skill `harness-api` ``
 - It appends the same line as a department registration under `## Available departments` in `<target>/.claude/skills/harness-planning/SKILL.md`.
 
-The pair slug becomes the **phase name** in the target runtime. That means the `Phase:` field in `state.md` and the phase reference in `Next` use that slug directly. Therefore slugs must remain kebab-case English role nouns and must avoid numeric suffixes such as `pair-1`.
+The pair slug becomes the **phase name** in the target runtime. That means the `Phase:` field in `state.md` and the phase reference in `Next` use that slug directly. Therefore slugs must start with `harness-`, remain kebab-case English role nouns after the prefix, and must avoid numeric suffixes such as `pair-1`. `register-pair.ts` enforces this with a hard-reject regex.
 
 `--unregister` removes those lines idempotently. If the target line is absent, it is a no-op.
 
@@ -107,7 +108,7 @@ The pair slug becomes the **phase name** in the target runtime. That means the `
 - Each agent frontmatter `skills` list includes the **two required entries** `<pair-slug>` and `harness-context` in that order, followed by zero or more optional extra domain skills that resolve to real on-disk `skills/<slug>/SKILL.md`.
 - The shared pair skill satisfies section order, the 200-line cap, and description-as-trigger as defined in `references/example-skills/skill-authoring.md`.
 - In 1:M pairs, the shared pair skill tags Evaluation Criteria by reviewer axis, such as `[sql-reviewer] ...` or `[server-reviewer] ...`, so each reviewer can focus on its own grading surface.
-- File naming stays consistent: producer -> `<pair-slug>-producer.md`, reviewer -> user-provided reviewer slug or the default `<pair-slug>-reviewer.md`, skill -> `<pair-slug>/SKILL.md`.
+- File naming stays consistent with the `harness-` namespace: producer -> `<pair-slug>-producer.md`, reviewer -> user-provided reviewer slug or the default `<pair-slug>-reviewer.md`, skill -> `<pair-slug>/SKILL.md`. All `<pair-slug>` and `<reviewer-slug>` values here are the already-normalized form starting with `harness-`.
 - After `register-pair.ts`, the target `harness-orchestrate` and `harness-planning` SKILL.md files each contain exactly one registration line for the pair slug, with no duplicates. In 1:M cases, the line includes the full `reviewers [<r1>, <r2>, ...]` array.
 - All authoring happens only in canonical `.claude/`, and `sync.ts` derives only the providers explicitly requested by the user or already detected on disk. First-time codex/gemini support still requires explicit `/harness-sync --provider codex,gemini`. Derived trees remain semantically equivalent to canonical, except for provider-specific model/frontmatter pins.
 - One `--add` call creates **exactly one pair** even if that pair has multiple reviewers.
@@ -128,6 +129,8 @@ The pair slug becomes the **phase name** in the target runtime. That means the `
 - Manually editing `harness-orchestrate` or `harness-planning` registration sections; anything outside `register-pair.ts` can break later registration/unregistration diffs.
 - Creating more than one pair in a single `--add` call; that breaks scope boundaries and user-intent traceability.
 - Using numeric suffixes or spaces in pair slugs; that damages readability in `state.md` `Phase:` fields.
+- Authoring pair, producer, reviewer, or skill slugs without the `harness-` prefix; the plugin's naming convention is that every generated subagent and skill lives under the `harness-` namespace inside `.claude/` so harness artifacts are unambiguous against ambient repo files.
+- Passing unprefixed slugs to `register-pair.ts` or `register-pair.ts --unregister`; the script hard-rejects them by design, so the normalization in step 1 of `--add` is mandatory, not cosmetic.
 - Embedding reviewer criteria inside the producer agent body, or the reverse; that is role leakage and violates `references/example-skills/agent-authoring.md`.
 - Authoring agent or skill files from scratch without the templates; that invites shape drift and unstable rubric grading.
 - Letting `--improve` auto-run `--split` without user approval after a split threshold is detected; registration fan-out and `Phase:` orphaning are destructive side effects.

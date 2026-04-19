@@ -1,8 +1,8 @@
 ---
-name: test-writer
-description: "Use when the target's `/harness-orchestrate` dispatches the `test-writer` producer phase. Authors unit tests covering a newly added module's public surface."
+name: harness-test-writer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-test-writer` producer phase. Authors unit tests covering a newly added module's public surface."
 skills:
-  - test-authoring
+  - harness-test-authoring
 model: opus
 ---
 

@@ -1,8 +1,8 @@
 ---
-name: api-reviewer
-description: "Use when the target's `/harness-orchestrate` dispatches the `api-reviewer` reviewer phase. Grades REST specs for convention conformance and sibling-endpoint consistency."
+name: harness-api-reviewer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-api-reviewer` reviewer phase. Grades REST specs for convention conformance and sibling-endpoint consistency."
 skills:
-  - api-design
+  - harness-api-design
 model: opus
 ---
 

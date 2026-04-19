@@ -48,10 +48,11 @@ function parseArgs(argv: string[]): Args {
     if (arg === "--help" || arg === "-h") {
       process.stdout.write(
         "Usage: node skills/harness-pair-dev/scripts/register-pair.ts " +
-          "--target <path> --pair <slug> --producer <slug> " +
-          "--reviewer <slug> [--reviewer <slug> ...] --skill <slug>\n" +
+          "--target <path> --pair <harness-slug> --producer <harness-slug> " +
+          "--reviewer <harness-slug> [--reviewer <harness-slug> ...] --skill <harness-slug>\n" +
           "       node skills/harness-pair-dev/scripts/register-pair.ts " +
-          "--unregister --target <path> --pair <slug>\n",
+          "--unregister --target <path> --pair <harness-slug>\n" +
+          "All pair/producer/reviewer/skill slugs must start with \"harness-\".\n",
       );
       process.exit(0);
     } else if (arg === "--unregister") out.unregister = true;
@@ -62,12 +63,17 @@ function parseArgs(argv: string[]): Args {
     else if (arg === "--skill") out.skill = rest[++i];
     else die(`unknown argument: ${arg}`);
   }
-  const slugRe = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+  // All generated subagents and skills must live under the `harness-` namespace
+  // so they are unambiguously part of the harness inside `.claude/`. The regex
+  // also rejects the bare `harness-` and `harness--x` to prevent artifacts from
+  // a naive prepend on an empty or malformed input.
+  const prefixRe = /^harness-[a-z0-9]+(-[a-z0-9]+)*$/;
   if (out.unregister) {
     for (const key of ["target", "pair"] as const) {
       if (!out[key]) die(`--${key} is required`);
     }
-    if (!slugRe.test(out.pair as string)) die(`--pair must be kebab-case (got: ${out.pair})`);
+    if (!prefixRe.test(out.pair as string))
+      die(`--pair must start with "harness-" (got: ${out.pair})`);
     return { ...out, producer: "", skill: "", reviewers: [] } as Args;
   }
   for (const key of ["target", "pair", "producer", "skill"] as const) {
@@ -75,10 +81,11 @@ function parseArgs(argv: string[]): Args {
   }
   if (!out.reviewers || out.reviewers.length === 0) die("at least one --reviewer is required");
   for (const key of ["pair", "producer", "skill"] as const) {
-    if (!slugRe.test(out[key] as string)) die(`--${key} must be kebab-case (got: ${out[key]})`);
+    if (!prefixRe.test(out[key] as string))
+      die(`--${key} must start with "harness-" (got: ${out[key]})`);
   }
   for (const r of out.reviewers) {
-    if (!slugRe.test(r)) die(`--reviewer must be kebab-case (got: ${r})`);
+    if (!prefixRe.test(r)) die(`--reviewer must start with "harness-" (got: ${r})`);
   }
   const dup = new Set<string>();
   for (const r of out.reviewers) {

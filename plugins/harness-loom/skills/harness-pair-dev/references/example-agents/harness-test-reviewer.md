@@ -1,8 +1,8 @@
 ---
-name: test-reviewer
-description: "Use when the target's `/harness-orchestrate` dispatches the `test-reviewer` reviewer phase. Judges unit-test coverage breadth and edge-case discipline, not code style."
+name: harness-test-reviewer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-test-reviewer` reviewer phase. Judges unit-test coverage breadth and edge-case discipline, not code style."
 skills:
-  - test-authoring
+  - harness-test-authoring
 model: opus
 ---
 

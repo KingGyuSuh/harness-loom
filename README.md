@@ -142,10 +142,10 @@ claude
 # 2) define the goal for this cycle
 echo "Ship a lightweight terminal Snake game with curses" > goal.md
 
-# 3) add project-specific pairs
-/harness-pair-dev --add game-design --purpose "Spec snake.py features and edge cases"
-/harness-pair-dev --add impl --purpose "Implement snake.py against the spec" \
-  --reviewer code-reviewer --reviewer playtest-reviewer
+# 3) add project-specific pairs (unprefixed slugs are auto-prepended with `harness-`)
+/harness-pair-dev --add harness-game-design --purpose "Spec snake.py features and edge cases"
+/harness-pair-dev --add harness-impl --purpose "Implement snake.py against the spec" \
+  --reviewer harness-code-reviewer --reviewer harness-playtest-reviewer
 
 # 4) optionally derive Codex / Gemini from canonical .claude/
 /harness-sync --provider codex,gemini

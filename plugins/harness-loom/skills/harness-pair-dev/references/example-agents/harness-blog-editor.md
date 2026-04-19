@@ -1,8 +1,8 @@
 ---
-name: blog-editor
-description: "Use when the target's `/harness-orchestrate` dispatches the `blog-editor` reviewer phase. Reviews post structure, clarity, voice, and fact-anchoring. Skips typo-level copy-edit."
+name: harness-blog-editor
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-blog-editor` reviewer phase. Reviews post structure, clarity, voice, and fact-anchoring. Skips typo-level copy-edit."
 skills:
-  - blog-authoring
+  - harness-blog-authoring
 model: opus
 ---
 

@@ -8,6 +8,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **All pair-generated subagents and skills are now namespaced with
+  `harness-`.** `/harness-pair-dev --add`'s pair slug, producer slug,
+  reviewer slugs, and shared-skill slug are normalized at authoring
+  time (idempotent prepend) and hard-rejected by `register-pair.ts` if
+  any slug still lacks the prefix. This unifies the naming convention
+  across factory-installed artifacts (`harness-orchestrate`,
+  `harness-planning`, `harness-context`, `harness-planner`) and
+  project-specific pairs, so everything under `.claude/agents/` and
+  `.claude/skills/` owned by the harness is recognizable at a glance.
+  The eight reference files under
+  `plugins/harness-loom/skills/harness-pair-dev/references/example-agents/`
+  were renamed with the prefix to keep the rubric self-consistent with
+  the new rule. Breaking for any pre-existing unprefixed pairs, but
+  the repo owns no such pairs and has no external clones yet.
 - **License changed from MIT to Apache License 2.0** ahead of the
   public flip. Apache 2.0 adds an explicit patent grant, a
   patent-retaliation clause, and the NOTICE attribution mechanism, which

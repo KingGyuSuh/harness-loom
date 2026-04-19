@@ -1,8 +1,8 @@
 ---
-name: api-designer
-description: "Use when the target's `/harness-orchestrate` dispatches the `api-designer` producer phase. Drafts REST endpoint specifications covering path, method, request, response, and error shapes."
+name: harness-api-designer
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-api-designer` producer phase. Drafts REST endpoint specifications covering path, method, request, response, and error shapes."
 skills:
-  - api-design
+  - harness-api-design
 model: opus
 ---
 
