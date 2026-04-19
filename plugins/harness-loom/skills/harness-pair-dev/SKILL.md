@@ -29,7 +29,7 @@ Shared flags: `--target <path>` (default `cwd`), `--provider <list>` (if omitted
    - **Normalize every slug with the `harness-` prefix.** Apply `s.startsWith("harness-") ? s : "harness-" + s` to the pair slug, each `--reviewer` value, and the derived producer and skill slugs. The rule is idempotent, so `--add foo` and `--add harness-foo` both yield `harness-foo`. From step 1 onward, every slug referenced in this skill is the already-normalized form. The downstream `register-pair.ts` hard-rejects any unprefixed slug, so authoring with the normalized form is the only valid path.
 2. **Decide reviewer roster** — if no `--reviewer` flag is present, default to one reviewer slug derived from the normalized pair slug, which is therefore `<pair-slug>-reviewer` (already carrying the `harness-` prefix via its pair base). If one or more flags are provided, each value is normalized per step 1 and becomes a reviewer slug, making the pair 1:M. Reviewer slugs must be kebab-case role names such as `harness-sql-reviewer` or `harness-server-reviewer`. Numeric suffixes are forbidden.
 3. **Read references** — Claude reads the following references in order:
-   - `references/example-agents/` (7 files) for tone and structural examples.
+   - `references/example-agents/` (8 files) for tone and structural examples.
    - `references/example-skills/agent-authoring.md` for strict rules on agent frontmatter, five principles, Task, and Output Format.
    - `references/example-skills/skill-authoring.md` for strict rules on skill frontmatter, description-as-trigger, section order, the 200-line cap, and oversized-split thresholds.
 4. **Codebase analysis (required)** — read the code the pair will actually work on first. Do not create a generic or abstract producer. Absorb the **real patterns used by this codebase** into the pair body. Collect at least:
@@ -91,7 +91,7 @@ The producer and reviewer templates always declare **two required entries** in f
 
 `register-pair.ts` edits two target skill bodies:
 
-- It appends one line into `<target>/.claude/skills/harness-orchestrate/SKILL.md` under `## Registered pairs`, matching the exact output shape from `register-pair.ts:174`:
+- It appends one line into `<target>/.claude/skills/harness-orchestrate/SKILL.md` under `## Registered pairs`, matching the exact output shape from `register-pair.ts:181`:
   - 1:1 example: `` - harness-sql: producer `harness-sql-producer` ↔ reviewer `harness-sql-reviewer`, skill `harness-sql` ``
   - 1:M example: `` - harness-api: producer `harness-api-producer` ↔ reviewers [`harness-api-reviewer`, `harness-security-reviewer`], skill `harness-api` ``
 - It appends the same line as a department registration under `## Available departments` in `<target>/.claude/skills/harness-planning/SKILL.md`.
@@ -139,7 +139,7 @@ The pair slug becomes the **phase name** in the target runtime. That means the `
 
 ## References
 
-- `references/example-agents/` — seven pair examples for tone and structure.
+- `references/example-agents/` — eight pair examples for tone and structure.
 - `references/example-skills/agent-authoring.md` — strict agent-authoring rules.
 - `references/example-skills/skill-authoring.md` — strict skill-authoring rules.
 - `references/example-skills/oversized-split.md` — split guidance when the 200-line cap is exceeded.

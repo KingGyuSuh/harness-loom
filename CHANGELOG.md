@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Stale canonical references inside
+  `plugins/harness-loom/skills/harness-pair-dev/SKILL.md`.** The file
+  claimed `references/example-agents/` held "7 files" / "seven pair
+  examples" when the directory has always carried eight, and it cited
+  `register-pair.ts:174` as the registration-entry line after the
+  0.1.4 prefix-validation block pushed it to line 181. Updated both
+  counts and the line citation so canonical references match disk.
+
 ## [0.1.4] — 2026-04-19
 
 ### Changed
