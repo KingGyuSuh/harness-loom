@@ -1,6 +1,6 @@
 ---
 name: skill-authoring
-description: "Use when authoring or reviewing a `skills/{slug}/SKILL.md` file — the shared pair rubric. Invoke whenever a producer writes skill body/frontmatter or a reviewer grades skill shape, description-as-trigger, line budget, or references split."
+description: "Use when authoring or reviewing a `skills/{slug}/SKILL.md` file — the shared pair rubric. Invoke whenever a producer writes skill body/frontmatter or a reviewer grades skill shape, description-as-trigger, line budget, or reference splits."
 user-invocable: false
 ---
 
@@ -8,9 +8,9 @@ user-invocable: false
 
 ## Design Thinking
 
-스킬은 methodology 레이어다. 한 skill 은 짝이 된 **producer 와 reviewer 가 공유하는 단일 기준**이며, producer 는 본문을 근거로 산출물을 만들고 reviewer 는 같은 본문을 근거로 FAIL/PASS 를 가른다. 따라서 skill 은 "무엇이 좋은가 (Design Thinking) + 어떻게 적용하는가 (Methodology) + 어떻게 채점하는가 (Evaluation Criteria) + 무엇이 깨지는가 (Taboos)" 의 네 축만 있으면 충분하다. 절차 transcript, 플랫폼 hook 설정, 도구 whitelist 같은 host-control 관심사는 skill 본문에 들어오지 않는다.
+A skill is the methodology layer. It is the **single shared rubric for one producer-reviewer pair**: the producer uses the body to create work, and the reviewer uses the same body to decide PASS or FAIL. That means a skill needs four axes only: what good looks like (Design Thinking), how to apply it (Methodology), how to grade it (Evaluation Criteria), and what breaks it (Taboos). Procedure transcripts, platform hook wiring, and tool whitelists are runtime-control concerns and do not belong in the skill body.
 
-프론트매터의 `description` 필드는 단순 메타데이터가 아니라 **플랫폼이 skill 을 자동 load 할지 결정하는 트리거**다. "Use when ...", "Invoke whenever ..." 같은 명령형 문구와 구체 트리거 어휘가 있어야 load 되고, "This skill helps with ..." 같은 수동 서술은 load 를 놓친다. 또한 skill 본문이 커지면 producer/reviewer 모두 길을 잃기 때문에 `SKILL.md` 본문은 **200 줄 cap** 을 따르고 넘치는 재료는 `references/{kebab-topic}.md` 로 분리한다.
+The frontmatter `description` is not passive metadata; it is a **trigger that decides whether the platform auto-loads the skill**. It needs imperative language such as "Use when ..." or "Invoke whenever ..." plus specific trigger vocabulary. Passive descriptions such as "This skill helps with ..." tend to be skipped. Also, when the skill body grows too large both producer and reviewer lose the thread, so `SKILL.md` follows a **200-line cap** and overflow material moves into `references/{kebab-topic}.md`.
 
 ## Methodology
 
@@ -20,102 +20,102 @@ user-invocable: false
 ---
 name: {skill-slug}
 description: "Use when {trigger condition}. Invoke whenever {secondary trigger}."
-user-invocable: false   # slash/hook 진입점이면 생략 (default true)
+user-invocable: false   # omit for slash/hook entrypoints (default true)
 ---
 
 # {Skill Title}
 
 ## Design Thinking
-{1 문단. 이 skill 이 왜 존재하며, producer/reviewer 가 무엇을 판단하기 위해 읽는지.}
+{1 paragraph. Why this skill exists and what the producer/reviewer are trying to judge.}
 
 ## Methodology
-{1~N 개 하위 섹션. 각 섹션은 "언제 / 어떻게 판단하는가"를 담는다.}
+{1..N subsections. Each explains when and how to judge.}
 
 ## Evaluation Criteria
-- {reviewer 가 grade 할 때 직접 인용하는 체크 항목들}
+- {checks the reviewer cites directly when grading}
 
 ## Taboos
-- {하면 안 되는 것들과 왜 안 되는지}
+- {things that must not happen, plus why}
 
-## Examples (BAD / GOOD)   # optional — 말로 설명하기 어려운 패턴에만
-## References               # optional — references/{kebab-topic}.md 포인터
+## Examples (BAD / GOOD)   # optional — only for patterns that are hard to explain with prose
+## References               # optional — pointers into references/{kebab-topic}.md
 ```
 
-섹션 **순서는 고정**이다. Design Thinking 이 맨 앞에 오지 않으면 reviewer 는 트리거 직후 "왜" 를 못 찾고 skill 의 판단 근거를 잃는다.
+The section **order is fixed**. If Design Thinking does not come first, the reviewer loses the "why" immediately after the trigger fires.
 
 ### 2. Description-as-trigger
 
-`description` 은 플랫폼이 파싱하는 트리거이므로 다음 규칙을 지킨다.
+Because `description` is parsed by the platform as a trigger, follow these rules:
 
-- **명령형**: `Use when ...`, `Invoke whenever ...`, `Trigger on ...` 로 시작한다.
-- **구체 트리거 어휘**: 슬래시 명령 (`/name`), 사용자 연속 발화 (`continue`, `next`), hook 재진입, 파일 종류, 검토 대상 등 **load 되어야 할 상황**을 적는다.
-- **누가 load 하는지 적지 않는다**. `Loaded ONLY by X`, `never by workers` 같은 권한 문구는 플랫폼이 "나는 X 가 아니니 이 skill 은 이번 턴과 무관" 으로 해석해 본문을 드롭한다.
-- 슬래시 진입점 스킬은 `user-invocable` 기본 (true) 을 쓴다. 내부 methodology 스킬은 `user-invocable: false`.
+- **Imperative voice**: start with `Use when ...`, `Invoke whenever ...`, or `Trigger on ...`.
+- **Specific trigger vocabulary**: include the real situations that should load the skill, such as slash commands (`/name`), user continuations (`continue`, `next`), hook re-entry, file types, or review targets.
+- **Do not say who is allowed to load it**. Phrases such as `Loaded ONLY by X` or `never by workers` can make the platform drop the skill body because it decides the current turn does not qualify.
+- Slash entrypoint skills use the default `user-invocable: true`. Internal methodology skills must set `user-invocable: false`.
 
-### 3. Line budget & oversized-split
+### 3. Line budget and oversized split
 
-본문 **200 줄 cap** 이 1차 기준이다. 본문이 캡을 넘거나 아래 세 threshold 중 하나라도 걸리면 split 한다.
+The body **200-line cap** is the first control line. If the body exceeds that cap, or if any one of the three thresholds below is hit, split the skill.
 
-- **≥ 300 lines** — 본문이 300 줄을 넘는다.
-- **≥ 3 authority-citation blocks** — 상위 문서가 line-range 로 인용하는 계약 블록이 한 파일에 3개 이상.
-- **≥ 2 examples blocks** — GOOD/BAD 쌍, 템플릿, 긴 샘플이 한 파일에 2개 이상.
+- **>= 300 lines** — the canonical `SKILL.md` body exceeds 300 lines.
+- **>= 3 authority-citation blocks** — the file contains three or more contract blocks that upstream docs cite by line range.
+- **>= 2 example blocks** — the file contains at least two GOOD/BAD pairs, templates, or long sample blocks.
 
-Split 시 규칙과 naming convention 은 `oversized-split.md` 의 §1–§5 를 정본으로 삼는다. 본문에 남기는 것은 **Frontmatter, Design Thinking, Methodology skeleton, Evaluation Criteria, Taboos** 다. references 로 이관하는 것은 계약 본문 전체 인용, 긴 템플릿, 예시 모음이다. references 파일 자체도 300 줄을 넘기지 않는다.
+When splitting, use `oversized-split.md` sections 1-5 as the canonical rule for naming and preservation. Keep **Frontmatter, Design Thinking, Methodology skeleton, Evaluation Criteria, and Taboos** in the main body. Move full contract prose, long templates, and example collections into `references/`. Each reference file must also stay under 300 lines.
 
-### 4. Coexistence with existing references/
+### 4. Coexistence with existing `references/`
 
-기존 sibling 파일 — 예를 들어 이미 있는 `references/some-topic.md` 같은 선행 자산 — 은 **리네이밍/재배열/흡수하지 않는다**. 신규 split 은 net-new material 만 소유하고 기존 파일과 부분 겹치는 영역은 `references/{existing-topic}.md:{line-range}` 로 인용한다. 같은 skill 의 references 파일들 사이에서 **내용 duplication 을 만들지 않는다** — duplication 은 reviewer 가 어느 파일을 채점 근거로 삼을지 애매하게 만든다.
+Do not rename, rearrange, or absorb existing sibling reference files such as `references/some-topic.md`. New split work owns only net-new material. If an existing file already covers part of the topic, cite it with `references/{existing-topic}.md:{line-range}`. Do not create duplication across reference files in the same skill; duplication makes it ambiguous which file the reviewer should treat as the grading source.
 
 ### 5. Non-goals
 
-이 rubric 이 **정의하지 않는** 것:
+This rubric does **not** define:
 
-- **플랫폼 sync 계약** — 플랫폼 디렉터리 배포, 모델 pin, hook wiring 은 host-control 레이어가 가진다.
-- **agent 정의 shape** — frontmatter, `# Role`, `## Principles`, `## Task`, `## Output Format` 은 `agent-authoring.md` 가 소유한다.
-- **문서 관리** — `CLAUDE.md` / `AGENTS.md` / `README.md` 포인터 문서는 별도 관심사다.
+- **Platform sync contracts** — platform directory deployment, model pins, and hook wiring belong to the runtime-control layer.
+- **Agent shape** — frontmatter plus `# Role`, `## Principles`, `## Task`, and `## Output Format` are owned by `agent-authoring.md`.
+- **Pointer-doc maintenance** — `CLAUDE.md`, `AGENTS.md`, and `README.md` are a separate concern.
 
 ## Evaluation Criteria
 
-reviewer 는 skill 산출물을 다음 항목으로 채점한다. 각 항목은 FAIL 근거로 직접 인용된다.
+When reviewing a skill artifact, cite failures directly against these items:
 
-1. **Frontmatter 정확성** — `name` 이 skill 디렉터리 슬러그와 일치하고, `description` 존재, 내부 skill 은 `user-invocable: false`.
-2. **Description-as-trigger 패턴** — 명령형 + 구체 트리거 어휘. 수동 서술 ("This skill helps with ...") 이나 권한 문구 ("Loaded ONLY by X") 없음.
-3. **섹션 순서 준수** — Design Thinking → Methodology → Evaluation Criteria → Taboos. optional 블록은 뒤에.
-4. **Design Thinking 밀도** — "왜 이 skill 이 존재하며 producer/reviewer 가 무엇을 판단하는가" 가 1 문단 이상 있다.
-5. **Line budget (≤ 200 줄)** — 본문이 200 줄 이내, 넘으면 split 필요.
-6. **References split 적용** — §3 의 세 threshold 중 하나라도 걸렸는데 split 이 안 되어 있으면 FAIL.
-7. **References naming convention** — `references/{kebab-topic}.md` 만 허용. 일반명 (`notes.md`, `details.md`, `misc.md`) 과 버전 접미사 (`v2.md`) 금지.
-8. **References readability floor** — 어떤 references 파일도 300 줄을 넘지 않는다.
-9. **Producer-Reviewer shareability** — 같은 skill 본문을 producer 가 생성 기준으로, reviewer 가 채점 기준으로 **동시에** 쓸 수 있는가.
-10. **Taboos 존재성** — 최소 4개 이상의 구체 taboo.
-11. **Korean prose, English identifiers** — 설명은 한국어, 파일명/식별자/frontmatter 키는 영어. 이모지 없음.
-12. **Non-goal 명시** — sync / agent-shape / docs 같은 인접 관심사가 다른 rubric 로 위임되어 있다.
+1. **Frontmatter correctness** — `name` matches the skill directory slug, `description` exists, and internal skills set `user-invocable: false`.
+2. **Description-as-trigger pattern** — imperative form plus specific trigger vocabulary. No passive descriptions such as "This skill helps with ..." and no authority phrases such as "Loaded ONLY by X".
+3. **Section-order compliance** — Design Thinking -> Methodology -> Evaluation Criteria -> Taboos. Optional blocks come after that.
+4. **Design Thinking density** — at least one paragraph explains why the skill exists and what the producer/reviewer are judging.
+5. **Line budget (<= 200 lines)** — if it goes past 200, a split is required.
+6. **Reference split applied** — if any threshold from §3 is met and no split exists, fail it.
+7. **Reference naming convention** — only `references/{kebab-topic}.md` is allowed. Generic names such as `notes.md`, `details.md`, `misc.md`, or version suffixes such as `v2.md` are forbidden.
+8. **Reference readability floor** — no reference file exceeds 300 lines.
+9. **Producer-reviewer shareability** — can the same skill body serve simultaneously as a producer creation guide and a reviewer grading guide?
+10. **Taboo presence** — at least four concrete taboos exist.
+11. **English prose, English identifiers** — body prose is English, identifiers and frontmatter keys are English, and there are no emojis.
+12. **Non-goal clarity** — neighboring concerns such as sync, agent shape, or pointer docs are clearly delegated elsewhere.
 
 ## Taboos
 
-- 이모지 사용 (예: 체크마크, 화살표 글리프).
-- 수동 description ("This skill helps with ...", "Covers X topic"). 플랫폼이 트리거로 인식하지 못한다.
-- 권한형 description ("Loaded ONLY by …", "never by workers"). 플랫폼이 skill 본문을 드롭한다.
-- sibling rubric 의 절차를 재서술 (예: `agent-authoring.md` 의 `## Principles` 5-bullet 규칙을 본 skill 에서 다시 명시). Non-goal 경계를 침범한다.
-- 일반명 references 파일 (`notes.md`, `details.md`, `misc.md`, `v2.md`). reviewer 가 line-range anchor 를 못 잡고, 중복이 파일 경계를 넘어 흐른다.
-- 300 줄을 넘는 references 파일. §3 trigger 1 을 재귀 위반.
-- Design Thinking 생략. trigger 직후 판단 근거를 잃는다.
-- 절차 transcript 를 본문에 박제 (예: "step 1: ..., step 2: ..., step 3: ..." 을 30 줄). methodology 는 판단 기준이지 대본이 아니다.
+- Use emojis such as checkmarks or arrow glyphs.
+- Write passive descriptions such as "This skill helps with ..." or "Covers X topic". Platforms may not recognize them as triggers.
+- Write access-scoped descriptions such as "Loaded ONLY by ..." or "never by workers". Platforms may drop the skill body.
+- Re-state procedures owned by sibling rubrics, such as the exact five-bullet rule from `agent-authoring.md`. That invades a non-goal boundary.
+- Use generic reference filenames such as `notes.md`, `details.md`, `misc.md`, or `v2.md`. Reviewers lose clean line-range anchors and duplication leaks across file boundaries.
+- Allow any reference file to exceed 300 lines. That violates the split trigger recursively.
+- Omit Design Thinking. Without it, the trigger fires but the reader loses the rationale.
+- Freeze a step transcript into the body with thirty lines of "step 1, step 2, step 3". Methodology is a judgment framework, not a script.
 
 ## Examples (BAD / GOOD)
 
-description 필드 한 예시로 bad / good 대비를 고정한다. 가상의 `api-design` 스킬 기준.
+Use this one `description` example as a fixed contrast. The hypothetical skill is `api-design`.
 
 ```yaml
-# BAD — 수동 서술, 트리거 없음, 권한형
+# BAD — passive description, no trigger, access-scoped
 description: "This skill describes REST API design conventions. Loaded ONLY by api-designer; never by workers."
 ```
 
 ```yaml
-# GOOD — 명령형 + 구체 트리거 + 권한 문구 없음
+# GOOD — imperative + specific trigger + no authority phrase
 description: "Use when drafting or reviewing a REST endpoint spec in this project. Invoke whenever a producer writes an endpoint description or a reviewer grades path/method/response conventions."
 ```
 
 ## References
 
-- `oversized-split.md` — split trigger 세 threshold, naming convention, cross-file citation shape, stays-in-SKILL 목록, quality-preservation invariants, coexistence 규율. 본 skill 의 §3 가 본 파일을 정본으로 인용한다.
+- `oversized-split.md` — the three split thresholds, naming convention, cross-file citation shape, what stays in SKILL.md, and quality-preservation invariants. §3 of this skill cites it as canonical.

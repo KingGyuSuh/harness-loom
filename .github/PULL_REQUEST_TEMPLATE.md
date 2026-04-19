@@ -11,10 +11,7 @@
 
 ## Verification
 
-- [ ] Install smoke test passes:
-      `rm -rf /tmp/harness-ci && mkdir /tmp/harness-ci && node skills/harness-init/scripts/install.ts /tmp/harness-ci`
-- [ ] Sync smoke test passes (if `scripts/*.ts` touched):
-      `cd /tmp/harness-ci && node <repo>/skills/harness-pair-dev/scripts/sync.ts --provider codex,gemini`
+- [ ] Test suite passes: `node --test tests/*.test.mjs`
 - [ ] Editor TS diagnostics clean on edited `scripts/*.ts`
 - [ ] `CHANGELOG.md` updated under `## [Unreleased]` (skip for docs-only)
 - [ ] No `{{PLACEHOLDER}}` residue in generated templates

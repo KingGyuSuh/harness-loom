@@ -59,19 +59,23 @@ skills/harness-init/references/runtime/  # target-side runtime templates (`*.tem
 ## Making a change
 
 1. **Fork and branch.** Branch name should be a short slug (`fix/codex-toml-schema`, `feat/pair-hint-flag`).
-2. **Run locally.** If you touched any `scripts/*.ts`, run the install + sync smoke test:
+2. **Run the test suite.**
    ```bash
-   rm -rf /tmp/harness-ci && mkdir /tmp/harness-ci
-   node skills/harness-init/scripts/install.ts /tmp/harness-ci
-   cd /tmp/harness-ci && node /absolute/path/to/harness-loom/skills/harness-pair-dev/scripts/sync.ts --provider codex,gemini
+   node --test tests/*.test.mjs
    ```
-   Both should exit 0 and produce valid output.
+   The suite spins up temp directories, runs `install.ts` / `sync.ts` /
+   `register-pair.ts` / `hook.sh` against them, and asserts on the
+   generated files (Codex nested `hooks.json`, `[features] codex_hooks`,
+   platform-dispatched `hook.sh reason`, register-pair contract format,
+   no absolute-path leaks, etc). No external dependencies — Node 22.6+'s
+   built-in `node:test` runner is the only requirement. CI runs the same
+   command on every push and pull request.
 3. **Type check (editor-based).** This repo is zero-build — scripts run via
    Node 22.6+ native type stripping, and there is no `package.json` /
    `tsconfig.json`. Keep signatures honest by opening the edited `scripts/*.ts`
    in an editor with a bundled TS language server (VS Code, WebStorm, etc.)
-   and resolving any reported diagnostics before sending the PR. The smoke
-   test in step 2 catches runtime regressions; type drift is caught by the
+   and resolving any reported diagnostics before sending the PR. The test
+   suite in step 2 catches runtime regressions; type drift is caught by the
    editor, not a CI-style `tsc` invocation.
 4. **Commit style.**
    - `feat: <scope> — <change>` for user-visible additions

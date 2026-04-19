@@ -100,7 +100,7 @@ async function discoverPairs(): Promise<Pair[]> {
 function renderSection(pairs: Pair[]): string {
   const lines: string[] = [SECTION_HEADING, ""];
   if (pairs.length === 0) {
-    lines.push("아직 등록된 pair 가 없다. `/harness-pair-dev --add <pair-slug> --purpose \"<text>\"` 로 추가한다.");
+    lines.push("No pairs are registered yet. Add one with `/harness-pair-dev --add <pair-slug> --purpose \"<text>\"`.");
   } else {
     for (const p of pairs) {
       const reviewerField =
@@ -112,7 +112,7 @@ function renderSection(pairs: Pair[]): string {
   }
   lines.push("");
   lines.push(
-    "> 이 섹션은 `docs-sync.ts` 가 target 의 `harness-orchestrate/SKILL.md` 의 `## Registered pairs` 섹션을 파싱해 유지한다. 수동 편집은 다음 pair 추가/수정 시 덮어쓰인다.",
+    "> This section is maintained by `docs-sync.ts`, which parses the target `harness-orchestrate/SKILL.md` `## Registered pairs` section. Manual edits are overwritten on the next pair add/update.",
   );
   return lines.join("\n") + "\n";
 }

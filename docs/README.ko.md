@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#멀티-플랫폼)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.1.0 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
+> **상태:** 0.1.1 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
 
 `harness-loom`은 대상 리포지토리에 런타임 하네스를 설치하고, 프로젝트에 맞는 pair를 하나씩 키워 가는 팩토리 플러그인입니다.
 

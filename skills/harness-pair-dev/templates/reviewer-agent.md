@@ -4,7 +4,7 @@ description: "Use when the target's `/harness-orchestrate` dispatches the `{{PAI
 skills:
   - {{SKILL_SLUG}}
   - harness-context
-  # 이하 optional — 이 reviewer 만 참조할 부가 도메인 skill 을 필요하면 append
+  # Optional below: append extra domain skills only this reviewer should read.
   # - {{EXTRA_SKILL_SLUG}}
 model: opus
 ---

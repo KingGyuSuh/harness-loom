@@ -218,7 +218,7 @@ async function writeClaudeSettings(target: string, force: boolean): Promise<stri
   const hooks = (existing.hooks as Record<string, unknown>) ?? {};
   hooks.Stop = [
     {
-      hooks: [{ type: "command", command: "bash .harness/hook.sh" }],
+      hooks: [{ type: "command", command: "bash .harness/hook.sh claude" }],
     },
   ];
   existing.hooks = hooks;

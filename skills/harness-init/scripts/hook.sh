@@ -43,5 +43,15 @@ loop_line="$(grep -E '^[[:space:]]*-?[[:space:]]*loop:' "$state_file" | head -n1
 loop_value="$(printf '%s' "$loop_line" | sed -E 's/.*loop:[[:space:]]*([A-Za-z]+).*/\1/' | tr '[:upper:]' '[:lower:]')"
 [[ "$loop_value" == "true" ]] || exit 0
 
-# Orchestrator slash command is fixed at install time (one orchestrator per harness).
-printf '{"decision":"block","reason":"/harness-orchestrate"}\n'
+# Orchestrator invocation syntax differs per platform:
+#   claude  → /harness-orchestrate   (slash command)
+#   codex   → $harness-orchestrate   (skill mention; /name is reserved for built-ins)
+#   gemini  → /harness-orchestrate   (slash command; AfterAgent event)
+# Platform is passed as $1 by each platform's hook config. Default to claude
+# for back-compat with older harnesses that wired `bash .harness/hook.sh` bare.
+platform="${1:-claude}"
+case "$platform" in
+  codex)   reason='$harness-orchestrate' ;;
+  *)       reason='/harness-orchestrate' ;;
+esac
+printf '{"decision":"block","reason":"%s"}\n' "$reason"

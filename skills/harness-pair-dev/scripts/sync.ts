@@ -304,6 +304,12 @@ async function cleanStaleAgents(
 
 // sync.ts owns codex/gemini hook wiring as part of deploy. Claude is wired by
 // install.ts; sync never touches `.claude/settings.json` (user property).
+//
+// Codex hook config shape (verified against codex-rs/hooks/src/engine/config.rs):
+//   { hooks: { Stop: [ { hooks: [ { type: "command", command, timeout } ] } ] } }
+// The shorthand { Stop: [ { command } ] } is a hard parse error under serde.
+// `codex_hooks = true` feature flag in .codex/config.toml is required for the
+// engine to load hooks.json at all (developers.openai.com/codex/hooks).
 async function writeCodexHookConfig(targetRoot: string): Promise<string> {
   const hooksPath = join(targetRoot, ".codex", "hooks.json");
   await mkdir(dirname(hooksPath), { recursive: true });
@@ -315,9 +321,38 @@ async function writeCodexHookConfig(targetRoot: string): Promise<string> {
       payload = {};
     }
   }
-  payload.Stop = [{ command: "bash .harness/hook.sh" }];
+  const hooks = (payload.hooks as Record<string, unknown>) ?? {};
+  hooks.Stop = [
+    {
+      hooks: [
+        { type: "command", command: "bash .harness/hook.sh codex", timeout: 30 },
+      ],
+    },
+  ];
+  payload.hooks = hooks;
   await writeFile(hooksPath, JSON.stringify(payload, null, 2) + "\n");
   return hooksPath;
+}
+
+async function writeCodexConfigToml(targetRoot: string): Promise<string> {
+  const configPath = join(targetRoot, ".codex", "config.toml");
+  await mkdir(dirname(configPath), { recursive: true });
+  let content = "";
+  if (await exists(configPath)) content = await readFile(configPath, "utf8");
+  const flagRegex = /(^|\n)[ \t]*codex_hooks[ \t]*=[ \t]*(true|false)/;
+  if (flagRegex.test(content)) {
+    content = content.replace(flagRegex, "$1codex_hooks = true");
+  } else if (/(^|\n)\[features\][^\S\n]*\n/.test(content)) {
+    content = content.replace(
+      /(^|\n)\[features\]([^\n]*)\n/,
+      `$1[features]$2\ncodex_hooks = true\n`,
+    );
+  } else {
+    if (content.length > 0 && !content.endsWith("\n")) content += "\n";
+    content += (content.length > 0 ? "\n" : "") + "[features]\ncodex_hooks = true\n";
+  }
+  await writeFile(configPath, content);
+  return configPath;
 }
 
 async function writeGeminiHookConfig(targetRoot: string): Promise<string> {
@@ -332,7 +367,7 @@ async function writeGeminiHookConfig(targetRoot: string): Promise<string> {
     }
   }
   const hooks = (existing.hooks as Record<string, unknown>) ?? {};
-  hooks.AfterAgent = [{ command: "bash .harness/hook.sh" }];
+  hooks.AfterAgent = [{ command: "bash .harness/hook.sh gemini" }];
   existing.hooks = hooks;
   await writeFile(settingsPath, JSON.stringify(existing, null, 2) + "\n");
   return settingsPath;
@@ -365,6 +400,7 @@ async function deployCodex(targetRoot: string, agents: AgentFile[], skills: Skil
     }
   }
   copied.push(await writeCodexHookConfig(targetRoot));
+  copied.push(await writeCodexConfigToml(targetRoot));
   return { copied, deleted };
 }
 
