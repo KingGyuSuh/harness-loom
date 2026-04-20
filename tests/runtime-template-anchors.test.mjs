@@ -35,6 +35,14 @@ const DOC_KEEPER_PRODUCER_TEMPLATE = join(
   REPO_ROOT,
   "plugins/harness-loom/skills/harness-init/references/runtime/harness-doc-keeper-producer.template.md",
 );
+const STATE_TEMPLATE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/state.template.md",
+);
+const STATE_SCHEMA = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-orchestrate/references/state-md-schema.md",
+);
 
 test("orchestrate template exists at the canonical factory path", () => {
   assert.ok(
@@ -285,6 +293,149 @@ test("runtime templates outside doc-keeper do not reference factory-only plugin 
       assert.ok(
         !body.includes(token),
         `${template} must not reference factory-only token ${token}`,
+      );
+    }
+  }
+});
+
+// Defer-to-end planner continuation contract. These tests pin the load-bearing
+// tokens so a future refactor cannot silently drop the `planner-continuation`
+// flag, the `next-action` grammar, or the Intent prefixes the planner relies on
+// to tell a structural-issue recall from a defer-to-end recall.
+
+test("state schema documents the 4-line header including planner-continuation", () => {
+  const body = readFileSync(STATE_SCHEMA, "utf8");
+  assert.match(
+    body,
+    /four-line header/,
+    "schema must describe the header as four lines now that planner-continuation exists",
+  );
+  assert.match(
+    body,
+    /^planner-continuation: <pending\|none>$/m,
+    "schema must show the planner-continuation canonical grammar",
+  );
+  assert.match(
+    body,
+    /\(planner continuation: \.\.\.\)/,
+    "schema must document the Intent prefix for defer-to-end recalls",
+  );
+  assert.match(
+    body,
+    /\(retreat reason: \.\.\.\)/,
+    "schema must keep the retreat Intent prefix so planner can distinguish recall modes",
+  );
+});
+
+test("state.template.md initializes planner-continuation: none", () => {
+  const body = readFileSync(STATE_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /^planner-continuation: none$/m,
+    "fresh cycle state must default planner-continuation to none so cold start is deterministic",
+  );
+});
+
+test("orchestrate template encodes the defer-to-end continuation flow", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("planner-continuation: pending"),
+    "orchestrate must write planner-continuation: pending from next-action=continue",
+  );
+  assert.ok(
+    body.includes("planner-continuation: none"),
+    "orchestrate must describe the cleared flag state",
+  );
+  assert.ok(
+    body.includes("defer-to-end"),
+    "orchestrate must label the continuation semantics as defer-to-end so the flag is not misread as next-turn recall",
+  );
+  assert.ok(
+    body.includes("Phase advance rule 4"),
+    "orchestrate must cite Phase advance rule 4 as the consumer of the pending flag",
+  );
+});
+
+test("orchestrate zero-emit safety keys off planner-continuation, not Phase alone", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("Zero-emit safety"),
+    "orchestrate must retain the zero-emit safety clause that prevents pathological continuation",
+  );
+  // The safety must not key purely off `Phase: planner`, because cold start,
+  // goal-reset, structural-retreat-to-planner, and ready-set-empty recall all
+  // arrive with Phase: planner and must not trip the safety.
+  assert.match(
+    body,
+    /planner-continuation: pending[\s\S]{0,200}turn start/i,
+    "zero-emit safety must be gated on planner-continuation: pending at turn start, not on Phase=planner alone",
+  );
+});
+
+test("planning template teaches the next-action continue|done grammar", () => {
+  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("next-action: done"),
+    "planning template must document the done signal",
+  );
+  assert.ok(
+    body.includes("next-action: continue"),
+    "planning template must document the continue signal",
+  );
+  assert.match(
+    body,
+    /defer-to-end|after .* terminal/i,
+    "planning template must describe continue as defer-to-end, not immediate recall",
+  );
+});
+
+test("planning template distinguishes structural-issue recall from defer-to-end recall", () => {
+  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("(retreat reason:"),
+    "planning template must name the retreat Intent prefix so the planner knows it is a structural recall",
+  );
+  assert.ok(
+    body.includes("(planner continuation:"),
+    "planning template must name the continuation Intent prefix so the planner knows to re-plan against events.md",
+  );
+});
+
+test("planner agent template exposes next-action as load-bearing", () => {
+  const body = readFileSync(PLANNER_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /next-action: <"done"\s*\|\s*"continue/,
+    "planner Output Format must show the load-bearing next-action grammar",
+  );
+  assert.ok(
+    body.includes("defer-to-end"),
+    "planner description must mention defer-to-end so authors do not expect next-turn recall",
+  );
+});
+
+test("legacy planner continuation tokens are fully removed", () => {
+  const tokens = [
+    "NEEDS-MORE-TURNS",
+    "no further planning required",
+    "actual Next-action",
+  ];
+  const templates = [
+    ORCHESTRATE_TEMPLATE,
+    PLANNING_TEMPLATE,
+    PLANNER_TEMPLATE,
+    STATE_TEMPLATE,
+    STATE_SCHEMA,
+    CONTEXT_TEMPLATE,
+    DOC_KEEPER_SKILL_TEMPLATE,
+    DOC_KEEPER_PRODUCER_TEMPLATE,
+  ];
+  for (const template of templates) {
+    const body = readFileSync(template, "utf8");
+    for (const token of tokens) {
+      assert.ok(
+        !body.includes(token),
+        `${template} must not carry legacy token "${token}"`,
       );
     }
   }

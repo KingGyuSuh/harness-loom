@@ -3,6 +3,7 @@
 Goal (from {{GOAL_SOURCE}}): {{GOAL_BODY}}
 Phase: planner
 loop: false
+planner-continuation: none
 
 ## Next
 To: planner

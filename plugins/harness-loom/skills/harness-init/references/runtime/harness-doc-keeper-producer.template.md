@@ -43,7 +43,7 @@ Layout rationale: {which categories were chosen and why, cited against project e
 Impact map: [{cycle event or task → doc file touched}]
 Pointers updated: {CLAUDE.md yes/no, AGENTS.md yes/no}
 Self-verification: {coverage, preserved-byte checks on hand-authored sections, generated-file determinism}
-Suggested next-work: "{advisory suggestion, orchestrator synthesizes actual Next-action}"
+Suggested next-work: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
 Remaining items: [{items not yet done}]
 Escalation: {none | structural-retreat-to-<stage>, reason}
 ```

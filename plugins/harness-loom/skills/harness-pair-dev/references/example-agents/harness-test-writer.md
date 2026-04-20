@@ -38,7 +38,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "{advisory suggestion, orchestrator synthesizes actual Next-action}"
+Suggested next-work: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
 Remaining items: [{items not yet done}]
 Escalation: {none | structural-retreat-to-<stage>, reason}
 ```
