@@ -30,7 +30,7 @@ At dispatch time the orchestrator supplies the following fields in the prompt. T
 - **Current phase** — the natural-language instruction for what must happen now. This field settles "what do I do in this turn?"
 - **Prior tasks / Prior reviews** — arrays of previous artifact paths. On rework they provide the baseline; on retreat they provide the target to repair; on forward progress they provide the upstream stage artifacts needed for the current global-roster gate.
 - **Axis** — reviewer-only field. In a 1:M pair it names the grading axis owned by this reviewer. In 1:1 it is omitted or set to `(entire pair)`.
-- **Existing EPICs / Recent events** — planner-only additions. They provide the current EPIC list and recent state changes.
+- **Existing EPICs / Recent events / Registered roster** — planner-only additions. They provide the current EPIC list, recent state changes, and the project's global roster (the `## Registered pairs` block copied verbatim). The planner uses only these envelope fields and never reads other SKILL files to discover the roster.
 
 ### 3. If you are the producer
 

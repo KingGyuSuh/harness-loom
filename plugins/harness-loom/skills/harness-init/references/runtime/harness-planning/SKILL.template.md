@@ -45,7 +45,7 @@ Each EPIC has four planner-owned fields:
 
 ### 4. Use the fixed roster correctly
 
-The project owns one **global roster order** derived from `harness-orchestrate/SKILL.md` `## Registered pairs`. Each EPIC's `roster` is a **subsequence** of that order:
+The project owns one **global roster order** supplied by the orchestrator in the dispatch envelope as `Registered roster`. Each EPIC's `roster` is a **subsequence** of that order:
 
 ```text
 roster: <pair1-producer> → <pair3-producer> → <pair5-producer>

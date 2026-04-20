@@ -20,7 +20,7 @@ The producer responsible for decomposing the current goal into outcome EPICs and
 
 ## Task
 
-1. Read `Goal`, `Existing EPICs`, and `Recent events` from the envelope.
+1. Read `Goal`, `Existing EPICs`, `Recent events`, and `Registered roster` from the envelope. Treat `Registered roster` as the authoritative pair list for this turn; do not consult any SKILL file to discover roster state.
 2. Scan this project's README, root docs, and major directories for domain signals.
 3. Turn the goal markdown into citation-ready notes such as `goal.md:Lxx`.
 4. Name downstream EPIC slugs starting at `EP-1--{outcome-slug}`; on re-plan turns, continue numbering after the last existing EPIC.

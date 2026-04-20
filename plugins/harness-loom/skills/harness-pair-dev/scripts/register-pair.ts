@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 // Purpose: Register a newly authored producer-reviewer pair into an existing
-//          target harness. Inserts a roster line into both
-//          `<target>/.harness/loom/skills/harness-orchestrate/SKILL.md` and
-//          `<target>/.harness/loom/skills/harness-planning/SKILL.md` so the
-//          orchestrator and planner discover the new department.
+//          target harness. Inserts a roster line into
+//          `<target>/.harness/loom/skills/harness-orchestrate/SKILL.md`
+//          `## Registered pairs`. That section is the sole roster SSOT; the
+//          planner receives the current roster through the orchestrator's
+//          dispatch envelope (`Registered roster`), so no planner-side file
+//          is edited here.
 //
 //          Registrations write to `.harness/loom/` (canonical staging), not to
 //          any derived platform tree. Pair agent/skill files authored alongside
@@ -35,8 +37,8 @@
 // `--before`/`--after` is an in-place replace (roster position is preserved);
 // re-registering WITH an anchor removes the old line and re-inserts at the
 // anchor (that is how a caller deliberately moves a pair). See `insertEntry`
-// below for the full semantics matrix. Both skill files must already exist
-// (run /harness-init first).
+// below for the full semantics matrix. The target orchestrator SKILL file
+// must already exist (run /harness-init first).
 
 import { readFile, writeFile, access } from "node:fs/promises";
 import { constants as FS } from "node:fs";
@@ -220,8 +222,19 @@ async function upsertSection(
   const raw = await readFile(filePath, "utf8");
   let next: string;
   const headingLine = `## ${heading}`;
-  if (raw.includes(headingLine)) {
-    const idx = raw.indexOf(headingLine);
+  // Match the heading only when it sits at the start of a line and the line
+  // ends immediately after the heading text. `indexOf(headingLine)` alone
+  // would also match inline occurrences like `` `## Registered pairs` `` that
+  // the skill body uses for cross-reference prose.
+  const headingIdxLineStart = raw.indexOf(`\n${headingLine}\n`);
+  const headingIdx =
+    headingIdxLineStart !== -1
+      ? headingIdxLineStart + 1
+      : raw.startsWith(`${headingLine}\n`)
+      ? 0
+      : -1;
+  if (headingIdx !== -1) {
+    const idx = headingIdx;
     const bodyStart = raw.indexOf("\n", idx) + 1;
     const nextHeading = raw.indexOf("\n## ", bodyStart);
     const bodyEnd = nextHeading === -1 ? raw.length : nextHeading;
@@ -269,7 +282,15 @@ async function removeFromSection(
 ): Promise<{ changed: boolean }> {
   const raw = await readFile(filePath, "utf8");
   const headingLine = `## ${heading}`;
-  const headingIdx = raw.indexOf(headingLine);
+  // Line-anchored heading match — see upsertSection for the rationale. Inline
+  // backtick references like `` `## Registered pairs` `` must not match.
+  const headingIdxLineStart = raw.indexOf(`\n${headingLine}\n`);
+  const headingIdx =
+    headingIdxLineStart !== -1
+      ? headingIdxLineStart + 1
+      : raw.startsWith(`${headingLine}\n`)
+      ? 0
+      : -1;
   if (headingIdx === -1) return { changed: false };
   const bodyStart = raw.indexOf("\n", headingIdx) + 1;
   const nextHeading = raw.indexOf("\n## ", bodyStart);
@@ -289,20 +310,16 @@ async function main() {
   const args = parseArgs(process.argv);
   const target = isAbsolute(args.target) ? args.target : resolve(process.cwd(), args.target);
   const orchestratePath = join(target, ".harness", "loom", "skills", "harness-orchestrate", "SKILL.md");
-  const planningPath = join(target, ".harness", "loom", "skills", "harness-planning", "SKILL.md");
 
   if (!(await exists(orchestratePath))) die(`missing ${orchestratePath} (run /harness-init first)`);
-  if (!(await exists(planningPath))) die(`missing ${planningPath} (run /harness-init first)`);
 
   if (args.unregister) {
     const orchestrate = await removeFromSection(orchestratePath, "Registered pairs", args.pair);
-    const planning = await removeFromSection(planningPath, "Available departments", args.pair);
     const summary = {
       target,
       pair: args.pair,
       action: "unregister",
       orchestrate: { path: orchestratePath, changed: orchestrate.changed },
-      planning: { path: planningPath, changed: planning.changed },
     };
     process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
     return;
@@ -335,13 +352,6 @@ async function main() {
     entry,
     placement,
   );
-  const planning = await upsertSection(
-    planningPath,
-    "Available departments",
-    args.pair,
-    entry,
-    placement,
-  );
 
   const summary = {
     target,
@@ -349,7 +359,6 @@ async function main() {
     entry,
     placement,
     orchestrate: { path: orchestratePath, changed: orchestrate.changed },
-    planning: { path: planningPath, changed: planning.changed },
   };
   process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
 }

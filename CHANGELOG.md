@@ -43,13 +43,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `events.md` in the same response before continuing Cold start.
   Removing `init.ts` eliminates a duplicate template body and makes the
   reset path auditable from the orchestrate SKILL alone.
-- **`register-pair.ts --unregister` is scoped to the roster sections
-  only.** Previous implementation removed every line in the target
-  SKILL file that started with `- <pair>:`, which could delete prose
-  examples or other sections that happened to share the prefix. The
-  new implementation is bounded to `## Registered pairs` in the
-  orchestrator SKILL and `## Available departments` in the planning
-  SKILL; narrative elsewhere in those files is preserved.
+- **Roster is sourced from a single file.** The orchestrator SKILL's
+  `## Registered pairs` section is the sole roster SSOT. `register-pair.ts`
+  writes only that section, and the planner receives the current roster
+  through the dispatch envelope (`Registered roster` field); the earlier
+  mirrored list in `harness-planning/SKILL.md` is gone, removing the
+  drift risk where a partial write could leave the two files out of
+  sync. `--unregister` is likewise bounded to that one section, and
+  prose elsewhere in the SKILL is preserved.
 - **`/harness-pair-dev` no longer auto-runs sync.** After `--add`,
   `--improve`, or `--split`, the user re-runs
   `node .harness/loom/sync.ts --provider <list>` explicitly to deploy

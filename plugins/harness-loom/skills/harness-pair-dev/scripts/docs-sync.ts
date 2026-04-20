@@ -92,8 +92,17 @@ async function discoverPairs(): Promise<Pair[]> {
   if (!(await exists(REGISTRATION_SOURCE))) return [];
   const raw = await readFile(REGISTRATION_SOURCE, "utf8");
   // Extract the `## Registered pairs` section body (up to next `## ` heading).
+  // Anchor the heading match to start-of-line + newline so inline backtick
+  // references like `` `## Registered pairs` `` in the surrounding prose do
+  // not get picked up as the real heading.
   const heading = "## Registered pairs";
-  const idx = raw.indexOf(heading);
+  const lineStart = raw.indexOf(`\n${heading}\n`);
+  const idx =
+    lineStart !== -1
+      ? lineStart + 1
+      : raw.startsWith(`${heading}\n`)
+      ? 0
+      : -1;
   if (idx < 0) return [];
   const afterHeading = raw.indexOf("\n", idx);
   const nextHeading = raw.indexOf("\n## ", afterHeading + 1);

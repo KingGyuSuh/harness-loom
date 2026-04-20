@@ -35,7 +35,7 @@ Target is always the current working directory. Sync is explicit: after authorin
    - `--reviewer none` -> reviewer-less producer-only group for deterministic auxiliary work
 4. Read the authoring references and the target codebase before writing anything. The pair must anchor to the real repo, not to abstract boilerplate.
 5. Author the producer, reviewer(s), and shared pair skill from templates, using repo-specific evidence in the identity, principles, methodology, evaluation criteria, and taboos.
-6. Run `register-pair.ts` to update `## Registered pairs` and `## Available departments`. Pass `--before <slug>` or `--after <slug>` when the new pair belongs at a specific point in the project-global roster order; omit them only when appending is genuinely the right workflow choice.
+6. Run `register-pair.ts` to update `## Registered pairs` in the orchestrator SKILL. Pass `--before <slug>` or `--after <slug>` when the new pair belongs at a specific point in the project-global roster order; omit them only when appending is genuinely the right workflow choice.
 7. Run `docs-sync.ts` so pointer docs stay aligned.
 8. Tell the user to run `node .harness/loom/sync.ts --provider <list>` from the target root.
 
@@ -77,12 +77,7 @@ The choice must stay explicit at every layer:
 
 ### 7. Registration contract
 
-`register-pair.ts` updates two target files:
-
-- `<target>/.harness/loom/skills/harness-orchestrate/SKILL.md` `## Registered pairs`
-- `<target>/.harness/loom/skills/harness-planning/SKILL.md` `## Available departments`
-
-That registration line is the project's global roster contract. Placement matters. It is not just a changelog.
+`register-pair.ts` updates `<target>/.harness/loom/skills/harness-orchestrate/SKILL.md` `## Registered pairs`. That section is the project's sole roster SSOT: the orchestrator reads it at dispatch time, and the planner receives it through the dispatch envelope. Placement matters. It is not just a changelog.
 
 ## Evaluation Criteria
 

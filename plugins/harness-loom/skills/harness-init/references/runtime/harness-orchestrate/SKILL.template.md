@@ -120,6 +120,7 @@ Planner-only additions:
 
 - **Existing EPICs** — the full `## EPIC summaries` block from `state.md`
 - **Recent events** — the last five lines of `events.md`
+- **Registered roster** — the full `## Registered pairs` block from this SKILL, copied verbatim so the planner can author EPIC roster slices without reading any other SKILL file
 
 Subagents trust only the envelope. They do not read `state.md` and infer routing. Reviewers judge only one task file plus the pair skill; they do not inspect producer transcript or tool trace.
 
