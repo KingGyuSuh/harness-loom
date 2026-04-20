@@ -1,6 +1,6 @@
 ---
 name: harness-doc-keeper
-description: "Use when authoring or grading the `harness-doc-keeper-producer`'s cycle-end documentation refresh. Defines how to derive durable module docs from this project's current filesystem and source files, how to keep `.harness/docs/<module>.md` anchored to source at `file:line`, and how to rewrite only the `## Modules` block in `CLAUDE.md` / `AGENTS.md`. Invoke whenever the orchestrator's halt-prep step dispatches the doc-keeper, or whenever its self-verified output is audited."
+description: "Use when authoring or grading the `harness-doc-keeper-producer`'s cycle-end documentation pass. Defines how to analyze the project (code + goal + cycle history), design the minimum useful documentation layout for this project, and author or evolve documents in that layout — both at the target root (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `DESIGN.md`, etc.) and under `docs/` subdirectories (`design-docs/`, `product-specs/`, `exec-plans/`, `generated/`, `references/`). Invoke whenever the orchestrator's halt-prep step dispatches the doc-keeper, or whenever its self-verified output is audited."
 user-invocable: false
 ---
 
@@ -8,75 +8,89 @@ user-invocable: false
 
 ## Design Thinking
 
-The doc-keeper turns one cycle's ephemeral task and review artifacts into durable project documentation. Its job is not to narrate the cycle; it is to leave this project with a readable snapshot of what the codebase currently contains. Because this skill runs in many different kinds of projects, it must derive modules from the current codebase's own filesystem and source files rather than from hardcoded harness-shaped vocabulary.
+The doc-keeper is the project's documentation architect. Its purpose is not to dump a module navigator generated from file paths, but to read what this project **is** and what its **goal** is, then build and maintain the documentation surface a team would actually want: product specs, design docs, architectural overviews, execution plans, generated reference material, top-level master files. Because the same skill runs in arbitrary projects — a SaaS product, a CLI, a library, a data pipeline, a game — it must infer the right documentation shape from the target itself rather than from a fixed taxonomy.
 
-This producer is reviewer-less because the work is mostly mechanical: inspect this project's current structure, refresh `.harness/docs/<module>.md`, and replace only the `## Modules` block in `CLAUDE.md` / `AGENTS.md`. The output is still graded, but it is graded from the producer's own `Status` and `Self-verification` evidence, so the work remains `not subject to review`, never "passed without review".
+This producer is reviewer-less because the verdict is auditable from its own output: the `Status: PASS|FAIL` line plus a `Self-verification` block that enumerates which files were created or updated, which cycle evidence drove each change, and which project areas were intentionally left alone. That evidence is sufficient to grade the work without a separate reviewer agent, so the output stays "not subject to review" rather than "passed without review".
 
 ## Methodology
 
-### 1. Derive modules from this project's current shape
+### 1. Analyze the project and its goal
 
-Start from what exists on disk now.
+Read before writing. The doc-keeper's first job is to understand what is being documented.
 
-- Inspect the project root and its primary manifests or entry files.
-- Ignore generated, vendored, cache, and runtime-owned directories such as `.git`, build outputs, `node_modules`, and `.harness/`.
-- Prefer stable project nouns that match how the codebase already decomposes itself: package names, workspace names, service directories, app directories, library directories, or other clear top-level ownership boundaries.
-- Split a broad area one level deeper only when that makes the docs easier to navigate. Keep the structure shallow when the codebase is still small.
-- Keep existing `.harness/docs/<module>.md` files only when they still describe something real or when they must be retained temporarily to avoid dropping useful context during an in-flight refactor.
+- Inspect the project root: `README`, build/runtime manifests (`package.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`, etc.), top-level directories, presence of `src/` vs `app/` vs `cmd/` vs `packages/` vs `services/`.
+- Read `goal.md` (or the goal copy captured in `.harness/cycle/state.md`) to understand what this project is trying to become, what constraints shape it, and what the team cares about.
+- Skim `.harness/cycle/events.md` and recent task/review artifacts to know what has been touched in the cycle just finished and what themes are active (new feature, refactor, tech-debt, perf, security review, migration, etc.).
+- Infer the project **type** and **audience**: product-oriented SaaS, developer library, internal tool, research codebase. The right docs for each differ.
 
-The goal is a module set that matches this project's current codebase, not a perfect universal taxonomy. When two plausible decompositions exist, choose the one that would help a future maintainer find code faster.
+### 2. Design the documentation layout that fits this project
 
-### 2. Write concise module docs anchored to source
+The doc-keeper chooses a layout — it does not follow a fixed template. A well-chosen layout uses as few categories as the project actually needs, names files with domain vocabulary, and leaves room to grow.
 
-Each `.harness/docs/<module>.md` file should be a compact orientation document.
+Useful building blocks the doc-keeper draws from, selecting only what applies:
 
-- Use one `# <Module>` heading.
-- Open with a short summary of what the module owns.
-- Organize the rest into a few `##` sections for the module's real concerns, interfaces, or subsystems.
-- Anchor the summary and every `##` section to source at `file:line`.
-- Mention cycle artifacts only as optional "recent work" context after the source-anchored explanation; they are never the primary evidence.
-- Keep each file concise. If a module becomes crowded, split the material into clearer sibling docs instead of stretching one file into an unreadable dump.
+- **Top-level master files** at the target root. Minimum: `CLAUDE.md` and `AGENTS.md` as pointer documents. Common additions only when the project earns them: `ARCHITECTURE.md` once there is a non-trivial architectural story to tell, `DESIGN.md` / `FRONTEND.md` / `BACKEND.md` once those layers have distinct concerns, `SECURITY.md` / `RELIABILITY.md` / `QUALITY_SCORE.md` once there are real practices to record.
+- **`docs/design-docs/`** for durable design rationale and core beliefs — the "why" that outlives any single feature.
+- **`docs/product-specs/`** for per-feature product and UX specs. Typically include an `index.md` once there is more than a couple of specs.
+- **`docs/exec-plans/`** for in-flight work: `active/` and `completed/` for plan files, plus focused trackers like `tech-debt-tracker.md` when debt is being managed as a continuous concern.
+- **`docs/generated/`** for artifacts auto-derived from source (schema dumps, API inventories). Only create when there is something real to generate.
+- **`docs/references/`** for external material pulled in for context (vendor docs, framework cheat sheets). Only when the team actually relies on such material.
+- **ADRs** (`docs/adr/NNNN-<title>.md` or similar) once the project is making architectural decisions worth recording.
 
-These files are project documentation. Do not turn them into methodology guides, audit logs, or explanations of harness internals.
+Do not create every category above on first contact. Seed only the subset the project's current size and activity justifies; add more on later cycles as evidence arrives.
 
-### 3. Rewrite only the `## Modules` block in pointer docs
+Layout taboos:
+- No invented category that cycle evidence does not support.
+- No duplication of the same information under two different paths.
+- No empty index files with no content; an index only exists when there is more than one sibling to list.
 
-`CLAUDE.md` and `AGENTS.md` are pointer documents. The doc-keeper owns only their `## Modules` block.
+### 3. Author and evolve docs in that layout
 
-- If a file does not exist, create a minimal pointer document with a short prelude and a `## Modules` section.
-- If a file exists and already contains `## Modules`, replace only that block.
-- If a file exists without `## Modules`, append a new `## Modules` block at the end.
-- Preserve every other section as-is. Do not rewrite titles, intros, platform notes, or other hand-authored sections.
+For every doc the layout calls for, author or update it surgically.
 
-The block itself should stay lightweight: one link per module plus a one-line purpose summary.
+- **Create** a file only when there is concrete cycle evidence or durable project evidence to fill it. An empty `SECURITY.md` on a cycle with no security work should not appear.
+- **Update** existing docs in place. Preserve hand-authored sections byte-for-byte unless the cycle's activity contradicts them. When in doubt, append a new `## Changelog` or `## Recent updates` section at the bottom of the file rather than rewriting the body.
+- **Cross-link** rather than duplicate. If `ARCHITECTURE.md` and a design-doc both describe the same decision, one is the source of truth and the other links to it.
+- **Regenerate** `docs/generated/*.md` deterministically from current source each cycle. These files are explicitly overwritable.
+- **Respect** markers like `<!-- doc-keeper: managed begin -->` / `<!-- doc-keeper: managed end -->` if a user has placed them: edit only the managed range and leave everything outside it untouched.
+- **Skip** files when the cycle has no relevant evidence. "No change this cycle" is a valid outcome for most files on most cycles.
 
-### 4. Reviewer-less verdict path
+Never touch source code (`src/`, `lib/`, `app/`, `frontend/`, `backend/`, `cmd/`, `internal/`, migrations, schema files in their code locations, test files). The doc-keeper owns documentation; it does not implement.
+
+### 4. Maintain `CLAUDE.md` / `AGENTS.md` as the pointer surface
+
+`CLAUDE.md` and `AGENTS.md` are the entry points assistants and contributors read first. The doc-keeper owns their `## Documents` section (or equivalent pointer section — choose one name and use it consistently within the project) and only that section.
+
+- If neither file exists, create both with a short prelude and a `## Documents` section that lists every top-level master file and every meaningful `docs/` subtree with a one-line description each.
+- If the files exist with a pointer section already, replace only that section and preserve every other section byte-for-byte.
+- Keep `CLAUDE.md` and `AGENTS.md` aligned inside the pointer section. The rest of the two files may legitimately diverge (platform-specific notes, assistant-specific guidance) and must not be forced into identity.
+
+### 5. Reviewer-less verdict path
 
 The producer emits `Status: PASS|FAIL` and a `Self-verification` block. That is the verdict source for this turn. No reviewer is dispatched, no review file is written, and the registration line keeps the `(no reviewer)` marker. Structural defects still use the shared `## Structural Issue` block.
 
 ## Evaluation Criteria
 
-- Module boundaries come from the project's current on-disk structure and source files, not from hardcoded harness-shaped vocabulary or a universal taxonomy.
-- Every `.harness/docs/<module>.md` file is anchored to source at `file:line` in the summary and in each `##` section.
-- Cycle artifacts, if mentioned, are supplementary context rather than the primary evidence.
-- Module docs stay concise and navigable; crowded material is split instead of accumulated into one oversized file.
-- `CLAUDE.md` and `AGENTS.md` are modified only inside the `## Modules` block.
-- The `## Modules` block stays a pointer surface rather than a second copy of methodology or review history.
-- The producer response ends with `Status: PASS|FAIL` and `Self-verification` that makes coverage and update scope auditable.
+- The layout is derived from reading the project and the goal, not from applying a fixed taxonomy wholesale.
+- Only documentation categories and files with concrete evidence are seeded or updated. Empty placeholders do not appear.
+- Existing hand-authored content is preserved byte-for-byte outside managed sections; updates are surgical.
+- `CLAUDE.md` and `AGENTS.md` carry a pointer section that actually enumerates the real documents present in this target, not a phantom list.
+- Generated docs under `docs/generated/` are derived deterministically from source and are clearly marked as regenerable.
+- Every file the doc-keeper creates or modifies is accounted for in the producer's `Self-verification` block, including an explicit "left alone this cycle" list when that clarifies intent.
+- No source code file is modified. The doc-keeper's write scope is limited to documentation paths.
 - Structural defects are surfaced with the shared `## Structural Issue` block instead of being flattened into a generic FAIL.
 
 ## Taboos
 
-- Invent module names from generic intuition instead of reading the project's actual structure.
-- Hardcode harness-shaped vocabulary such as `skills`, `agents`, or `plugins` as if every codebase this skill runs in had the harness's own shape.
-- Cite only `.harness/cycle/` artifacts as evidence while skipping the project source itself.
-- Rewrite `CLAUDE.md` or `AGENTS.md` wholesale instead of limiting edits to `## Modules`.
-- Fill module docs with methodology, workflow rules, or harness background that belongs elsewhere.
-- Keep stale module docs indefinitely when they no longer describe anything real and no longer help navigation.
-- Create generic filenames such as `notes`, `misc`, or `details` that do not map back to real ownership boundaries.
-- Reframe reviewer-less work as "passed without review" rather than `not subject to review`.
+- Generate one doc per code directory as if every project wanted a module navigator; that is a taxonomy, not a documentation design.
+- Create files the cycle has no evidence for (empty `SECURITY.md`, placeholder `PRODUCT_SENSE.md`) just because a reference layout mentions them.
+- Rewrite an existing hand-authored doc's body wholesale. Surgical append or managed-section edits only.
+- Duplicate the same information in two files instead of cross-linking.
+- Modify source code, tests, build scripts, migrations, or anything outside documentation paths.
+- Keep `CLAUDE.md` and `AGENTS.md` byte-identical outside the pointer section; they are allowed to diverge.
+- Flatten a structural issue into a generic FAIL or present "passed without review" as the reviewer-less verdict posture.
 
 ## References
 
-- `../harness-orchestrate/SKILL.md` — cycle halt behavior and reviewer-less verdict handling
-- `../harness-context/SKILL.md` — envelope reading, output shape, and structural-issue reporting
+- `../harness-orchestrate/SKILL.md` — cycle halt behavior, reviewer-less verdict handling, Authority Rules
+- `../harness-context/SKILL.md` — envelope reading, output shape, structural-issue reporting

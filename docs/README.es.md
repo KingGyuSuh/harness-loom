@@ -29,7 +29,7 @@ Este repositorio es la fábrica. Siembra en el repositorio de destino un harness
 - un contexto de ejecución común para todos los subagentes
 - pairs producer-reviewer específicos del proyecto que vas añadiendo con el tiempo
 
-El `.harness/` del proyecto objetivo se divide en tres namespaces hermanos: `loom/` es el árbol canónico de staging que pertenece a install y sync, `cycle/` contiene el estado de runtime que pertenece al orchestrator y `docs/` es la instantánea documental que pertenece al nuevo producer integrado `harness-doc-keeper`. Los árboles de plataforma (`.claude/`, `.codex/`, `.gemini/`) se derivan de `.harness/loom/` cuando hacen falta.
+El `.harness/` del proyecto objetivo se divide en dos namespaces hermanos: `loom/` es el árbol canónico de staging que pertenece a install y sync, y `cycle/` contiene el estado de runtime que pertenece al orchestrator. La documentación del proyecto vive directamente en el proyecto objetivo (raíz `*.md`, `docs/`), no dentro de `.harness/`. Los árboles de plataforma (`.claude/`, `.codex/`, `.gemini/`) se derivan de `.harness/loom/` cuando hacen falta.
 
 ## Por qué tiene esta forma
 
@@ -61,11 +61,10 @@ target project
     │   ├── state.md
     │   ├── events.md
     │   └── epics/
-    ├── docs/                    # instantánea documental (harness-doc-keeper)
     └── _archive/                # ciclos anteriores; se crea al hacer reset por goal-different
 ```
 
-A continuación deriva al menos un árbol de plataforma con `node .harness/loom/sync.ts --provider claude` (añade `codex,gemini` si es multiplataforma) y luego añade pairs específicos del dominio con `/harness-pair-dev`. El `harness-doc-keeper` integrado es un producer sin reviewer que se dispara automáticamente al final de cada ciclo y proyecta los artefactos task/review de ese ciclo en `.harness/docs/<module>.md` y en `CLAUDE.md` / `AGENTS.md` solo TOC. No lo invocas directamente; el orchestrator lo despacha como último turno sin reviewer antes de detenerse.
+La documentación del proyecto (raíz `*.md`, `docs/`) se almacena **directamente en el proyecto objetivo**, fuera de `.harness/`. A continuación deriva al menos un árbol de plataforma con `node .harness/loom/sync.ts --provider claude` (añade `codex,gemini` si es multiplataforma) y luego añade pairs específicos del dominio con `/harness-pair-dev`. El `harness-doc-keeper` integrado es un producer sin reviewer que se dispara automáticamente al final de cada ciclo, lee el proyecto + goal + actividad del ciclo y autora/evoluciona la documentación que este proyecto realmente necesita (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/design-docs/`, `docs/product-specs/`, `docs/exec-plans/`, etc. — solo el subconjunto que la evidencia del proyecto justifica). No lo invocas directamente; el orchestrator lo despacha como último turno sin reviewer antes de detenerse.
 
 ## Requisitos
 
@@ -170,7 +169,7 @@ node .harness/loom/sync.ts --provider claude
 /harness-orchestrate goal.md
 ```
 
-Las salidas se guardan en `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. El estado de ejecución vive en `.harness/cycle/state.md` y el registro de eventos en `.harness/cycle/events.md`. Antes de detenerse en cada ciclo, el orchestrator despacha automáticamente el producer integrado `harness-doc-keeper` sin reviewer, que proyecta el registro de auditoría del ciclo en `.harness/docs/<module>.md` y en `CLAUDE.md` / `AGENTS.md` solo TOC.
+Las salidas se guardan en `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. El estado de ejecución vive en `.harness/cycle/state.md` y el registro de eventos en `.harness/cycle/events.md`. Antes de detenerse en cada ciclo, el orchestrator despacha automáticamente el producer integrado `harness-doc-keeper` sin reviewer, que lee el proyecto + goal + actividad del ciclo y autora o evoluciona la documentación del proyecto de forma quirúrgica — archivos maestros en la raíz (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, etc.) y el subárbol `docs/` (`design-docs/`, `product-specs/`, `exec-plans/`, `generated/`, según lo que la evidencia del proyecto justifique). El contenido escrito a mano fuera de la sección de punteros se preserva byte-a-byte.
 
 ## Conceptos clave
 
@@ -212,8 +211,9 @@ plugins/harness-loom/skills/harness-pair-dev/      escribe ->       .harness/loo
                                                          -> .gemini/
                                                      |
                                                      +-- harness-doc-keeper se dispara en el halt del ciclo
-                                                         -> .harness/docs/<module>.md
-                                                         -> CLAUDE.md / AGENTS.md (solo TOC)
+                                                         -> CLAUDE.md / AGENTS.md (sección de punteros)
+                                                         -> ARCHITECTURE.md / DESIGN.md / ...
+                                                         -> docs/{design-docs,product-specs,exec-plans,generated,...}/
 ```
 
 Esta separación es deliberada:

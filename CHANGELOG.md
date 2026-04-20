@@ -63,33 +63,41 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Cycle-end doc-keeper dispatch added to `/harness-orchestrate`.**
   Every cycle's halt-prep step now auto-dispatches the new built-in
   `harness-doc-keeper` reviewer-less producer as a final turn before
-  clearing `Next`. The producer walks `.harness/cycle/events.md` plus the
-  cycle's task / review files and rewrites `.harness/docs/<module>.md`
-  together with byte-near-identical TOC-only `CLAUDE.md` / `AGENTS.md`.
-  Verdict comes from the producer's own `Status: PASS|FAIL` per the
-  reviewer-less verdict path; on `FAIL` the slot reworks once and then
-  halts so documentation drift never blocks the cycle. **Breaking** in
-  the sense that every cycle now ends with one extra automatic turn,
-  and any target with a hand-authored `CLAUDE.md` / `AGENTS.md` will
-  see its `## Modules` section rewritten on the next halt (preludes
-  above `## Modules` are preserved verbatim).
+  clearing `Next`. The producer reads the project + goal + cycle
+  activity and authors or evolves project documentation **directly in
+  the target** — root master files (`CLAUDE.md`, `AGENTS.md`,
+  `ARCHITECTURE.md`, …) plus a `docs/` subtree (`design-docs/`,
+  `product-specs/`, `exec-plans/`, `generated/`, etc. — only the subset
+  the project's evidence supports). Existing hand-authored content
+  outside the pointer section is preserved byte-for-byte. Verdict comes
+  from the producer's own `Status: PASS|FAIL` per the reviewer-less
+  verdict path; on `FAIL` the slot reworks once and then halts so
+  documentation drift never blocks the cycle. **Breaking** in the
+  sense that every cycle now ends with one extra automatic turn, and
+  any target with a hand-authored `CLAUDE.md` / `AGENTS.md` will see
+  its pointer section (enumerating root + `docs/` master files)
+  rewritten on the next halt.
 
 ### Added
 
-- **`.harness/loom/`, `.harness/cycle/`, `.harness/docs/` namespaces** —
-  the new three-way split of the runtime workspace. Authority is
-  exclusive: install + sync own `loom/`, the orchestrator owns `cycle/`,
-  and `harness-doc-keeper` owns `docs/`. `_archive/` holds past cycles
-  that the orchestrator moves there on a goal-different reset.
+- **`.harness/loom/` and `.harness/cycle/` namespaces** — the new
+  two-way split of the runtime workspace. Authority is exclusive:
+  install + sync own `loom/`, and the orchestrator owns `cycle/`.
+  `_archive/` holds past cycles that the orchestrator moves there on a
+  goal-different reset. Project documentation is **not** under
+  `.harness/` — it lives at the target root (`*.md`) and in `docs/`,
+  right where a team would look for it.
 - **`harness-doc-keeper` built-in producer templates.** Two new runtime
   templates ship under
   `plugins/harness-loom/skills/harness-init/references/runtime/`:
-  `harness-doc-keeper/SKILL.template.md` defines the reviewer-less
-  rubric (module derivation, per-file structure, TOC-only pointer-doc
-  contract), and `harness-doc-keeper-producer.template.md` provides the
-  producer body (Self-verification carries file-changed counts and per
-  -file line-delta vs the prior cycle). Registration line uses the
-  reviewer-less form `(no reviewer)` without `↔`.
+  `harness-doc-keeper/SKILL.template.md` defines the docs-curator
+  rubric (analyze project + goal, design a project-appropriate layout,
+  author/evolve master files and `docs/` subtree, keep the pointer
+  section in `CLAUDE.md` / `AGENTS.md` surgical), and
+  `harness-doc-keeper-producer.template.md` provides the producer body
+  (Self-verification carries files created/modified/left-alone, layout
+  rationale, and a cycle-to-docs impact map). Registration line uses
+  the reviewer-less form `(no reviewer)` without `↔`.
 - **Self-contained target sync.** `harness-init` now copies
   `sync.ts` next to `hook.sh` under `<target>/.harness/loom/`, so
   `node .harness/loom/sync.ts --provider <list>` works without the
@@ -137,9 +145,10 @@ migration script (out of cycle scope). Manual steps:
    `.claude/`, `.codex/`, and `.gemini/` deterministically; do not
    hand-edit them afterward.
 5. Continue normal `/harness-orchestrate` and `/harness-pair-dev`
-   usage; the cycle-end auto-doc-keeper dispatch will populate
-   `.harness/docs/` and TOC-only `CLAUDE.md` / `AGENTS.md` on the next
-   halt.
+   usage; the cycle-end auto-doc-keeper dispatch will author or evolve
+   project documentation at the target root (`CLAUDE.md`, `AGENTS.md`,
+   `ARCHITECTURE.md`, etc.) and under `docs/` on the next halt. Any
+   hand-authored content outside the pointer section is preserved.
 
 ## [0.1.5] — 2026-04-20
 

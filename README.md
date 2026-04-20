@@ -59,11 +59,10 @@ target project
     │   ├── state.md
     │   ├── events.md
     │   └── epics/
-    ├── docs/                    # doc snapshot (harness-doc-keeper owns)
     └── _archive/                # past cycles, created on goal-different reset
 ```
 
-You then derive at least one platform tree with `node .harness/loom/sync.ts --provider claude` (and add `codex,gemini` for multi-platform), then add domain-specific pairs with `/harness-pair-dev`. The built-in `harness-doc-keeper` is a reviewer-less producer that auto-fires at every cycle's halt, projecting that cycle's task and review artifacts into `.harness/docs/<module>.md` files plus a TOC-only `CLAUDE.md` / `AGENTS.md`. You do not invoke it directly; the orchestrator dispatches it as the final reviewer-less turn before halting.
+Project documentation (target-root `*.md` files, `docs/`) is authored **directly in the target**, not inside `.harness/`. You then derive at least one platform tree with `node .harness/loom/sync.ts --provider claude` (and add `codex,gemini` for multi-platform), then add domain-specific pairs with `/harness-pair-dev`. The built-in `harness-doc-keeper` is a reviewer-less producer that auto-fires at every cycle's halt; it reads the project + goal + cycle activity and authors or evolves the documentation this project actually needs (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/design-docs/`, `docs/product-specs/`, `docs/exec-plans/`, etc. — only the subset your project's evidence supports). You do not invoke it directly; the orchestrator dispatches it as the final reviewer-less turn before halting.
 
 ## Requirements
 
@@ -168,7 +167,7 @@ node .harness/loom/sync.ts --provider claude
 /harness-orchestrate goal.md
 ```
 
-Outputs land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. Runtime state lives in `.harness/cycle/state.md`, and the event log lives in `.harness/cycle/events.md`. At every cycle's halt the orchestrator auto-dispatches the built-in `harness-doc-keeper` reviewer-less producer, which projects the cycle's audit into `.harness/docs/<module>.md` plus a TOC-only `CLAUDE.md` / `AGENTS.md`.
+Outputs land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. Runtime state lives in `.harness/cycle/state.md`, and the event log lives in `.harness/cycle/events.md`. At every cycle's halt the orchestrator auto-dispatches the built-in `harness-doc-keeper` reviewer-less producer, which reads the project + goal + cycle activity and authors or evolves project documentation surgically — target-root master files (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, etc.) and a `docs/` subtree (`design-docs/`, `product-specs/`, `exec-plans/`, `generated/`, as the project's evidence warrants). Existing hand-authored content outside the pointer section is preserved byte-for-byte.
 
 ## Concepts
 
@@ -210,8 +209,9 @@ plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loo
                                                          -> .gemini/
                                                      |
                                                      +-- harness-doc-keeper auto-fires at cycle halt
-                                                         -> .harness/docs/<module>.md
-                                                         -> CLAUDE.md / AGENTS.md (TOC only)
+                                                         -> CLAUDE.md / AGENTS.md (pointer section)
+                                                         -> ARCHITECTURE.md / DESIGN.md / ...
+                                                         -> docs/{design-docs,product-specs,exec-plans,generated,...}/
 ```
 
 This split is intentional:

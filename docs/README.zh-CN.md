@@ -29,7 +29,7 @@
 - 所有 subagent 共用的运行时上下文
 - 随时间逐步补充的、面向项目领域的 producer-reviewer pair
 
-目标项目的 `.harness/` 划分为三个并列的命名空间：`loom/` 是由 install 与 sync 拥有的正本 staging 树，`cycle/` 是由 orchestrator 拥有的运行时状态，`docs/` 是由新引入的内置 `harness-doc-keeper` producer 拥有的文档快照。平台树（`.claude/`、`.codex/`、`.gemini/`）按需从 `.harness/loom/` 派生。
+目标项目的 `.harness/` 划分为两个并列的命名空间：`loom/` 是由 install 与 sync 拥有的正本 staging 树，`cycle/` 是由 orchestrator 拥有的运行时状态。项目文档（根目录 `*.md`、`docs/`）直接放在目标项目中，不在 `.harness/` 内部。平台树（`.claude/`、`.codex/`、`.gemini/`）按需从 `.harness/loom/` 派生。
 
 ## 为什么是这种结构
 
@@ -61,11 +61,10 @@ target project
     │   ├── state.md
     │   ├── events.md
     │   └── epics/
-    ├── docs/                    # 文档快照（harness-doc-keeper 拥有）
     └── _archive/                # 历史循环；goal-different 复位时创建
 ```
 
-之后用 `node .harness/loom/sync.ts --provider claude`（多平台时再加 `codex,gemini`）派生至少一个平台树，再通过 `/harness-pair-dev` 添加领域相关的 pair。内置的 `harness-doc-keeper` 是一个无 reviewer 的 producer，会在每个循环停止前自动运行，把该循环的 task 与 review 产物整理到 `.harness/docs/<module>.md` 与 TOC 形式的 `CLAUDE.md` / `AGENTS.md`。用户不直接调用它；orchestrator 在 halt 之前作为最后一个无 reviewer 的回合自动 dispatch。
+项目文档（根目录 `*.md`、`docs/`）**直接放在目标项目中**，不在 `.harness/` 内部。之后用 `node .harness/loom/sync.ts --provider claude`（多平台时再加 `codex,gemini`）派生至少一个平台树，再通过 `/harness-pair-dev` 添加领域相关的 pair。内置的 `harness-doc-keeper` 是一个无 reviewer 的 producer，会在每个循环停止前自动运行，读取项目 + goal + 循环活动，然后精细地创作或演进项目实际需要的文档（`CLAUDE.md`、`AGENTS.md`、`ARCHITECTURE.md`、`docs/design-docs/`、`docs/product-specs/`、`docs/exec-plans/` 等 — 只取项目证据支持的子集）。用户不直接调用它；orchestrator 在 halt 之前作为最后一个无 reviewer 的回合自动 dispatch。
 
 ## 要求
 
@@ -170,7 +169,7 @@ node .harness/loom/sync.ts --provider claude
 /harness-orchestrate goal.md
 ```
 
-输出会落在 `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` 下面。运行时状态保存在 `.harness/cycle/state.md`，事件日志保存在 `.harness/cycle/events.md`。每个循环停止之前，orchestrator 会自动 dispatch 内置的 `harness-doc-keeper` 无 reviewer producer，把循环审计记录整理到 `.harness/docs/<module>.md` 以及 TOC 形式的 `CLAUDE.md` / `AGENTS.md`。
+输出会落在 `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` 下面。运行时状态保存在 `.harness/cycle/state.md`，事件日志保存在 `.harness/cycle/events.md`。每个循环停止之前，orchestrator 会自动 dispatch 内置的 `harness-doc-keeper` 无 reviewer producer，读取项目 + goal + 循环活动后精细地创作或演进项目文档——根目录的主文件（`CLAUDE.md`、`AGENTS.md`、`ARCHITECTURE.md` 等）以及 `docs/` 子树（`design-docs/`、`product-specs/`、`exec-plans/`、`generated/` 等只取项目证据支持的子集）。指针区段之外的人工撰写内容按字节保留。
 
 ## 核心概念
 
@@ -212,8 +211,9 @@ plugins/harness-loom/skills/harness-pair-dev/      编写    ->      .harness/lo
                                                          -> .gemini/
                                                      |
                                                      +-- harness-doc-keeper 在循环 halt 时自动运行
-                                                         -> .harness/docs/<module>.md
-                                                         -> CLAUDE.md / AGENTS.md（仅 TOC）
+                                                         -> CLAUDE.md / AGENTS.md（指针区段）
+                                                         -> ARCHITECTURE.md / DESIGN.md / ...
+                                                         -> docs/{design-docs,product-specs,exec-plans,generated,...}/
 ```
 
 这样的拆分是有意设计的：

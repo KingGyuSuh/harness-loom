@@ -59,11 +59,10 @@ target project
     │   ├── state.md
     │   ├── events.md
     │   └── epics/
-    ├── docs/                    # 문서 스냅샷 (harness-doc-keeper 소유)
     └── _archive/                # 과거 사이클; goal-different 리셋 시 생성
 ```
 
-이후 `node .harness/loom/sync.ts --provider claude` (멀티 플랫폼이라면 `codex,gemini`까지) 로 최소 하나의 플랫폼 트리를 파생하고, `/harness-pair-dev`로 도메인별 pair를 추가합니다. 빌트인 `harness-doc-keeper`는 reviewer 없는 producer 단독 구성으로, 매 사이클이 멈추기 직전에 자동 실행되어 그 사이클의 task와 review 산출물을 `.harness/docs/<module>.md` 와 TOC 전용 `CLAUDE.md` / `AGENTS.md` 로 정리합니다. 사용자가 직접 호출하지 않으며, orchestrator가 halt 직전 마지막 reviewer-less 턴으로 디스패치합니다.
+프로젝트 문서(루트 `*.md`, `docs/`)는 `.harness/` 바깥, **타겟 프로젝트 안에 직접** 쌓입니다. 이후 `node .harness/loom/sync.ts --provider claude` (멀티 플랫폼이라면 `codex,gemini`까지) 로 최소 하나의 플랫폼 트리를 파생하고, `/harness-pair-dev`로 도메인별 pair를 추가합니다. 빌트인 `harness-doc-keeper`는 reviewer 없는 producer로, 매 사이클이 멈추기 직전에 자동 실행되어 프로젝트 + goal + 사이클 활동을 읽고 이 프로젝트가 실제로 필요로 하는 문서(`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/design-docs/`, `docs/product-specs/`, `docs/exec-plans/` 등 — 증거가 뒷받침하는 범위 내)를 작성·갱신합니다. 사용자가 직접 호출하지 않으며, orchestrator가 halt 직전 마지막 reviewer-less 턴으로 디스패치합니다.
 
 ## 요구 사항
 
@@ -168,7 +167,7 @@ node .harness/loom/sync.ts --provider claude
 /harness-orchestrate goal.md
 ```
 
-산출물은 `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` 아래에 쌓입니다. 런타임 상태는 `.harness/cycle/state.md`, 이벤트 로그는 `.harness/cycle/events.md`에 남습니다. 매 사이클이 멈추기 직전, orchestrator는 빌트인 `harness-doc-keeper` reviewer-less producer를 자동 디스패치하여 사이클 감사 기록을 `.harness/docs/<module>.md` 와 TOC 전용 `CLAUDE.md` / `AGENTS.md` 로 정리합니다.
+산출물은 `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` 아래에 쌓입니다. 런타임 상태는 `.harness/cycle/state.md`, 이벤트 로그는 `.harness/cycle/events.md`에 남습니다. 매 사이클이 멈추기 직전, orchestrator는 빌트인 `harness-doc-keeper` reviewer-less producer를 자동 디스패치하며, 이 producer는 프로젝트 + goal + 사이클 활동을 읽어 프로젝트 문서를 surgical하게 작성/갱신합니다 — 루트 마스터 파일(`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md` 등)과 `docs/` 하위 트리(`design-docs/`, `product-specs/`, `exec-plans/`, `generated/` 등 프로젝트 증거가 정당화하는 범위 내). 기존의 사람-작성 본문은 pointer 섹션 외부에서 byte-for-byte 보존됩니다.
 
 ## 핵심 개념
 
@@ -210,8 +209,9 @@ plugins/harness-loom/skills/harness-pair-dev/      작성  ->      .harness/loom
                                                          -> .gemini/
                                                      |
                                                      +-- harness-doc-keeper가 사이클 halt에서 자동 실행
-                                                         -> .harness/docs/<module>.md
-                                                         -> CLAUDE.md / AGENTS.md (TOC 전용)
+                                                         -> CLAUDE.md / AGENTS.md (pointer 섹션)
+                                                         -> ARCHITECTURE.md / DESIGN.md / ...
+                                                         -> docs/{design-docs,product-specs,exec-plans,generated,...}/
 ```
 
 이 분리는 의도적입니다.

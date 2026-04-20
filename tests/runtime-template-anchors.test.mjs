@@ -150,18 +150,35 @@ test("orchestrate template gates dispatch through a ready set at the same global
   );
 });
 
-test("doc-keeper skill template stays project-shape driven without factory references", () => {
+test("doc-keeper skill template drives a docs-curator layout from project + goal, not a code-module navigator", () => {
   const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
   assert.match(
     body,
-    /derive modules from this project's current shape/i,
-    "doc-keeper SKILL.template must derive modules from the current project's own structure",
+    /analyze the project and its goal/i,
+    "doc-keeper SKILL.template must open by analyzing project + goal",
   );
   assert.match(
     body,
-    /Ignore generated, vendored, cache, and runtime-owned directories/i,
-    "doc-keeper SKILL.template must ignore generated and runtime-owned directories",
+    /design the documentation layout that fits this project/i,
+    "doc-keeper SKILL.template must design a project-specific layout",
   );
+  // Layout building blocks the rubric advertises. A curator-style rubric must
+  // surface these category names so the producer knows what vocabulary it can
+  // draw from.
+  for (const category of [
+    "design-docs",
+    "product-specs",
+    "exec-plans",
+    "generated",
+    "references",
+  ]) {
+    assert.match(
+      body,
+      new RegExp(`docs/${category}/`),
+      `layout building block docs/${category}/ must be named`,
+    );
+  }
+  // Legacy navigator vocabulary must not reappear.
   for (const token of [
     "plugins/harness-loom",
     "skill-authoring.md",
@@ -179,40 +196,29 @@ test("doc-keeper skill template stays project-shape driven without factory refer
   }
 });
 
-test("doc-keeper skill template anchors citations to source at file:line", () => {
+test("doc-keeper skill template forbids writing outside the documentation surface", () => {
   const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
   assert.match(
     body,
-    /anchor(ed)? to source at `file:line`/,
-    "doc-keeper SKILL.template must declare source at file:line as the primary citation",
-  );
-  // Cycle artifacts must be demoted to a supplementary role so a fullstack
-  // target project can produce valid docs even in a cycle that did not write
-  // any task/review files referencing project code.
-  assert.match(
-    body,
-    /cycle artifacts.*never the primary evidence/i,
-    "doc-keeper SKILL.template must demote cycle artifacts to supplementary evidence",
+    /never touch source code|does not implement/i,
+    "doc-keeper SKILL.template must forbid writing to code/tests/build scripts",
   );
 });
 
-test("doc-keeper skill template specifies a surgical `## Modules` block rewrite", () => {
+test("doc-keeper skill template keeps the CLAUDE.md / AGENTS.md pointer-section surgical contract", () => {
   const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
-  assert.ok(
-    body.includes("## Modules"),
-    "doc-keeper SKILL.template must name the `## Modules` heading as the surgical-merge boundary",
+  // The pointer section name may evolve (Modules, Documents, etc.) but the
+  // surgical-merge discipline — replace only the pointer section, preserve
+  // everything else — must persist to prevent silent data loss.
+  assert.match(
+    body,
+    /CLAUDE\.md.*AGENTS\.md|AGENTS\.md.*CLAUDE\.md/,
+    "doc-keeper SKILL.template must name both pointer docs",
   );
   assert.match(
     body,
-    /Preserve every other section as-is/i,
-    "doc-keeper SKILL.template must preserve content outside `## Modules`",
-  );
-  // The Taboo block must warn against wholesale rewrite so future refactors do
-  // not silently reintroduce the data-loss bug.
-  assert.match(
-    body,
-    /Rewrite `CLAUDE\.md` or `AGENTS\.md` wholesale/i,
-    "doc-keeper SKILL.template Taboos must forbid wholesale CLAUDE/AGENTS regeneration",
+    /replace only that section|preserve every other section/i,
+    "doc-keeper SKILL.template must keep the surgical-merge contract",
   );
 });
 
@@ -225,27 +231,34 @@ test("doc-keeper skill template no longer references the stale OpenAI harness-en
   );
 });
 
-test("doc-keeper producer template emits concise coverage-oriented self-verification", () => {
+test("doc-keeper producer template emits a curator-style self-verification contract", () => {
   const body = readFileSync(DOC_KEEPER_PRODUCER_TEMPLATE, "utf8");
-  assert.ok(
-    body.includes("Modules covered"),
-    "doc-keeper producer must emit `Modules covered` in its Output Format",
-  );
-  assert.ok(
-    body.includes("Pointers updated"),
-    "doc-keeper producer must emit `Pointers updated` in its Output Format",
-  );
-  // The producer must explicitly forbid reading state.md for module shape so
-  // its module set stays anchored to the target's filesystem, not to cycle
-  // state that may not reference any target source.
-  assert.match(
-    body,
-    /Do NOT use `state\.md` or cycle artifacts to invent the module structure; derive that from `cwd`/i,
-    "doc-keeper producer must redirect module discovery to cwd scan, not state.md",
-  );
+  // The producer must surface docs-curator signals: layout rationale, impact
+  // map from cycle events to docs, pointer-doc status, and an explicit "left
+  // alone intentionally" accounting so the reviewer-less verdict is graded on
+  // scope, not just on presence of outputs.
+  for (const field of [
+    "Files created",
+    "Files modified",
+    "Files left alone",
+    "Layout rationale",
+    "Impact map",
+    "Pointers updated",
+    "Self-verification",
+  ]) {
+    assert.ok(
+      body.includes(field),
+      `doc-keeper producer must emit \`${field}\` in its Output Format`,
+    );
+  }
+  // Byte-count bookkeeping and module-navigator framing must not come back.
   assert.ok(
     !body.includes("Preserved prefix/suffix bytes"),
     "doc-keeper producer should avoid byte-count bookkeeping in its output contract",
+  );
+  assert.ok(
+    !body.includes("Modules covered"),
+    "doc-keeper producer must drop the module-navigator `Modules covered` field",
   );
 });
 

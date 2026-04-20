@@ -55,7 +55,7 @@ test("install.ts preserves the pre-seeded harness-doc-keeper registered-pairs li
   }
 });
 
-test("installed harness-doc-keeper skill uses generic target-agnostic vocabulary", () => {
+test("installed harness-doc-keeper skill directs the producer to design docs from project + goal", () => {
   const target = makeTempDir();
   try {
     assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
@@ -64,16 +64,50 @@ test("installed harness-doc-keeper skill uses generic target-agnostic vocabulary
       "utf8",
     );
 
+    // The rubric must open by reading project + goal, not by scanning code
+    // for module boundaries. This is the central reframe (docs curator, not
+    // module navigator).
     assert.match(
       skill,
-      /derive modules from this project's current shape/i,
-      "skill must derive modules from the current project's own structure",
+      /analyze the project and its goal/i,
+      "skill must open by analyzing project + goal",
     );
     assert.match(
       skill,
-      /Ignore generated, vendored, cache, and runtime-owned directories/i,
-      "skill must ignore generated and runtime-owned directories",
+      /design the documentation layout that fits this project/i,
+      "skill must design a layout rather than enumerate code modules",
     );
+
+    // Layout building blocks the rubric advertises must be present so a
+    // producer knows the vocabulary it can draw from.
+    for (const category of [
+      "design-docs",
+      "product-specs",
+      "exec-plans",
+      "generated",
+      "references",
+    ]) {
+      assert.match(
+        skill,
+        new RegExp(`docs/${category}/`),
+        `layout building block docs/${category}/ must be referenced`,
+      );
+    }
+
+    // The pointer-doc surgical contract must still be present: CLAUDE.md /
+    // AGENTS.md are owned only in the pointer section.
+    assert.match(skill, /CLAUDE\.md.*AGENTS\.md|AGENTS\.md.*CLAUDE\.md/);
+    assert.match(skill, /replace only that section|preserve every other section/i);
+
+    // Write-scope guard: doc-keeper must never touch source code.
+    assert.match(
+      skill,
+      /never touch source code|does not implement/i,
+      "skill must forbid writing outside documentation paths",
+    );
+
+    // Old module-navigator vocabulary (5-pass scan, file:line anchors as primary
+    // evidence, legacy reference URLs) must no longer appear.
     for (const forbidden of [
       "plugins/harness-loom",
       "skill-authoring.md",
@@ -86,15 +120,6 @@ test("installed harness-doc-keeper skill uses generic target-agnostic vocabulary
     ]) {
       assert.ok(!skill.includes(forbidden), `skill must not mention ${forbidden}`);
     }
-
-    // Surgical-merge contract must be present (prevents silent data loss).
-    assert.match(skill, /## Modules/, "Modules heading referenced in surgical-merge contract");
-    assert.match(skill, /Preserve every other section as-is/i);
-
-    // Source citation must be declared as the primary evidence.
-    assert.match(skill, /anchor(ed)? to source at `file:line`/);
-
-    // Dead OpenAI reference must be gone.
     assert.doesNotMatch(
       skill,
       /openai\.com\/index\/harness-engineering/,

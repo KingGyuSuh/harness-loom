@@ -61,11 +61,10 @@ target project
     │   ├── state.md
     │   ├── events.md
     │   └── epics/
-    ├── docs/                    # ドキュメントスナップショット (harness-doc-keeper 所有)
     └── _archive/                # 過去のサイクル; goal-different リセット時に作成
 ```
 
-その後、`node .harness/loom/sync.ts --provider claude` (マルチプラットフォームなら `codex,gemini` も) で少なくとも 1 つのプラットフォームツリーを派生し、`/harness-pair-dev` でドメイン固有の pair を追加します。組み込みの `harness-doc-keeper` は reviewer のいない producer 単独構成で、毎サイクルの停止直前に自動実行され、そのサイクルの task / review 成果物を `.harness/docs/<module>.md` と TOC のみの `CLAUDE.md` / `AGENTS.md` に整理します。ユーザが直接呼び出すことはなく、orchestrator が halt 直前の最後の reviewer-less ターンとして dispatch します。
+プロジェクトドキュメント (ルート `*.md`、`docs/`) は `.harness/` の外、**対象プロジェクト内に直接**保存されます。その後、`node .harness/loom/sync.ts --provider claude` (マルチプラットフォームなら `codex,gemini` も) で少なくとも 1 つのプラットフォームツリーを派生し、`/harness-pair-dev` でドメイン固有の pair を追加します。組み込みの `harness-doc-keeper` は reviewer のいない producer で、毎サイクルの停止直前に自動実行され、プロジェクト + goal + サイクル活動を読み取り、このプロジェクトが実際に必要とするドキュメント (`CLAUDE.md`、`AGENTS.md`、`ARCHITECTURE.md`、`docs/design-docs/`、`docs/product-specs/`、`docs/exec-plans/` など、証拠が正当化する範囲内) を作成・更新します。ユーザが直接呼び出すことはなく、orchestrator が halt 直前の最後の reviewer-less ターンとして dispatch します。
 
 ## 要件
 
@@ -170,7 +169,7 @@ node .harness/loom/sync.ts --provider claude
 /harness-orchestrate goal.md
 ```
 
-出力は `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` に蓄積されます。ランタイム状態は `.harness/cycle/state.md`、イベントログは `.harness/cycle/events.md` に残ります。毎サイクルの停止直前に、orchestrator は組み込みの `harness-doc-keeper` reviewer-less producer を自動 dispatch し、サイクルの監査記録を `.harness/docs/<module>.md` と TOC のみの `CLAUDE.md` / `AGENTS.md` に整理します。
+出力は `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` に蓄積されます。ランタイム状態は `.harness/cycle/state.md`、イベントログは `.harness/cycle/events.md` に残ります。毎サイクルの停止直前に、orchestrator は組み込みの `harness-doc-keeper` reviewer-less producer を自動 dispatch し、プロジェクト + goal + サイクル活動を読み取ってプロジェクトドキュメントを surgical に作成・更新します — ルートのマスターファイル (`CLAUDE.md`、`AGENTS.md`、`ARCHITECTURE.md` など) と `docs/` サブツリー (`design-docs/`、`product-specs/`、`exec-plans/`、`generated/` など証拠が正当化する範囲内)。ポインタセクションの外側にある人手で書かれた内容は byte-for-byte 保存されます。
 
 ## コア概念
 
@@ -212,8 +211,9 @@ plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loo
                                                          -> .gemini/
                                                      |
                                                      +-- harness-doc-keeper がサイクル halt で自動実行
-                                                         -> .harness/docs/<module>.md
-                                                         -> CLAUDE.md / AGENTS.md (TOC のみ)
+                                                         -> CLAUDE.md / AGENTS.md (pointer セクション)
+                                                         -> ARCHITECTURE.md / DESIGN.md / ...
+                                                         -> docs/{design-docs,product-specs,exec-plans,generated,...}/
 ```
 
 この分離は意図的です。

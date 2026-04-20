@@ -10,10 +10,12 @@
 .gemini/
 
 # Runtime workspace for self-install: `.harness/loom/` is canonical staging,
-# `.harness/cycle/` mutates per orchestrator turn, `.harness/docs/` is written
-# by the doc-keeper, and `.harness/_archive/` holds past cycles that the
-# orchestrator moves there on a goal-different reset. None of these should
-# land in factory commits.
+# `.harness/cycle/` mutates per orchestrator turn, and `.harness/_archive/`
+# holds past cycles that the orchestrator moves there on a goal-different
+# reset. Project documentation the doc-keeper produces lands at the target
+# root (`docs/`, `*.md`) — not under `.harness/` — and is committed to the
+# target repo, not ignored there.
+# None of the `.harness/` paths should land in factory commits.
 .harness/
 
 # Pointer docs the factory tracks as source-of-truth (authored by humans). They
