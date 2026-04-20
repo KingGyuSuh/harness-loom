@@ -112,7 +112,6 @@ When reviewing a skill artifact, cite failures directly against these items:
 - Allow any reference file to exceed 300 lines. That violates the split trigger recursively.
 - Omit Design Thinking. Without it, the trigger fires but the reader loses the rationale.
 - Freeze a step transcript into the body with thirty lines of "step 1, step 2, step 3". Methodology is a judgment framework, not a script.
-- Frame a reviewer-less (`--reviewer none`) pair-skill as "review optional" or "review skipped"; the only legitimate framing is "not subject to review" anchored to a deterministic axis, and the body must justify that axis in Design Thinking. Anything weaker re-creates the rubber-stamp pair the branch exists to retire (`harness-pair-dev/SKILL.md` §7, goals.md:L21).
 
 ## Examples (BAD / GOOD)
 

@@ -64,6 +64,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `register-pair.ts:174` as the registration-entry line after the
   0.1.4 prefix-validation block pushed it to line 181. Updated both
   counts and the line citation so canonical references match disk.
+- **Phase advance Retreat rule allowed an empty `Prior reviews` for
+  reviewer-less producer turns.** Rule 2 in the runtime
+  `harness-orchestrate` template previously demanded a structural-issue
+  review file in `Next.Prior reviews`, but reviewer-less turns write
+  zero review files; the structural issue lives inside the producer's
+  task file, which is already in `Next.Prior tasks`. Rule 2 now matches
+  the Rework rule's pattern (paired = `[the structural issue review]`,
+  reviewer-less = `[]`), so a producer-emitted `## Structural Issue`
+  retreat no longer references a non-existent review artifact.
 
 ## [0.1.4] — 2026-04-19
 

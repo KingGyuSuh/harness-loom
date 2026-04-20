@@ -142,7 +142,6 @@ When this branch fires, the agent-authoring rules above still apply to the produ
 - Platform dispatch knobs such as `path`, `effort`, `allow-tools`, `allowed-tools`, or `tools`. Those invade another layer's responsibility.
 - Principle count other than five. That causes repetition and grading drift.
 - Re-stating orchestrator routing or state-write procedures in the agent body. Routing/state are orchestrator-owned.
-- Authoring a placeholder reviewer file (`<pair-slug>-reviewer.md` containing only "this pair is reviewer-less") for a `--reviewer none` invocation. The on-disk signal is the **absence** of the file plus the `(no reviewer)` registration line; a stub file would re-create the rubber-stamp reviewer the branch exists to avoid.
 
 ## Evaluation Criteria
 
@@ -169,4 +168,3 @@ When a pair reviewer grades an agent with this rubric, it checks:
 - Duplicate the pair skill body inside the agent; that creates two sources of truth and guarantees drift.
 - Use emojis as decoration.
 - Treat `Suggested next-work` or `Advisory-next` as routing authority; the orchestrator synthesizes the real next step.
-- Use `--reviewer none` as a default authoring path or invoke it for creative / judgment / generative work; the branch is reserved for deterministic / auxiliary roles (sync, format, mirror, mechanical translation), and pair authoring remains the default per `harness-pair-dev/SKILL.md` §7.

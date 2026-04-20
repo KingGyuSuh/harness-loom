@@ -96,7 +96,7 @@ This section applies only to **pair producer turns** (1:1, 1:M, and reviewer-les
    - `Next.EPIC` = the same EPIC, unless retreating to planner in which case the full existing EPIC list is included in the planner envelope
    - `Next.Intent` = `(retreat reason: <reason>). <what the upstream stage must redesign>`
    - `Next.Prior tasks` = `[the latest task from the retreat target stage]`
-   - `Next.Prior reviews` = `[the structural issue review]`
+   - `Next.Prior reviews` = `[the structural issue review]` for paired turns; `[]` (empty) for reviewer-less turns since the structural issue is recorded inside the producer's task file (already in `Next.Prior tasks`)
    - rewind the EPIC's `current` to the retreat target producer
 3. **Forward advance (PASS)** — reviewer PASS for paired turns, or producer self-`Status: PASS` for reviewer-less turns:
    - first move the just-passed EPIC's `current` to the next roster slug, or to `done` if the roster is exhausted
