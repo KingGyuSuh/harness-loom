@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#多平台)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **状态：** 0.1.4 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
+> **状态：** 0.1.5 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
 
 `harness-loom` 是一个工厂型插件：它会把运行时 harness 安装到目标仓库里，并按 pair 的粒度逐步扩展。
 
@@ -101,7 +101,7 @@ claude --plugin-dir ./plugins/harness-loom
 锁定特定 tag：
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # 锁定 tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.4
+codex marketplace add KingGyuSuh/harness-loom@v0.1.5
 ```
 
 然后在 Codex TUI 中执行 `/plugins`，打开 `Harness Loom` marketplace 条目并安装插件。

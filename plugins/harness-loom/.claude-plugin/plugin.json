@@ -1,6 +1,6 @@
 {
   "name": "harness-loom",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Seed a planner + producer-reviewer pair harness into any repository, then grow it pair by pair.",
   "author": {
     "name": "KingGyuSuh",
