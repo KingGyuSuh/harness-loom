@@ -143,9 +143,15 @@ claude
 echo "Ship a lightweight terminal Snake game with curses" > goal.md
 
 # 3) add project-specific pairs (unprefixed slugs are auto-prepended with `harness-`)
-/harness-pair-dev --add harness-game-design --purpose "Spec snake.py features and edge cases"
-/harness-pair-dev --add harness-impl --purpose "Implement snake.py against the spec" \
+#    `<purpose>` is a positional second argument; no `--purpose` flag.
+/harness-pair-dev --add harness-game-design "Spec snake.py features and edge cases"
+/harness-pair-dev --add harness-impl "Implement snake.py against the spec" \
   --reviewer harness-code-reviewer --reviewer harness-playtest-reviewer
+
+# 3a) reviewer-less opt-in for deterministic / auxiliary work
+#     (sync, format, mirror); pair is still the default.
+/harness-pair-dev --add harness-asset-mirror "Copy canonical assets into the derived tree" \
+  --reviewer none
 
 # 4) optionally derive Codex / Gemini from canonical .claude/
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ A few terms recur across commands, files, and state. Knowing these six is enough
 |---------|---------|
 | `/harness-init [<target>] [--force]` | Scaffold the canonical `.claude/` foundation into a target project. Writes `.harness/`, runtime skills, the `harness-planner` agent, and hook wiring. |
 | `/harness-sync [--provider <list>]` | Derive `.codex/` and `.gemini/` from canonical `.claude/`. This is one-way sync; it never writes back into `.claude/`. |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | Author a new producer-reviewer pair anchored to the current codebase. Repeat `--reviewer` for 1:N reviewer topology. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is a positional second argument. Repeat `--reviewer` for 1:N reviewer topology, or pass `--reviewer none` for a reviewer-less producer-only group (deterministic / auxiliary work; pair is still the default). |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Re-audit an existing pair against the rubric and current codebase, then improve it. |
 | `/harness-pair-dev --split <slug>` | Split an overloaded pair into two narrower pairs. |
 | `/harness-orchestrate <goal.md>` | Target-side runtime entry point. Reads the goal, dispatches one pair per response, and advances the cycle through hook re-entry. |

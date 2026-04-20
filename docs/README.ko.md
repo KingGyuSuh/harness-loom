@@ -143,9 +143,15 @@ claude
 echo "curses를 사용한 가벼운 터미널 스네이크 게임 출시" > goal.md
 
 # 3) 프로젝트별 pair 추가
-/harness-pair-dev --add game-design --purpose "snake.py 기능과 엣지 케이스 명세 작성"
-/harness-pair-dev --add impl --purpose "명세에 맞춰 snake.py 구현" \
+#    `<purpose>`는 두 번째 위치 인자입니다. `--purpose` 플래그는 더 이상 받지 않습니다.
+/harness-pair-dev --add game-design "snake.py 기능과 엣지 케이스 명세 작성"
+/harness-pair-dev --add impl "명세에 맞춰 snake.py 구현" \
   --reviewer code-reviewer --reviewer playtest-reviewer
+
+# 3a) reviewer 없는 opt-in: 결정론적/보조 작업(sync, format, mirror) 전용.
+#     기본은 여전히 pair 입니다.
+/harness-pair-dev --add asset-mirror "정본 자산을 파생 트리로 복사" \
+  --reviewer none
 
 # 4) (선택) 정본 .claude/에서 Codex / Gemini 파생
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ echo "curses를 사용한 가벼운 터미널 스네이크 게임 출시" > goal
 |---------|---------|
 | `/harness-init [<target>] [--force]` | 대상 프로젝트에 정본 `.claude/` 기반을 설치합니다. `.harness/`, 런타임 스킬, `harness-planner` 에이전트, 훅 연결을 생성합니다. |
 | `/harness-sync [--provider <list>]` | 정본 `.claude/`에서 `.codex/`와 `.gemini/`를 파생합니다. 단방향 동기화이며 `.claude/`로는 절대 되돌려 쓰지 않습니다. |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | 현재 코드베이스에 맞는 새 producer-reviewer pair를 작성합니다. `--reviewer`를 반복하면 1:N reviewer 구성을 만들 수 있습니다. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 현재 코드베이스에 맞는 새 producer-reviewer pair를 작성합니다. `<purpose>`는 두 번째 위치 인자입니다. `--reviewer`를 반복하면 1:N 구성이 되고, `--reviewer none`을 넘기면 reviewer 없는 producer-only 그룹이 됩니다(결정론적/보조 작업 전용; 기본은 여전히 pair). |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 기존 pair를 루브릭과 현재 코드베이스 기준으로 다시 점검하고 개선합니다. |
 | `/harness-pair-dev --split <slug>` | 과도하게 커진 pair를 더 좁은 두 pair로 나눕니다. |
 | `/harness-orchestrate <goal.md>` | 대상 측 런타임 진입점입니다. 목표를 읽고 응답당 하나의 pair를 디스패치하며, 훅 재진입을 통해 사이클을 이어갑니다. |

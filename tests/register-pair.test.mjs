@@ -140,6 +140,87 @@ test("register-pair rejects slugs that are missing the harness- prefix", () => {
   }
 });
 
+test("register-pair writes reviewer-less entry as `(no reviewer)` without ↔ arrow", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--target", target,
+      "--pair", "harness-mirror",
+      "--producer", "harness-mirror-producer",
+      "--reviewer", "none",
+      "--skill", "harness-mirror",
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+
+    const orchestrate = readFileSync(
+      join(target, ".claude/skills/harness-orchestrate/SKILL.md"),
+      "utf8",
+    );
+    assert.match(
+      orchestrate,
+      /- harness-mirror: producer `harness-mirror-producer` \(no reviewer\), skill `harness-mirror`/,
+    );
+    // Load-bearing: the `↔` arrow must be absent from the reviewer-less line
+    // so the runtime can distinguish "not subject to review" from a pair.
+    assert.ok(
+      !/- harness-mirror:.*↔/.test(orchestrate),
+      "reviewer-less line must not contain the ↔ arrow",
+    );
+
+    const planning = readFileSync(
+      join(target, ".claude/skills/harness-planning/SKILL.md"),
+      "utf8",
+    );
+    assert.match(
+      planning,
+      /- harness-mirror: producer `harness-mirror-producer` \(no reviewer\), skill `harness-mirror`/,
+    );
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair rejects mixing --reviewer none with real reviewer slugs", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--target", target,
+      "--pair", "harness-mirror",
+      "--producer", "harness-mirror-producer",
+      "--reviewer", "none",
+      "--reviewer", "harness-mirror-reviewer",
+      "--skill", "harness-mirror",
+    ]);
+    assert.notEqual(r.status, 0, "mixing none with a real reviewer must fail");
+    assert.match(r.stderr, /none/);
+    assert.match(r.stderr, /cannot be combined/);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair reviewer-less mode does not require harness- prefix on the literal `none`", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    // Sanity: `none` is a magic value, not a slug, so the prefix regex does
+    // not apply to it. Real reviewer slugs are still rejected when unprefixed
+    // (covered by the existing prefix-rejection test).
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--target", target,
+      "--pair", "harness-mirror",
+      "--producer", "harness-mirror-producer",
+      "--reviewer", "none",
+      "--skill", "harness-mirror",
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
 test("register-pair --unregister also enforces the harness- prefix on --pair", () => {
   const target = makeTempDir();
   try {

@@ -6,6 +6,55 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **`/harness-pair-dev --add` now takes `<purpose>` as a positional
+  second argument.** The legacy `--purpose "<text>"` flag form is gone.
+  New shape: `/harness-pair-dev --add <pair-slug> "<purpose>" [--reviewer
+  <slug>|none ...]`. **Breaking** for any caller still using the
+  `--purpose` flag — re-run with the positional form. Reduces the
+  argument-hint to a single self-evident line and removes a parse path
+  that could silently swallow an empty purpose.
+- **User-facing `--target` and `--provider` flags are removed from
+  `/harness-pair-dev`.** Target is fixed to the current working
+  directory; provider sync is delegated to `sync.ts`'s on-disk detection
+  (claude is always present; codex/gemini only when their derived trees
+  already exist). To enable a new provider for the first time, call
+  `/harness-sync --provider <list>` separately. The internal
+  `register-pair.ts` script still accepts `--target` for integration
+  tests; only the user-facing slash entry changes.
+- **Runtime `harness-orchestrate` template recognizes the producer-only
+  registration shape and dispatches reviewer-less producer turns
+  cleanly.** When the `## Registered pairs` line carries the
+  load-bearing `(no reviewer)` token (and lacks the `↔` arrow), the
+  orchestrator skips reviewer dispatch, writes no review file, and
+  treats the producer's own `Status: PASS|FAIL` plus
+  `Self-verification` as the verdict source. A producer
+  `## Structural Issue` block remains the only retreat trigger.
+  Reviewer-less is framed as **"not subject to review"** in the
+  reviewed-work contract, never as **"passed without review"**.
+- **`harness-pair-dev` authoring rubric documents when reviewer-less is
+  appropriate.** A new `### 7. When reviewer-less is appropriate`
+  section in the SKILL body, plus matching Evaluation Criteria and
+  Taboos, scope `--reviewer none` to deterministic / auxiliary work
+  (sync, format, mirror, mechanical translation) and explicitly forbid
+  it for creative / judgment / generative work (code authoring, doc
+  writing, marketing copy, planning, schema design). Pair-first
+  identity is preserved across the rubric and the example-skills
+  references.
+
+### Added
+
+- **`--reviewer none` reviewer-less opt-in for `/harness-pair-dev
+  --add`.** Pair authoring stays the default; passing the literal
+  `none` value (and only that, never mixed with real reviewer slugs)
+  produces a producer-only group with no reviewer agent file. The
+  `register-pair.ts` script writes a third registration shape:
+  `` - <pair>: producer `<p>` (no reviewer), skill `<s>` ``. The
+  missing `↔` arrow plus the literal `(no reviewer)` token are the
+  load-bearing markers the runtime uses to dispatch the turn without
+  expecting a reviewer.
+
 ### Fixed
 
 - **Stale canonical references inside

@@ -143,9 +143,15 @@ claude
 echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 
 # 3) 添加项目专属 pair
-/harness-pair-dev --add game-design --purpose "为 snake.py 编写功能与边界情况说明"
-/harness-pair-dev --add impl --purpose "按照说明实现 snake.py" \
+#    `<purpose>` 是第二个位置参数，不再接受 `--purpose` 标志。
+/harness-pair-dev --add game-design "为 snake.py 编写功能与边界情况说明"
+/harness-pair-dev --add impl "按照说明实现 snake.py" \
   --reviewer code-reviewer --reviewer playtest-reviewer
+
+# 3a) 无 reviewer 的 opt-in：仅用于确定性 / 辅助工作（sync、format、mirror）；
+#     默认仍然是 pair。
+/harness-pair-dev --add asset-mirror "把正本资产复制到派生树" \
+  --reviewer none
 
 # 4) （可选）从正本 .claude/ 派生 Codex / Gemini
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 |---------|---------|
 | `/harness-init [<target>] [--force]` | 在目标项目里搭建正本 `.claude/` 基础环境，写入 `.harness/`、运行时 skill、`harness-planner` agent，以及 hook 连接。 |
 | `/harness-sync [--provider <list>]` | 从正本 `.claude/` 派生 `.codex/` 和 `.gemini/`。这是单向同步，不会回写 `.claude/`。 |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | 基于当前代码库编写新的 producer-reviewer pair。重复 `--reviewer` 可以组成 1:N reviewer 拓扑。 |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 基于当前代码库编写新的 producer-reviewer pair。`<purpose>` 是第二个位置参数。重复 `--reviewer` 形成 1:N 拓扑；传入 `--reviewer none` 则得到无 reviewer 的 producer-only 组（仅用于确定性/辅助工作；默认仍然是 pair）。 |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 依据 rubric 与当前代码库重新审视已有 pair，并对其改进。 |
 | `/harness-pair-dev --split <slug>` | 将过于臃肿的 pair 拆成两个更聚焦的 pair。 |
 | `/harness-orchestrate <goal.md>` | 目标侧运行时入口。读取目标后，每次响应 dispatch 一个 pair，并通过 hook 重入推进整个循环。 |

@@ -54,7 +54,7 @@ roster: <pair1-producer> → <pair2-producer> → <pair3-producer>
 ```
 
 - Every slug must be a registered pair producer in this cycle. Unregistered slugs cannot appear in the roster.
-- Reviewers do not appear separately in the roster. One producer name stands for the whole pair, and the orchestrator automatically dispatches the paired reviewer(s).
+- Reviewers do not appear separately in the roster. One producer name stands for the whole group, and the orchestrator automatically dispatches the paired reviewer(s) — or zero reviewers, if the registered line for that producer is the reviewer-less shape (`(no reviewer)`, no `↔` arrow). The planner does not need to know which kind a producer is; the orchestrator looks it up at dispatch time.
 - The planner itself never appears as a roster producer. It is re-dispatched only through the orchestrator's escalation path.
 - If an EPIC cannot be filled with registered pairs, **do not include it in `EPICs (this turn)`**. Instead, list the needed pair slug + purpose under `Additional pairs required`, and leave a one-line summary of the blocked outcome under `Remaining`. The state should contain only **executable EPICs**, meaning EPICs whose rosters are fully fillable by registered pairs.
 

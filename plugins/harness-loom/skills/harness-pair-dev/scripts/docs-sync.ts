@@ -56,10 +56,22 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-// Parse a registration line emitted by register-pair.ts. Supports both 1:1
-// (`reviewer \`x\``) and 1:M (`reviewers [\`x\`, \`y\`]`) forms.
+// Parse a registration line emitted by register-pair.ts. Supports three
+// shapes: 1:1 (`reviewer \`x\``), 1:M (`reviewers [\`x\`, \`y\`]`), and the
+// reviewer-less producer-only form `(no reviewer)` introduced for v0.1.5.
+// The reviewer-less form omits the `↔` arrow on purpose; that absence is
+// what the runtime keys on to recognize "not subject to review".
 function parseRegistrationLine(line: string): Pair | null {
-  // Expected shape: `- <pair>: producer \`<p>\` ↔ <reviewer-field>, skill \`<s>\``
+  // Reviewer-less form first — try it before the `↔` form so the absence of
+  // the arrow is treated as a positive signal, not a parse failure.
+  const none = line.match(
+    /^-\s+([a-z0-9][a-z0-9-]*)\s*:\s*producer\s+`([^`]+)`\s+\(no reviewer\),\s*skill\s+`([^`]+)`\s*$/,
+  );
+  if (none) {
+    const [, slug, producer, skill] = none;
+    return { slug, producer, reviewers: [], skill };
+  }
+  // Pair (1:1 or 1:M) shape: `- <pair>: producer \`<p>\` ↔ <reviewer-field>, skill \`<s>\``
   const m = line.match(
     /^-\s+([a-z0-9][a-z0-9-]*)\s*:\s*producer\s+`([^`]+)`\s*↔\s*(.+?),\s*skill\s+`([^`]+)`\s*$/,
   );
@@ -100,13 +112,13 @@ async function discoverPairs(): Promise<Pair[]> {
 function renderSection(pairs: Pair[]): string {
   const lines: string[] = [SECTION_HEADING, ""];
   if (pairs.length === 0) {
-    lines.push("No pairs are registered yet. Add one with `/harness-pair-dev --add <pair-slug> --purpose \"<text>\"`.");
+    lines.push("No pairs are registered yet. Add one with `/harness-pair-dev --add <pair-slug> \"<purpose>\"`.");
   } else {
     for (const p of pairs) {
-      const reviewerField =
-        p.reviewers.length === 1
-          ? `reviewer \`${p.reviewers[0]}\``
-          : `reviewers [${p.reviewers.map((r) => `\`${r}\``).join(", ")}]`;
+      let reviewerField: string;
+      if (p.reviewers.length === 0) reviewerField = "no reviewer";
+      else if (p.reviewers.length === 1) reviewerField = `reviewer \`${p.reviewers[0]}\``;
+      else reviewerField = `reviewers [${p.reviewers.map((r) => `\`${r}\``).join(", ")}]`;
       lines.push(`- \`${p.slug}\` — producer \`${p.producer}\`, ${reviewerField}, skill \`${p.skill}\`.`);
     }
   }
