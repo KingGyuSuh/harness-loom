@@ -407,3 +407,67 @@ test("register-pair --unregister reports changed:false on a missing pair", () =>
     cleanupDir(target);
   }
 });
+
+test("register-pair tolerates CRLF line endings in orchestrator SKILL.md", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+
+    // Rewrite the orchestrator SKILL with CRLF endings (simulates a Windows
+    // checkout where `git config core.autocrlf=true` converted on checkout).
+    const orchestratePath = join(
+      target,
+      ".harness/loom/skills/harness-orchestrate/SKILL.md",
+    );
+    const lfBody = readFileSync(orchestratePath, "utf8");
+    const crlfBody = lfBody.replace(/\n/g, "\r\n");
+    writeFileSync(orchestratePath, crlfBody);
+
+    // Register a pair — should find `## Registered pairs` despite CRLF, insert
+    // into that section (not append a second duplicate heading), and preserve
+    // CRLF on write-back.
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--target", target,
+      "--pair", "harness-crlf",
+      "--producer", "harness-crlf-producer",
+      "--reviewer", "none",
+      "--skill", "harness-crlf",
+      "--before", "harness-doc-keeper",
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+
+    const after = readFileSync(orchestratePath, "utf8");
+    // Exactly one `## Registered pairs` heading at line-start — not duplicated.
+    const headingCount = (after.match(/(^|\r\n|\n)## Registered pairs(\r\n|\n)/g) || []).length;
+    assert.equal(headingCount, 1, `expected exactly one Registered pairs heading, got ${headingCount}`);
+    // The new entry landed in the section.
+    assert.match(after, /- harness-crlf: producer `harness-crlf-producer` \(no reviewer\), skill `harness-crlf`/);
+    // CRLF preserved on write — the file must still contain \r\n.
+    assert.ok(after.includes("\r\n"), "CRLF line endings must survive the round-trip");
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair rejects --before / --after with a missing value", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    for (const flag of ["--before", "--after"]) {
+      // Flag at argv end with no following value — must error, not fall back
+      // silently to append placement.
+      const r = runNode(REGISTER_PAIR_SCRIPT, [
+        "--target", target,
+        "--pair", "harness-demo",
+        "--producer", "harness-demo-producer",
+        "--reviewer", "harness-demo-reviewer",
+        "--skill", "harness-demo",
+        flag,
+      ]);
+      assert.notEqual(r.status, 0, `${flag} with no value should fail`);
+      assert.match(r.stderr, new RegExp(`${flag} requires a pair slug`));
+    }
+  } finally {
+    cleanupDir(target);
+  }
+});

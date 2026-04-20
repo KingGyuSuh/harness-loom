@@ -63,3 +63,53 @@ test("docs-sync preserves registered pair order instead of sorting alphabeticall
     cleanupDir(target);
   }
 });
+
+test("docs-sync finds Registered pairs and rewrites pointer docs when files use CRLF", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+
+    // Register one pair so the roster is non-empty.
+    assert.equal(
+      runNode(REGISTER_PAIR_SCRIPT, [
+        "--target", target,
+        "--pair", "harness-crlf",
+        "--producer", "harness-crlf-producer",
+        "--reviewer", "harness-crlf-reviewer",
+        "--skill", "harness-crlf",
+      ]).status,
+      0,
+    );
+
+    // Force CRLF on the orchestrator SKILL and on a pre-existing CLAUDE.md so
+    // both the read-source and the write-target exercise CRLF handling.
+    const orchestratePath = join(
+      target,
+      ".harness/loom/skills/harness-orchestrate/SKILL.md",
+    );
+    writeFileSync(
+      orchestratePath,
+      readFileSync(orchestratePath, "utf8").replace(/\n/g, "\r\n"),
+    );
+    const claudeMdPath = join(target, "CLAUDE.md");
+    writeFileSync(claudeMdPath, "# CLAUDE.md\r\n\r\nInitial prelude.\r\n", "utf8");
+
+    const r = runNode(DOCS_SYNC_SCRIPT, [], { cwd: target });
+    assert.equal(r.status, 0, r.stderr);
+    const summary = JSON.parse(r.stdout);
+    // Must not silently fall back to zero pairs on CRLF — the real roster
+    // count is the non-zero signal the test keys on.
+    assert.ok(summary.pairs > 0, `expected pairs > 0, got ${summary.pairs}`);
+
+    const after = readFileSync(claudeMdPath, "utf8");
+    // The synced section contains the registered slug.
+    assert.match(after, /`harness-crlf`/);
+    // Must not contain the "No pairs are registered yet" fallback, which is
+    // the exact silent-desync symptom the LF-only heading probe produced.
+    assert.doesNotMatch(after, /No pairs are registered yet/);
+    // CRLF preserved on write back.
+    assert.ok(after.includes("\r\n"), "CRLF line endings must survive the round-trip");
+  } finally {
+    cleanupDir(target);
+  }
+});

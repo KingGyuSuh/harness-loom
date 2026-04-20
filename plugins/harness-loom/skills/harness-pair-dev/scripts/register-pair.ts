@@ -104,8 +104,16 @@ function parseArgs(argv: string[]): Args {
     else if (arg === "--producer") out.producer = rest[++i];
     else if (arg === "--reviewer") out.reviewers!.push(rest[++i]);
     else if (arg === "--skill") out.skill = rest[++i];
-    else if (arg === "--before") out.before = rest[++i];
-    else if (arg === "--after") out.after = rest[++i];
+    else if (arg === "--before") {
+      const v = rest[++i];
+      if (v === undefined || v.startsWith("--")) die("--before requires a pair slug");
+      out.before = v;
+    }
+    else if (arg === "--after") {
+      const v = rest[++i];
+      if (v === undefined || v.startsWith("--")) die("--after requires a pair slug");
+      out.after = v;
+    }
     else die(`unknown argument: ${arg}`);
   }
   // All generated subagents and skills must live under the `harness-` namespace
@@ -160,6 +168,19 @@ function parseArgs(argv: string[]): Args {
 function registrationPair(line: string): string | null {
   const match = line.match(/^-\s+([a-z0-9][a-z0-9-]*)\s*:/);
   return match ? match[1] : null;
+}
+
+// Read a file and normalize CRLF line endings to LF so downstream parsing
+// (heading detection, split-by-"\n") works uniformly. The `isCRLF` flag is
+// carried back to the write site so the original line-ending style is
+// preserved on disk — no LF→CRLF conversion for LF files, no CRLF→LF flattening
+// for Windows checkouts.
+function normalizeCRLF(raw: string): { body: string; isCRLF: boolean } {
+  const isCRLF = raw.includes("\r\n");
+  return { body: isCRLF ? raw.replace(/\r\n/g, "\n") : raw, isCRLF };
+}
+function restoreCRLF(body: string, isCRLF: boolean): string {
+  return isCRLF ? body.replace(/\n/g, "\r\n") : body;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -219,7 +240,8 @@ async function upsertSection(
   entry: string,
   placement: Placement,
 ): Promise<{ changed: boolean }> {
-  const raw = await readFile(filePath, "utf8");
+  const rawFile = await readFile(filePath, "utf8");
+  const { body: raw, isCRLF } = normalizeCRLF(rawFile);
   let next: string;
   const headingLine = `## ${heading}`;
   // Match the heading only when it sits at the start of a line and the line
@@ -265,8 +287,9 @@ async function upsertSection(
     const sep = raw.endsWith("\n") ? "" : "\n";
     next = `${raw}${sep}\n${headingLine}\n\n${entry}\n`;
   }
-  if (next === raw) return { changed: false };
-  await writeFile(filePath, next);
+  const final = restoreCRLF(next, isCRLF);
+  if (final === rawFile) return { changed: false };
+  await writeFile(filePath, final);
   return { changed: true };
 }
 
@@ -280,7 +303,8 @@ async function removeFromSection(
   heading: string,
   pair: string,
 ): Promise<{ changed: boolean }> {
-  const raw = await readFile(filePath, "utf8");
+  const rawFile = await readFile(filePath, "utf8");
+  const { body: raw, isCRLF } = normalizeCRLF(rawFile);
   const headingLine = `## ${heading}`;
   // Line-anchored heading match — see upsertSection for the rationale. Inline
   // backtick references like `` `## Registered pairs` `` must not match.
@@ -302,7 +326,9 @@ async function removeFromSection(
   const nextSectionBody = kept.join("\n");
   if (nextSectionBody === sectionBody) return { changed: false };
   const next = raw.slice(0, bodyStart) + nextSectionBody + raw.slice(bodyEnd);
-  await writeFile(filePath, next);
+  const final = restoreCRLF(next, isCRLF);
+  if (final === rawFile) return { changed: false };
+  await writeFile(filePath, final);
   return { changed: true };
 }
 

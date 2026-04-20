@@ -56,6 +56,17 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+// Read a file and normalize CRLF line endings to LF so parsing and regex
+// anchors work uniformly. The `isCRLF` flag carries back to the write site so
+// the original Windows-style line endings survive the round-trip.
+function normalizeCRLF(raw: string): { body: string; isCRLF: boolean } {
+  const isCRLF = raw.includes("\r\n");
+  return { body: isCRLF ? raw.replace(/\r\n/g, "\n") : raw, isCRLF };
+}
+function restoreCRLF(body: string, isCRLF: boolean): string {
+  return isCRLF ? body.replace(/\n/g, "\r\n") : body;
+}
+
 // Parse a registration line emitted by register-pair.ts. Three shapes are
 // recognized: 1:1 (`reviewer \`x\``), 1:M (`reviewers [\`x\`, \`y\`]`), and
 // the reviewer-less producer-only form `(no reviewer)`. The reviewer-less
@@ -90,7 +101,8 @@ function parseRegistrationLine(line: string): Pair | null {
 
 async function discoverPairs(): Promise<Pair[]> {
   if (!(await exists(REGISTRATION_SOURCE))) return [];
-  const raw = await readFile(REGISTRATION_SOURCE, "utf8");
+  const rawFile = await readFile(REGISTRATION_SOURCE, "utf8");
+  const { body: raw } = normalizeCRLF(rawFile);
   // Extract the `## Registered pairs` section body (up to next `## ` heading).
   // Anchor the heading match to start-of-line + newline so inline backtick
   // references like `` `## Registered pairs` `` in the surrounding prose do
@@ -141,7 +153,8 @@ type UpsertResult = "created" | "replaced" | "unchanged" | "skipped";
 
 async function upsertSection(docPath: string, rendered: string): Promise<UpsertResult> {
   if (!(await exists(docPath))) return "skipped";
-  const raw = await readFile(docPath, "utf8");
+  const rawFile = await readFile(docPath, "utf8");
+  const { body: raw, isCRLF } = normalizeCRLF(rawFile);
   // Match "## Harness Pairs" heading and everything up to the next top-level
   // `## ` heading (not `###`) or true end-of-string. No `m` flag — we need
   // end-of-string anchor, not end-of-line.
@@ -162,8 +175,9 @@ async function upsertSection(docPath: string, rendered: string): Promise<UpsertR
     next = trimmed + "\n\n" + rendered;
     mode = "created";
   }
-  if (next === raw) return "unchanged";
-  await writeFile(docPath, next);
+  const final = restoreCRLF(next, isCRLF);
+  if (final === rawFile) return "unchanged";
+  await writeFile(docPath, final);
   return mode;
 }
 
