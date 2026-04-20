@@ -98,7 +98,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "{advisory suggestion, orchestrator synthesizes actual Next-action}"
+Suggested next-work: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
 Remaining items: [{items not yet done}]
 Escalation: {none | structural-retreat-to-<stage>, reason}
 ```
@@ -111,14 +111,15 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "{advisory suggestion, orchestrator synthesizes actual Next-action}"
+Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
 ```
 
 - Verdict must be the exact string `PASS` or `FAIL`. No emojis, emoticons, or neutral categories such as `PARTIAL`.
 - Evidence must cite disk paths plus line ranges. "I feel" or "looks good" is not evidence.
 - Producers must not emit reviewer verdict fields, and reviewers must not emit producer diff fields. That is role leakage.
+- `Suggested next-work` (producer) and `Advisory-next` (reviewer) are **optional forward hints** for the next stage — emit them only when you have something non-obvious to pass forward; otherwise the value is `none`. The orchestrator does not consume these fields to decide `Next.To`; that is determined by Phase advance rules from the verdict. Do not try to steer self-recall or rework from these fields — that is a role leak into the meta-role (`harness-planner`) that alone owns its `next-action` continuation signal.
 
-**Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, may replace the Producer shape's `Files created / Files modified / Diff summary` fields with role-specific return fields such as `EPICs / Remaining / Next-action / Additional pairs required`. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
+**Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, may replace the Producer shape's `Files created / Files modified / Diff summary` fields with role-specific return fields such as `EPICs / Remaining / next-action / Additional pairs required`. The `next-action` field on a meta-role is load-bearing (defer-to-end continuation grammar `continue|done`, defined in its pair skill), not the same field as the executor-side optional advisory. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
 
 ## Reviewer-less Producer Authoring (Opt-in Branch)
 

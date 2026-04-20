@@ -26,7 +26,7 @@ Research Reviewer is the reviewer that grades the synthesis memo submitted by Re
 4. Check whether direct source quotation and synthesized interpretation remain visually distinct.
 5. Review whether outlier or minority-view sections exist and preserve the substance properly.
 6. Verify that unresolved questions and follow-up research items are explicitly surfaced.
-7. Write Criteria, FAIL items, Regression gate, Feedback, and Advisory-next.
+7. Write Criteria, FAIL items, Regression gate, and Feedback. `Advisory-next` is optional — emit it only when there is a non-obvious forward hint for the next stage, otherwise use `none`.
 
 ## Output Format
 
@@ -38,5 +38,5 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "{advisory suggestion, orchestrator synthesizes actual Next-action}"
+Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
 ```

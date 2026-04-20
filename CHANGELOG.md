@@ -6,6 +6,75 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-04-20
+
+### Changed
+
+- **Defer-to-end planner continuation.** Replaces the previous
+  one-shot planner turn with a flag-driven re-entry. The planner's
+  Output Format now carries a load-bearing `next-action: <"done" |
+  "continue — <reason>">` line; `continue` writes
+  `planner-continuation: pending` into a **new fourth header line** on
+  `state.md`, and Phase advance rule 4 consumes that flag by recalling
+  the planner (instead of halting) once every EPIC reaches terminal.
+  The recalled planner plans the next batch against real `events.md`
+  execution evidence rather than a pre-cycle prediction. The planner
+  distinguishes the two recall modes via `Next.Intent` prefix —
+  `(retreat reason: ...)` for a structural-issue retreat,
+  `(planner continuation: ...)` for a defer-to-end recall.
+- **Producer / reviewer advisory fields are optional forward hints.**
+  `Suggested next-work` (producer) and `Advisory-next` (reviewer) no
+  longer carry mandatory placeholder text; `none` is the canonical
+  value when there is nothing non-obvious to pass forward. The
+  orchestrator does **not** consume these fields to decide `Next.To` —
+  that is determined by Phase advance rules from the verdict. Treating
+  them as routing authority is documented as a role leak into the
+  planner meta-role that alone owns its `next-action` signal.
+- **Naming disambiguation.** Executor-side advisory comments that
+  previously referenced "actual Next-action" now reference "the Next
+  block" (informal shorthand for `state.md` `## Next`). The literal
+  `next-action` field is reserved for the planner meta-role's
+  load-bearing continuation grammar. Prevents cross-role confusion
+  introduced by the new planner field.
+
+### Added
+
+- **Planning rubric gains concrete continue/done signals + two-mode
+  recall section.** `harness-planning` §2 now lists specific triggers
+  for `continue` (later EPIC shape depends on earlier execution, goal
+  is exploratory, follow-up feature depends on shipped behavior) vs.
+  `done` (plan is fully decidable up front). §5 teaches the planner to
+  tell structural-issue recall from defer-to-end recall via the
+  `Next.Intent` prefix and to treat `Recent events` as the evidence
+  base on a continuation recall. New taboos forbid padding-style
+  continuation and ignoring `Recent events` on recall.
+- **Runtime anchor tests for the new contracts.**
+  `tests/runtime-template-anchors.test.mjs` pins eight load-bearing
+  strings: the 4-line header schema, `planner-continuation: none`
+  template default, defer-to-end `Phase advance rule 4` wiring in the
+  orchestrator, zero-emit safety discriminator, `next-action` grammar
+  on both planning skill and planner agent, Intent-prefix mode
+  distinction, and a legacy-token regression block that fails if old
+  wording (`NEEDS-MORE-TURNS`, `no further planning required`,
+  `actual Next-action`) ever reappears.
+
+### Fixed
+
+- **Zero-emit safety discriminator.** The safety clause that prevents
+  a pathological continuation-recalled planner from stalling halt now
+  keys off `planner-continuation: pending` being on the state header at
+  turn start, not off `Phase: planner` alone. The prior wording would
+  have misfired on cold start, goal-reset, structural retreat to
+  planner, and ready-set-empty recall — all of which legitimately
+  arrive with `Phase: planner` and must not trip the safety.
+- **Additional-pairs halt policy.** Turn Algorithm step 8-a now
+  explicitly labels the `Additional pairs required` halt as a
+  **blocked halt** (user intervention required) and states that step
+  10 (cycle-end doc-keeper dispatch) does **not** run there. Doc-keeper
+  fires only through Phase advance rule 4 with
+  `planner-continuation: none`. Removes ambiguity flagged during audit
+  between immediate halt and normal cycle-end halt.
+
 ## [0.2.0] — 2026-04-20
 
 ### Changed
@@ -392,7 +461,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.0
 [0.1.5]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.5
 [0.1.4]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.4

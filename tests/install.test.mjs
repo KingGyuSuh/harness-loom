@@ -68,6 +68,7 @@ test("install.ts produces state.md matching the new schema", () => {
     assert.match(state, /Goal \(from <none yet>\):/);
     assert.match(state, /Phase: planner/);
     assert.match(state, /^loop: false$/m);
+    assert.match(state, /^planner-continuation: none$/m);
     assert.match(state, /## Next/);
     assert.match(state, /## EPIC summaries/);
     assert.doesNotMatch(state, /\{\{[A-Z_]+\}\}/);

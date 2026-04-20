@@ -14,6 +14,10 @@ The planner decides outcomes, not implementation trivia. Each EPIC should descri
 
 This means the planner is not selecting between arbitrary DAG nodes. It is mapping domain outcomes onto a fixed project pipeline.
 
+A single outcome normally traverses **several** stages. If shipping one feature requires a schema change, an API, a UI, an end-to-end test, a doc, and a commit, that is **one EPIC with a six-stage roster**, not six EPICs each assigned to one producer. Slicing an outcome along producer-specialty lines turns the EPIC list into a team roster and hides the outcome behind the pipeline. The planner's instinct should be to **lengthen the roster within one EPIC before adding a new EPIC**.
+
+A simple test for whether two items are one outcome or two: would a user say "ship it" after the first alone? If no, they belong to one outcome. Different **surfaces** of the same shipped feature — backend, frontend, doc, release — are not separate outcomes; different **shipped results** are.
+
 ## Methodology
 
 ### 1. Read the project and the goal
@@ -30,7 +34,25 @@ Treat the goal as plain markdown text. Do not depend on special headers such as 
 
 On an initial plan, emit downstream EPICs immediately starting at `EP-1--{kebab-outcome}`. On a re-plan, keep the result append-only by marking replaced EPICs as `superseded` and appending new EPICs after the existing list.
 
-Keep one turn focused. A planner turn should usually emit only a few EPICs. If more remain, leave continuation language under `next-action` and let the orchestrator call the planner again later.
+Keep one turn focused. A planner turn should usually emit only a few EPICs. The `next-action` line tells the orchestrator whether another planning turn will be needed **after the current batch of EPICs finishes executing**:
+
+- `next-action: done` — planning is complete for this cycle; once the emitted EPICs reach terminal, the orchestrator advances to the cycle-end doc-keeper and halts.
+- `next-action: continue — <one-sentence reason>` — more EPICs will be needed; the orchestrator records `planner-continuation: pending` in `state.md` and **recalls the planner only after every currently-live EPIC reaches terminal**, not immediately. The point is to re-plan against actual execution evidence (events.md, completed task artifacts) rather than blind prediction.
+
+The orchestrator matches the prefix `continue` as the continuation signal; `done` (or any non-`continue` value) clears the flag. This grammar is load-bearing — vague phrasing such as `next-action: maybe more later` degrades silently to `done` under the matcher. A **zero-emit safety** overrides persistent continuation: if a continuation-recalled planner turn emits zero new executable EPICs, the orchestrator forces `done` regardless of the `next-action` line so the cycle cannot stall at halt.
+
+Treat `continue` as **learned replanning**, not split-the-batch convenience. Concrete signals that `continue` is the right call:
+
+- A later EPIC's `roster` or `upstream` cannot be decided without seeing which files or surfaces the first batch actually touched.
+- The goal names a follow-up feature whose shape depends on an earlier feature's shipped behavior (e.g., "tune notifications once profile flow is proven").
+- The goal is deliberately exploratory — scope of later batches is expected to emerge from execution.
+
+Concrete signals that `done` is the right call even when more work exists:
+
+- All EPICs are already decidable from the goal markdown — emit them all this turn.
+- You want more thinking time, but no execution outcome would change later EPICs. That is padding, not learned replanning.
+
+When recalled at defer-to-end (see §5), `Recent events` in the envelope is your evidence base — read the last events.md lines and base the next batch of EPICs on what actually shipped, not on what you originally predicted.
 
 ### 3. Generate EPIC fields
 
@@ -58,9 +80,14 @@ roster: <pair1-producer> → <pair3-producer> → <pair5-producer>
 
 If an EPIC cannot be expressed with currently registered pairs, do not emit it as executable work. Put the needed `slug + purpose` under `Additional pairs required` and summarize the blocked outcome under `Remaining`.
 
-### 5. Re-plan append-only
+### 5. Re-plan append-only (structural recall and defer-to-end continuation)
 
-When the planner is recalled after a structural issue, append new EPICs or mark old ones `superseded`. Do not mutate an existing EPIC's `outcome`, `roster`, or `upstream` in place.
+The planner is recalled in two distinct modes — read the envelope signals to tell which mode you are in, then follow the mode-specific expectations:
+
+- **Structural-issue recall.** Triggered when a downstream reviewer or reviewer-less producer raised a `## Structural Issue` block whose `Suspected upstream stage` resolved to `planner`. The envelope's `Current phase` will carry `(retreat reason: ...)`. Treat the cited upstream contract as the thing to fix — mark affected EPICs `superseded` and append replacements that address the reported gap.
+- **Defer-to-end continuation recall.** Triggered when every currently-live EPIC reached terminal while `planner-continuation: pending` was on state. The envelope's `Current phase` will carry `(planner continuation: ...)`. Treat `Recent events` as your evidence base: the five most recent events.md lines summarize what the last batch actually produced. Plan the next batch against that evidence, not against a pre-cycle prediction.
+
+Either mode is **append-only**: continue numbering after the last existing EPIC, never mutate existing `outcome`, `roster`, or `upstream` fields in place. If a recalled turn has nothing new to plan (goal is now fully covered, or the structural gap is already repaired by prior EPICs), emit zero EPICs with `next-action: done` — the zero-emit safety will force `done` anyway, so there is no loop risk and you do not need to pad with placeholder EPICs.
 
 ## EPIC summary shape
 
@@ -87,6 +114,8 @@ note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates
 - `upstream` is treated as a same-stage gate.
 - Blocked work goes to `Additional pairs required` instead of being emitted as fake executable EPICs.
 - Re-planning is append-only.
+- `next-action: continue` is used only for learned replanning (later EPIC shape truly depends on earlier execution); padding-style continuation is treated as a grading failure.
+- On a defer-to-end continuation recall, `Recent events` from the envelope is cited as evidence for at least one newly emitted EPIC (or the turn cleanly resolves with zero new EPICs and `next-action: done`).
 - Planner output contains no task file paths and no control-plane fields.
 
 ## Taboos
@@ -98,25 +127,64 @@ note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates
 - Mutate an existing EPIC in place instead of appending a replacement.
 - Overfill one planning turn with a rushed batch of EPICs instead of leaving continuation work for later.
 - Include task file paths or `current` in planner output.
+- Slice one outcome into several EPICs along producer-specialty lines (one EPIC per surface or team). The same outcome traversing multiple stages is one EPIC with a longer roster.
+- Emit `next-action: continue` as padding ("I might need more later, not sure yet", "want more thinking time"). Continuation is for cases where execution evidence changes the later plan — not for reserving uncertainty. A pattern of continue turns that emit zero new EPICs trips the zero-emit safety and is a grading failure.
+- Ignore `Recent events` on a defer-to-end recall. The whole point of defer-to-end is that events.md now carries evidence the initial turn could not see.
 
-## Example (GOOD)
+## Examples (BAD / GOOD)
+
+Assume a web fullstack project whose registered roster is:
+
+```text
+db-migration-producer → backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
+```
+
+The goal asks for a user profile page.
+
+### BAD — outcome sliced along producer-specialty lines
+
+```text
+EP-1--profile-schema
+- roster: db-migration-producer
+
+EP-2--profile-api
+- roster: backend-api-producer
+
+EP-3--profile-ui
+- roster: frontend-ui-producer
+
+EP-4--profile-tests
+- roster: e2e-test-producer
+
+EP-5--profile-docs
+- roster: doc-producer
+
+EP-6--profile-commit
+- roster: git-producer
+```
+
+All six EPICs serve the single outcome "user can view and edit their profile." The EPIC list has become a team roster — no single EPIC names a shippable result, and the planner has quietly redesigned the runtime's fixed stage order into per-EPIC micro-flows. Fold into one EPIC with a long roster.
+
+### GOOD — one EPIC per outcome, long roster inside
 
 ```text
 EPICs (this turn):
 
-EP-1--domain-agent-design
-- outcome: Define a dedicated auth-gatekeeper agent for the OAuth domain.
+EP-1--user-profile-page
+- outcome: Ship the `/profile` page so a logged-in user can view and edit their display name, handle, and bio end-to-end.
 - upstream: none
-- why: goal.md:L11 "A dedicated role is needed for third-party OAuth flows."
-- roster: agent-dev-producer
+- why: goal.md:L12 "Users need a profile page to manage personal info."
+- roster: db-migration-producer → backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
 
-EP-2--auth-skill-authoring
-- outcome: Author the skill set referenced by auth-gatekeeper.
-- upstream: EP-1--domain-agent-design
-- why: goal.md:L18 "Login must rely on third-party OAuth2."
-- roster: skill-dev-producer → test-writer-producer
+EP-2--profile-avatar-upload
+- outcome: Let users upload an avatar image and render it on the profile page, using the S3 direct-upload pattern.
+- upstream: EP-1--user-profile-page
+- why: goal.md:L18 "Avatar upload must use S3 direct-upload."
+- roster: backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
 
 Remaining: none
-Next-action: no further planning required
+next-action: done
 Additional pairs required: none
 ```
+
+Each EPIC is **one shippable outcome traversing many stages**. EP-2 skips `db-migration-producer` (no schema change) — stages may be skipped, their relative order never changes. `upstream: EP-1--user-profile-page` is a **same-stage gate**: EP-2's `backend-api-producer` turn waits for EP-1's `backend-api-producer` turn, not for all of EP-1 to finish. EP-1 and EP-2 are two EPICs because they pass the "ship it alone?" test independently — the profile page is useful without avatar upload.
