@@ -1,12 +1,11 @@
 ---
 name: {{PAIR_SLUG}}-producer
-description: "Use when the target's `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` producer phase. Produces the task specified in the pair's shared skill rubric. Returns Producer-shape Output Format for paired reviewer to judge."
+description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` producer phase. Produces the task specified in the pair's shared skill rubric. Returns Producer-shape Output Format for the paired reviewer to judge."
 skills:
   - {{SKILL_SLUG}}
   - harness-context
   # Optional below: append extra domain skills only this producer should read.
   # - {{EXTRA_SKILL_SLUG}}
-model: opus
 ---
 
 # {{PRODUCER_ROLE_NAME}}

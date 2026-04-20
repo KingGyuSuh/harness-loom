@@ -1,12 +1,11 @@
 ---
 name: {{PAIR_SLUG}}-reviewer
-description: "Use when the target's `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` reviewer phase. Grades the paired producer's task against the shared skill rubric. Returns Reviewer-shape Output Format with PASS/FAIL verdict and evidence-cited criteria."
+description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` reviewer phase. Grades the paired producer's task against the shared skill rubric. Returns Reviewer-shape Output Format with PASS/FAIL verdict and evidence-cited criteria."
 skills:
   - {{SKILL_SLUG}}
   - harness-context
   # Optional below: append extra domain skills only this reviewer should read.
   # - {{EXTRA_SKILL_SLUG}}
-model: opus
 ---
 
 # {{REVIEWER_ROLE_NAME}}

@@ -62,6 +62,8 @@ The body **200-line cap** is the first control line. If the body exceeds that ca
 
 When splitting, use `oversized-split.md` sections 1-5 as the canonical rule for naming and preservation. Keep **Frontmatter, Design Thinking, Methodology skeleton, Evaluation Criteria, and Taboos** in the main body. Move full contract prose, long templates, and example collections into `references/`. Each reference file must also stay under 300 lines.
 
+**SSOT runtime-law exception.** A single-source-of-truth runtime skill — one whose authority blocks are cited by line range from sibling skills, agent envelopes, and pointer docs so every reviewer grades against one shared surface — is exempt from the **200-line soft cap** and the **`>= 3 authority-citation blocks`** split trigger. The 300-line hard cap still applies, and every other rule in this section (keep the four core sections in the body, no sibling-reference duplication, references stay under 300 lines) still applies. The exception exists because splitting those contract blocks out of the body would force reviewers to grade by citation chain rather than by one coherent body — which is exactly the failure mode `harness-orchestrate/SKILL.md`'s Taboo (`Move directly gradeable contract blocks … out into references`) forbids. This carve-out currently applies to `harness-orchestrate/SKILL.md` only; adding another skill to the exception requires the same "upstream docs cite this by line range" test.
+
 ### 4. Coexistence with existing `references/`
 
 Do not rename, rearrange, or absorb existing sibling reference files such as `references/some-topic.md`. New split work owns only net-new material. If an existing file already covers part of the topic, cite it with `references/{existing-topic}.md:{line-range}`. Do not create duplication across reference files in the same skill; duplication makes it ambiguous which file the reviewer should treat as the grading source.
@@ -73,7 +75,7 @@ The default authoring path remains a paired producer-reviewer set, and the pair-
 For the narrow reviewer-less branch (`--reviewer none` on `/harness-pair-dev --add`), the same body shape still applies, with these deltas:
 
 - **Design Thinking carries a one-sentence justification** of why the work is "not subject to review", anchored to a deterministic axis: sync ("the producer just rewrites canonical artifacts into a derived tree; the only meaningful check is byte equivalence, which the producer self-verifies"), format ("the producer runs a formatter; correctness is what the formatter declares"), mirror ("the producer copies one source-of-truth file into a sibling and asserts hash match"). Without that sentence, the body cannot be graded for the reviewer-less posture and the producer turn would silently degrade into "passed without review" — the framing `harness-pair-dev/SKILL.md` §7 forbids.
-- **Evaluation Criteria still lists reviewer-citable checks**, but the consumer is now the orchestrator's verdict-source rule (it reads the producer's `Status` line plus `Self-verification` block). Phrase each criterion so the producer can self-cite it from script output, exit code, diff, or lint result — vague criteria that only a human reviewer could grade are a hard fail in the reviewer-less branch.
+- **Evaluation Criteria still lists reviewer-citable checks**, but the consumer shifts to the orchestrator's verdict-source rule (it reads the producer's `Status` line plus `Self-verification` block). Phrase each criterion so the producer can self-cite it from script output, exit code, diff, or lint result — vague criteria that only a human reviewer could grade are a hard fail in the reviewer-less branch.
 - **Examples (BAD / GOOD) blocks**, if used, should contrast a deterministic-axis Design Thinking sentence (GOOD) against a hand-wave like "this work is small so review is optional" (BAD). The latter re-creates the rubber-stamp pair the branch exists to retire.
 
 ### 6. Non-goals
@@ -92,8 +94,8 @@ When reviewing a skill artifact, cite failures directly against these items:
 2. **Description-as-trigger pattern** — imperative form plus specific trigger vocabulary. No passive descriptions such as "This skill helps with ..." and no authority phrases such as "Loaded ONLY by X".
 3. **Section-order compliance** — Design Thinking -> Methodology -> Evaluation Criteria -> Taboos. Optional blocks come after that.
 4. **Design Thinking density** — at least one paragraph explains why the skill exists and what the producer/reviewer are judging.
-5. **Line budget (<= 200 lines)** — if it goes past 200, a split is required.
-6. **Reference split applied** — if any threshold from §3 is met and no split exists, fail it.
+5. **Line budget (<= 200 lines)** — if it goes past 200, a split is required, unless the skill qualifies for the §3 SSOT runtime-law exception.
+6. **Reference split applied** — if any threshold from §3 is met and no split exists (and the SSOT exception does not apply), fail it.
 7. **Reference naming convention** — only `references/{kebab-topic}.md` is allowed. Generic names such as `notes.md`, `details.md`, `misc.md`, or version suffixes such as `v2.md` are forbidden.
 8. **Reference readability floor** — no reference file exceeds 300 lines.
 9. **Producer-reviewer shareability** — can the same skill body serve simultaneously as a producer creation guide and a reviewer grading guide?

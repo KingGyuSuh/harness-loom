@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multiplataforma)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Estado:** 0.1.5 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
+> **Estado:** 0.2.0 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
 
 `harness-loom` es un plugin de fábrica que instala un harness de ejecución en un repositorio de destino y lo va ampliando pair a pair.
 
@@ -29,14 +29,14 @@ Este repositorio es la fábrica. Siembra en el repositorio de destino un harness
 - un contexto de ejecución común para todos los subagentes
 - pairs producer-reviewer específicos del proyecto que vas añadiendo con el tiempo
 
-`.claude/` es la fuente canónica. `.codex/` y `.gemini/` se derivan de ella cuando hace falta.
+El `.harness/` del proyecto objetivo se divide en tres namespaces hermanos: `loom/` es el árbol canónico de staging que pertenece a install y sync, `cycle/` contiene el estado de runtime que pertenece al orchestrator y `docs/` es la instantánea documental que pertenece al nuevo producer integrado `harness-doc-keeper`. Los árboles de plataforma (`.claude/`, `.codex/`, `.gemini/`) se derivan de `.harness/loom/` cuando hacen falta.
 
 ## Por qué tiene esta forma
 
 - **Primero skill, luego agent.** La metodología compartida vive en un `SKILL.md` por pair, así que las reglas de producción y de revisión se mantienen alineadas.
 - **Producer más reviewer.** Un pair puede ampliarse a uno o varios reviewers, cada uno evaluando un eje distinto.
-- **Una sola fuente canónica.** El harness se escribe en `.claude/`; `.codex/` y `.gemini/` solo se derivan cuando los necesitas.
-- **Ejecución guiada por hooks.** El orchestrator escribe el siguiente dispatch en `.harness/state.md`, y los hooks reanudan el ciclo sin trabajo manual adicional.
+- **Una sola fuente canónica.** El harness se escribe en `.harness/loom/`; `.claude/`, `.codex/` y `.gemini/` solo se derivan cuando los necesitas.
+- **Ejecución guiada por hooks.** El orchestrator escribe el siguiente dispatch en `.harness/cycle/state.md`, y los hooks reanudan el ciclo sin trabajo manual adicional.
 - **Authoring anclado al repositorio.** La generación de pairs lee el código real del proyecto objetivo, así que puede citar archivos y patrones concretos en lugar de generar boilerplate abstracto.
 
 ## Qué se instala
@@ -45,36 +45,40 @@ Cuando ejecutas `/harness-init` dentro de un repositorio de destino, `harness-lo
 
 ```text
 target project
-├── .harness/
-│   ├── state.md
-│   ├── events.md
-│   ├── hook.sh
-│   └── epics/
-├── .claude/
-│   ├── agents/
-│   │   └── harness-planner.md
-│   ├── skills/
-│   │   ├── harness-orchestrate/
-│   │   ├── harness-planning/
-│   │   └── harness-context/
-│   └── settings.json
-└── pairs producer/reviewer específicos del proyecto
+└── .harness/
+    ├── loom/                    # staging canónico (install + sync)
+    │   ├── skills/
+    │   │   ├── harness-orchestrate/
+    │   │   ├── harness-planning/
+    │   │   ├── harness-context/
+    │   │   └── harness-doc-keeper/
+    │   ├── agents/
+    │   │   ├── harness-planner.md
+    │   │   └── harness-doc-keeper-producer.md
+    │   ├── hook.sh
+    │   └── sync.ts
+    ├── cycle/                   # estado de runtime (orchestrator)
+    │   ├── state.md
+    │   ├── events.md
+    │   └── epics/
+    ├── docs/                    # instantánea documental (harness-doc-keeper)
+    └── _archive/                # ciclos anteriores; se crea al hacer reset por goal-different
 ```
 
-Después puedes añadir pairs específicos del dominio con `/harness-pair-dev` y, si lo necesitas, derivar árboles específicos para Codex o Gemini con `/harness-sync`.
+A continuación deriva al menos un árbol de plataforma con `node .harness/loom/sync.ts --provider claude` (añade `codex,gemini` si es multiplataforma) y luego añade pairs específicos del dominio con `/harness-pair-dev`. El `harness-doc-keeper` integrado es un producer sin reviewer que se dispara automáticamente al final de cada ciclo y proyecta los artefactos task/review de ese ciclo en `.harness/docs/<module>.md` y en `CLAUDE.md` / `AGENTS.md` solo TOC. No lo invocas directamente; el orchestrator lo despacha como último turno sin reviewer antes de detenerse.
 
 ## Requisitos
 
 - **Node.js ≥ 22.6** — los scripts se ejecutan mediante TypeScript stripping nativo; no hay paso de build ni `package.json`.
 - **git** — la creación de pairs se apoya en el historial de git para el rollback de `--split`.
 - **Al menos un CLI de asistente compatible**, ya autenticado:
-  - [Claude Code](https://code.claude.com/docs) — plataforma principal; `.claude/` es la fuente canónica.
-  - [Codex CLI](https://developers.openai.com/codex/cli) — árbol derivado mediante `/harness-sync --provider codex`.
-  - [Gemini CLI](https://geminicli.com/docs/) — árbol derivado mediante `/harness-sync --provider gemini`.
+  - [Claude Code](https://code.claude.com/docs) — plataforma principal; el staging canónico `.harness/loom/` se deriva a `.claude/` mediante `node .harness/loom/sync.ts --provider claude`.
+  - [Codex CLI](https://developers.openai.com/codex/cli) — se deriva a `.codex/` mediante `node .harness/loom/sync.ts --provider codex`.
+  - [Gemini CLI](https://geminicli.com/docs/) — se deriva a `.gemini/` mediante `node .harness/loom/sync.ts --provider gemini`.
 
 ## Instalación
 
-La fábrica se distribuye con el layout monorepo estándar `plugins/<name>/`: la raíz del repositorio contiene `.claude-plugin/marketplace.json` y `.agents/plugins/marketplace.json`, y el árbol real del plugin vive bajo `plugins/harness-loom/`. **La fábrica se ejecuta en Claude Code o Codex CLI.** Gemini CLI está soportado como *consumidor de runtime* (ver la sección "Gemini CLI (runtime only)" más abajo).
+La fábrica se distribuye con el layout monorepo estándar `plugins/<name>/`: la raíz del repositorio contiene `.claude-plugin/marketplace.json` y `.agents/plugins/marketplace.json`, y el árbol real del plugin vive bajo `plugins/harness-loom/`. La fábrica se usa desde Claude Code o Codex CLI, y dentro del proyecto objetivo se derivan los árboles de plataforma que hagan falta.
 
 ### Claude Code
 
@@ -98,10 +102,10 @@ Repositorio git público (GitHub shorthand):
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
-Fijar un tag específico:
+Fijar un tag específico si hace falta:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
+/plugin marketplace add KingGyuSuh/harness-loom@<tag>
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -116,17 +120,17 @@ codex marketplace add /path/to/harness-loom
 # repositorio git público
 codex marketplace add KingGyuSuh/harness-loom
 
-# fijar un tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.5
+# fijar un tag si hace falta
+codex marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 Después, dentro del TUI de Codex, ejecuta `/plugins`, abre la entrada `Harness Loom` del marketplace e instala el plugin.
 
-### Gemini CLI (runtime only)
+### Gemini Runtime
 
-La **fábrica** de harness-loom **no puede instalarse como extensión de Gemini** — el loader de extensiones de Gemini hardcodea la raíz del repositorio como raíz de la extensión, lo cual choca con la convención monorepo `plugins/<name>/` que adopta la fábrica. En cambio, Gemini CLI está soportado como **consumidor del runtime harness** desplegado en un proyecto objetivo:
+Instala la fábrica desde Claude Code o Codex CLI y luego deriva `.gemini/` dentro del proyecto objetivo para ejecutar el runtime en Gemini:
 
-1. Desde Claude Code o Codex CLI, instala la fábrica y ejecuta `/harness-init` + `/harness-sync --provider gemini` dentro de tu proyecto objetivo. Esto despliega el runtime del lado del objetivo (`.harness/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` con el hook `AfterAgent`).
+1. Desde Claude Code o Codex CLI, instala la fábrica y ejecuta `/harness-init` + `node .harness/loom/sync.ts --provider gemini` dentro de tu proyecto objetivo. Esto despliega el runtime del lado del objetivo (`.harness/loom/`, `.harness/cycle/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` con el hook `AfterAgent`).
 2. Haz `cd` a ese proyecto objetivo y ejecuta `gemini`. La CLI autoflea los agents/skills/hooks workspace-scope bajo `.gemini/`.
 3. Tu ciclo orchestrator corre end-to-end en Gemini — el authoring de la fábrica sigue en Claude / Codex, la ejecución puede ser en cualquiera de las tres.
 
@@ -136,31 +140,37 @@ La **fábrica** de harness-loom **no puede instalarse como extensión de Gemini*
 cd your-project
 claude
 
-# 1) instalar la base canónica
+# 1) instalar la base canónica (.harness/loom/ + .harness/cycle/)
 /harness-init
 
-# 2) definir el objetivo de este ciclo
+# 2) derivar al menos un árbol de plataforma desde el staging canónico.
+node .harness/loom/sync.ts --provider claude
+#    Para multiplataforma, lista todos los providers que quieras derivar:
+# node .harness/loom/sync.ts --provider claude,codex,gemini
+
+# 3) definir el objetivo de este ciclo
 echo "Publicar un juego ligero de Snake en terminal con curses" > goal.md
 
-# 3) añadir pairs específicos del proyecto
-#    `<purpose>` es el segundo argumento posicional. La forma `--purpose` ya no se acepta.
+# 4) añadir pairs específicos del proyecto
+#    `<purpose>` es el segundo argumento posicional. Tras escribirlos, vuelve a
+#    ejecutar el comando sync de arriba para refrescar los árboles derivados.
 /harness-pair-dev --add game-design "Especificar las funcionalidades y casos límite de snake.py"
 /harness-pair-dev --add impl "Implementar snake.py conforme a la especificación" \
   --reviewer code-reviewer --reviewer playtest-reviewer
 
-# 3a) opt-in sin reviewer para trabajo determinista / auxiliar
+# 4a) opt-in sin reviewer para trabajo determinista / auxiliar
 #     (sync, format, mirror); por defecto sigue siendo pair.
 /harness-pair-dev --add asset-mirror "Copiar los activos canónicos al árbol derivado" \
   --reviewer none
 
-# 4) opcionalmente derivar Codex / Gemini desde la base canónica .claude/
-/harness-sync --provider codex,gemini
+# 4b) vuelve a lanzar sync para desplegar los pairs nuevos en los árboles de plataforma
+node .harness/loom/sync.ts --provider claude
 
 # 5) ejecutar el harness de runtime
 /harness-orchestrate goal.md
 ```
 
-Las salidas se guardan en `.harness/epics/EP-N--<slug>/{tasks,reviews}/`. El estado de ejecución vive en `.harness/state.md` y el registro de eventos en `.harness/events.md`.
+Las salidas se guardan en `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. El estado de ejecución vive en `.harness/cycle/state.md` y el registro de eventos en `.harness/cycle/events.md`. Antes de detenerse en cada ciclo, el orchestrator despacha automáticamente el producer integrado `harness-doc-keeper` sin reviewer, que proyecta el registro de auditoría del ciclo en `.harness/docs/<module>.md` y en `CLAUDE.md` / `AGENTS.md` solo TOC.
 
 ## Conceptos clave
 
@@ -170,34 +180,40 @@ Hay varios términos que aparecen una y otra vez en comandos, archivos y estados
 - **Pair** — un **producer** más uno o varios **reviewers** que comparten un único `SKILL.md`. Es la unidad base de authoring del trabajo de dominio.
 - **Producer** — el subagente que hace el trabajo de una tarea (código, especificaciones, análisis) y propone el siguiente paso.
 - **Reviewer** — el subagente que evalúa la salida del producer según un eje concreto, como calidad de código, ajuste a la especificación o seguridad.
-- **EPIC / Task** — un EPIC es una unidad de resultado emitida por el planner; un Task es una única ronda producer-reviewer dentro de ese EPIC. Los artefactos se guardan bajo `.harness/epics/EP-N--<slug>/{tasks,reviews}/`.
-- **Orchestrator vs Planner** — el **orchestrator** controla `.harness/state.md` y despacha exactamente un pair por respuesta. El **planner** opera dentro de ese ciclo y descompone el objetivo en EPICs con sus rosters.
+- **EPIC / Task** — un EPIC es una unidad de resultado emitida por el planner; un Task es una única ronda producer-reviewer dentro de ese EPIC. Los artefactos se guardan bajo `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`.
+- **Orchestrator vs Planner** — el **orchestrator** controla `.harness/cycle/state.md` y despacha exactamente un producer por respuesta (con 0, 1 o M reviewers en paralelo). El **planner** opera dentro de ese ciclo para descomponer el objetivo en EPICs, elegir para cada EPIC el tramo aplicable del roster global fijo y declarar los gates upstream por misma etapa.
 
 ## Comandos
 
 | Comando | Propósito |
 |---------|---------|
-| `/harness-init [<target>] [--force]` | Construye la base canónica `.claude/` dentro de un proyecto de destino. Escribe `.harness/`, los skills de runtime, el agent `harness-planner` y la configuración de hooks. |
-| `/harness-sync [--provider <list>]` | Deriva `.codex/` y `.gemini/` a partir de la base canónica `.claude/`. Es una sincronización en un solo sentido; nunca reescribe `.claude/`. |
-| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Crea un nuevo pair producer-reviewer apoyado en el código actual. `<purpose>` es el segundo argumento posicional. Repite `--reviewer` para una topología 1:N, o pasa `--reviewer none` para un grupo producer-only sin reviewer (trabajo determinista / auxiliar; el pair sigue siendo el predeterminado). |
-| `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Reaudita un pair existente según la rúbrica y el estado actual del código, y luego lo mejora. |
-| `/harness-pair-dev --split <slug>` | Divide un pair demasiado grande en dos pairs más acotados. |
-| `/harness-orchestrate <goal.md>` | Punto de entrada del runtime en el repositorio objetivo. Lee el objetivo, despacha un pair por respuesta y avanza el ciclo mediante la reentrada del hook. |
+| `/harness-init [<target>] [--force]` | Construye el árbol de staging canónico `.harness/loom/` y el estado de runtime `.harness/cycle/` dentro del proyecto de destino. Escribe los skills de runtime, el agent `harness-planner`, el producer integrado `harness-doc-keeper` y las copias self-contained de `hook.sh` + `sync.ts` dentro de `.harness/loom/`. No toca ningún árbol de plataforma. |
+| `node .harness/loom/sync.ts --provider <list>` | Deriva el `.harness/loom/` canónico a los árboles de plataforma (`.claude/`, `.codex/`, `.gemini/`). Es unidireccional; nunca reescribe `.harness/loom/`. Sin `--provider` cae en autodetección de los árboles de plataforma ya presentes en disco. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Crea un nuevo pair producer-reviewer apoyado en el código actual. `<purpose>` es el segundo argumento posicional. Repite `--reviewer` para una topología 1:N, o pasa `--reviewer none` para un grupo producer-only sin reviewer (trabajo determinista / auxiliar; el pair sigue siendo el predeterminado). El authoring solo escribe en `.harness/loom/`; vuelve a lanzar `node .harness/loom/sync.ts --provider <list>` después. |
+| `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Reaudita un pair existente según la rúbrica y el estado actual del código, y luego lo mejora. Vuelve a lanzar sync para refrescar los árboles de plataforma. |
+| `/harness-pair-dev --split <slug>` | Divide un pair demasiado grande en dos pairs más acotados. Vuelve a lanzar sync después. |
+| `/harness-orchestrate <goal.md>` | Punto de entrada del runtime en el repositorio objetivo. Lee el objetivo, despacha un producer (con su conjunto de reviewers emparejados cuando aplique) por respuesta y avanza el ciclo mediante la reentrada del hook. Antes del halt, despacha automáticamente el producer integrado `harness-doc-keeper` sin reviewer y luego limpia `Next`. |
 
 ## Fábrica y runtime
 
 ```text
 factory (este repositorio)                       target project
 -----------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          instala ->       .harness/{state,events,hook,epics}/
-plugins/harness-loom/skills/harness-pair-dev/      escribe ->       .claude/agents/<slug>-producer.md
-plugins/harness-loom/skills/harness-sync/          deriva  ->       .claude/agents/<reviewer>.md
-plugins/harness-loom/skills/harness-init/references/runtime/ siembra -> .claude/skills/<slug>/SKILL.md
-                                               .claude/settings.json
+plugins/harness-loom/skills/harness-init/          instala ->       .harness/loom/{skills,agents,hook.sh,sync.ts}
+plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/}
+plugins/harness-loom/skills/harness-init/references/runtime/ siembra -> .harness/loom/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-pair-dev/      escribe ->       .harness/loom/agents/<slug>-producer.md
+                                                                    .harness/loom/agents/<reviewer>.md
+                                                                    .harness/loom/skills/<slug>/SKILL.md
                                                      |
-                                                     +-- /harness-sync (opcional)
+                                                     +-- node .harness/loom/sync.ts --provider <list>
+                                                         -> .claude/{agents,skills,settings.json}
                                                          -> .codex/
                                                          -> .gemini/
+                                                     |
+                                                     +-- harness-doc-keeper se dispara en el halt del ciclo
+                                                         -> .harness/docs/<module>.md
+                                                         -> CLAUDE.md / AGENTS.md (solo TOC)
 ```
 
 Esta separación es deliberada:
@@ -212,7 +228,7 @@ Los pines de plataforma que aplica `sync.ts` son los siguientes:
 
 | Plataforma | Modelo | Evento de hook | Notas |
 |----------|-------|------------|-------|
-| Claude | `inherit` | `Stop` | `.claude/settings.json` dispara `.harness/hook.sh`. |
+| Claude | `inherit` | `Stop` | `.claude/settings.json` dispara `.harness/loom/hook.sh`. |
 | Codex | `gpt-5.4`, `model_reasoning_effort: xhigh` | `Stop` | Los subagentes no usan modelos mini. |
 | Gemini | `gemini-3.1-pro-preview` | `AfterAgent` | Los skills se reflejan en el árbol de la plataforma. |
 

@@ -8,7 +8,7 @@ loop: false
 To: planner
 EPIC: (none)
 Task path: (assigned on first planner dispatch)
-Intent: Read the full goal.md, emit up to four EPICs, and provide the roster for each EPIC.
+Intent: Read the full goal.md, emit up to four EPICs, and provide the applicable global-roster slice for each EPIC.
 Prior tasks:
 Prior reviews:
 
@@ -20,6 +20,6 @@ Example:
 
 ### EP-1--<kebab-outcome>
 outcome: <one-sentence completion condition>.
-roster: <producer1> → <producer2> → <producer3>.
+roster: <producer1> → <producer3> → <producer5>.
 current: <producer-slug | done | superseded>.
-note: <brief summary of upstream, blocker, or progress state; cite sources such as goal.md:Lxx>.
+note: <brief summary of same-stage upstream gates, blocker, or progress state; cite sources such as goal.md:Lxx>.

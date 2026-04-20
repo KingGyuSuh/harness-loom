@@ -25,7 +25,7 @@ mkdir /tmp/scratch && cd /tmp/scratch
 claude --plugin-dir /absolute/path/to/harness-loom
 # then in Claude Code:
 /harness-init
-/harness-pair-dev --add sample --purpose "scratch test"
+/harness-pair-dev --add harness-sample "scratch test"
 ```
 
 ## Project layout
@@ -41,7 +41,6 @@ plugins/
     skills/
       harness-init/                 # /harness-init (user-invocable)
       harness-pair-dev/             # /harness-pair-dev (user-invocable)
-      harness-sync/                 # /harness-sync (user-invocable)
       harness-init/references/runtime/   # target-side runtime templates (`*.template.md`)
 tests/                              # node:test integration suite
 docs/README.*.md                    # translated READMEs
@@ -126,8 +125,8 @@ factory's own rubric:
   deployed harness's
   point of view only. They should describe live runtime contracts
   (orchestrator, planner, pair, `.harness/`, state/events, dispatch, review),
-  not factory operations such as `/harness-init`, `/harness-pair-dev`,
-  `/harness-sync`, plugin installation, or marketplace/distribution concerns.
+  not factory operations such as `/harness-init`, `/harness-pair-dev`, plugin
+  installation, or marketplace/distribution concerns.
 
 See `plugins/harness-loom/skills/harness-pair-dev/references/example-skills/skill-authoring.md`
 and `agent-authoring.md` for the full rubric (it's the same rubric applied

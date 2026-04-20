@@ -1,45 +1,50 @@
 #!/usr/bin/env node
-// Purpose: Deploy canonical `.claude/` source (agents + skills) into the
-//          derived platform directories `.codex/` and `.gemini/`. Sync is
-//          strictly one-way: canonical → derived. It never writes to
-//          `.claude/` (canonical is read-only from sync's perspective);
-//          re-normalize claude with `/harness-init --force` instead.
+// Purpose: Deploy canonical staging `<target>/.harness/loom/` (agents +
+//          skills) into the platform trees `.claude/`, `.codex/`, and/or
+//          `.gemini/`. Sync is strictly one-way: loom → platform. It NEVER
+//          writes to `.harness/loom/` (the canonical staging is read-only
+//          from sync's perspective) and never reads or writes
+//          `.harness/cycle/` (the orchestrator owns that namespace).
 //
 // Usage:
-//   node skills/harness-pair-dev/scripts/sync.ts [--provider codex,gemini]
-//   node skills/harness-pair-dev/scripts/sync.ts [--codex] [--gemini]
+//   node .harness/loom/sync.ts [--provider claude,codex,gemini]
+//   node .harness/loom/sync.ts [--claude] [--codex] [--gemini]
 //
-//   When `--provider` is omitted the script auto-detects derived providers
-//   already on disk (`.codex/` / `.gemini/`). First-time codex/gemini setup
-//   requires explicit `--provider codex,gemini` so the user opts in. Passing
-//   `--provider claude` (or `--claude`) is a hard error — sync does not
-//   touch canonical.
+//   This script is also installed at the canonical plugin path and may be
+//   invoked there during development:
+//     node skills/harness-init/scripts/sync.ts ...
+//   Both call sites resolve the target as `process.cwd()`.
+//
+//   Deploy is always an explicit opt-in: a bare invocation with no
+//   `--provider` / `--claude` / `--codex` / `--gemini` is an error. The
+//   script never auto-detects platform trees from disk — a pre-existing
+//   `.claude/` may belong to the user, not to a prior harness deploy, and
+//   silently overwriting it would clobber unrelated settings.
+//
+// Wipe-and-overwrite contract (goals.md L68):
+//   For each selected platform, sync deletes only files/directories under
+//   `agents/` and `skills/` whose name (or basename) starts with `harness-`
+//   before reseeding from `.harness/loom/`. Non-harness assets the user
+//   placed in those directories (`team-reviewer.md`, custom skills) are
+//   preserved verbatim.
 //
 // Platform contract (verified against official specs):
 //   - Codex subagents pin `model = "gpt-5.4"`, `model_reasoning_effort = "xhigh"`.
 //     Agent body goes in `developer_instructions = """..."""` — NOT `prompt`.
 //     Skills are referenced via repeated `[[skills.config]]` tables.
 //     Source: developers.openai.com/codex/subagents
-//   - Claude agents pin `model: inherit`.
+//   - Claude agents pin `model: inherit`. Skills are loaded by directory.
 //   - Gemini agents pin `model: gemini-3.1-pro-preview`. Frontmatter is
 //     `.strict()` and rejects unknown keys (including `skills`). Skills are
 //     auto-loaded globally from `.gemini/skills/` and surfaced to every agent
 //     via progressive disclosure — no per-agent reference needed.
 //     Source: github.com/google-gemini/gemini-cli (packages/core/src/agents/agentLoader.ts)
-//   - Codex + Gemini do NOT duplicate skills under `.{platform}/agents/*/`;
-//     skills deploy once to `.{platform}/skills/`.
-//   - Codex deploy writes `.codex/hooks.json` (Stop event); Gemini deploy
-//     writes `.gemini/settings.json` (AfterAgent event). Both wire to
-//     `.harness/hook.sh`. Claude hook wiring is install.ts territory and
-//     sync never touches `.claude/settings.json`.
+//   - Each platform's hook setting wires to `bash .harness/loom/hook.sh
+//     <platform>` (Stop for claude/codex, AfterAgent for gemini).
 //
 // Library API:
-//   import { runSync, detectDeployedProviders } from "./sync.ts"
-//   await runSync({ targetRoot, providers });
-//
-// Idempotency: All writes rewrite whole files. Stale `.claude/agents/*.md`,
-// `.codex/agents/*.toml`, `.gemini/agents/*.md` that do not map back to a
-// canonical agent are deleted.
+//   import { runSync } from "./sync.ts"
+//   await runSync({ targetRoot, providers: ["claude"] });
 
 import {
   mkdir,
@@ -55,6 +60,8 @@ import { constants as FS } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import process from "node:process";
 
+// All supported platform trees are derived deploy targets. `.harness/loom/`
+// remains the only canonical staging source.
 export type Platform = "claude" | "codex" | "gemini";
 
 interface PlatformPin {
@@ -80,12 +87,8 @@ interface SkillDir {
   sourcePath: string;
 }
 
-// Only derived providers (codex, gemini) are valid sync targets. Claude is
-// canonical and read-only from sync's perspective.
-type DerivedPlatform = Exclude<Platform, "claude">;
-
 interface ParsedArgs {
-  providers: Set<DerivedPlatform>;
+  providers: Set<Platform>;
 }
 
 function die(message: string, code = 1): never {
@@ -95,27 +98,29 @@ function die(message: string, code = 1): never {
 
 function parseProvidersFromArgs(argv: string[]): ParsedArgs {
   const rest = argv.slice(2);
-  const providers = new Set<DerivedPlatform>();
+  const providers = new Set<Platform>();
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (arg === "--help" || arg === "-h") {
       process.stdout.write(
-        "Usage: node skills/harness-pair-dev/scripts/sync.ts " +
-          "[--provider codex,gemini] [--codex] [--gemini]\n" +
-          "  Sync derives `.codex/` and `.gemini/` from canonical `.claude/`.\n" +
-          "  Sync never writes to `.claude/` (use `/harness-init --force` for that).\n",
+        "Usage: node .harness/loom/sync.ts " +
+          "--provider <claude,codex,gemini>     (any subset, comma-separated)\n" +
+          "   or: node .harness/loom/sync.ts --claude [--codex] [--gemini]\n" +
+          "  Sync derives `.claude/`, `.codex/`, `.gemini/` from canonical\n" +
+          "  staging `.harness/loom/`. Every platform is an explicit opt-in;\n" +
+          "  there is no auto-detection. Sync never writes to `.harness/loom/`\n" +
+          "  and never touches `.harness/cycle/`.\n",
       );
       process.exit(0);
     }
-    if (arg === "--claude") die("claude is canonical; sync never writes to .claude/. Use /harness-init or edit .claude/ directly.");
+    if (arg === "--claude") providers.add("claude");
     else if (arg === "--codex") providers.add("codex");
     else if (arg === "--gemini") providers.add("gemini");
     else if (arg === "--provider") {
       const value = rest[++i];
       if (!value) die("--provider requires a value");
       for (const t of value.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)) {
-        if (t === "claude") die("claude is canonical; sync never writes to .claude/. Pass codex/gemini only.");
-        if (t === "codex" || t === "gemini") providers.add(t);
+        if (t === "claude" || t === "codex" || t === "gemini") providers.add(t);
         else die(`unknown provider: ${t}`);
       }
     } else die(`unknown flag: ${arg}`);
@@ -130,17 +135,6 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-// `.claude/` is canonical and read-only from sync's perspective — sync never
-// writes to it. Detection therefore returns ONLY derived providers (codex,
-// gemini) that already exist on disk. First-time codex/gemini setup must come
-// from explicit `--provider`.
-export async function detectDeployedProviders(targetRoot: string): Promise<Platform[]> {
-  const present: Platform[] = [];
-  if (await exists(join(targetRoot, ".codex"))) present.push("codex");
-  if (await exists(join(targetRoot, ".gemini"))) present.push("gemini");
-  return present;
 }
 
 // ---------------------------------------------------------------- frontmatter
@@ -230,7 +224,7 @@ function renderCodexAgentToml(fm: Record<string, unknown>, body: string, pin: Pl
 // ---------------------------------------------------------------- sources
 
 async function loadCanonicalAgents(targetRoot: string): Promise<AgentFile[]> {
-  const dir = join(targetRoot, ".claude", "agents");
+  const dir = join(targetRoot, ".harness", "loom", "agents");
   if (!(await exists(dir))) return [];
   const entries = await readdir(dir);
   const agents: AgentFile[] = [];
@@ -250,7 +244,7 @@ async function loadCanonicalAgents(targetRoot: string): Promise<AgentFile[]> {
 }
 
 async function loadCanonicalSkills(targetRoot: string): Promise<SkillDir[]> {
-  const dir = join(targetRoot, ".claude", "skills");
+  const dir = join(targetRoot, ".harness", "loom", "skills");
   if (!(await exists(dir))) return [];
   const entries = await readdir(dir);
   const skills: SkillDir[] = [];
@@ -279,22 +273,28 @@ async function copyTree(src: string, dst: string, copied: string[]): Promise<voi
   }
 }
 
-async function cleanStaleAgents(
-  platformAgentsDir: string,
-  canonicalNames: Set<string>,
-  extension: string,
+// Wipe-and-overwrite step: delete only entries under `dir` whose basename
+// starts with `harness-`. Non-harness user assets are left in place. Tracks
+// every removed path on `deleted` for the run summary.
+async function wipeHarnessEntries(
+  dir: string,
+  extensionFilter: string | null,
   deleted: string[],
 ): Promise<void> {
-  if (!(await exists(platformAgentsDir))) return;
-  const entries = await readdir(platformAgentsDir);
+  if (!(await exists(dir))) return;
+  const entries = await readdir(dir);
   for (const entry of entries) {
-    const full = join(platformAgentsDir, entry);
+    const full = join(dir, entry);
     const st = await stat(full);
-    if (!st.isFile()) continue;
-    if (!entry.endsWith(extension)) continue;
-    const base = entry.replace(new RegExp(`${extension}$`), "");
-    if (!canonicalNames.has(base)) {
+    if (st.isFile()) {
+      if (extensionFilter && !entry.endsWith(extensionFilter)) continue;
+      const base = extensionFilter ? entry.slice(0, -extensionFilter.length) : entry;
+      if (!base.startsWith("harness-")) continue;
       await rm(full, { force: true });
+      deleted.push(full);
+    } else if (st.isDirectory()) {
+      if (!entry.startsWith("harness-")) continue;
+      await rm(full, { recursive: true, force: true });
       deleted.push(full);
     }
   }
@@ -302,9 +302,32 @@ async function cleanStaleAgents(
 
 // ---------------------------------------------------------------- hook configs
 
-// sync.ts owns codex/gemini hook wiring as part of deploy. Claude is wired by
-// install.ts; sync never touches `.claude/settings.json` (user property).
-//
+// All three platforms wire their re-entry hook to `.harness/loom/hook.sh`
+// (the self-contained copy seeded by install.ts). The platform name is passed
+// as $1 so hook.sh chooses the right slash/skill syntax.
+
+async function writeClaudeSettings(targetRoot: string): Promise<string> {
+  const settingsPath = join(targetRoot, ".claude", "settings.json");
+  await mkdir(dirname(settingsPath), { recursive: true });
+  let existing: Record<string, unknown> = {};
+  if (await exists(settingsPath)) {
+    try {
+      existing = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
+    } catch {
+      existing = {};
+    }
+  }
+  const hooks = (existing.hooks as Record<string, unknown>) ?? {};
+  hooks.Stop = [
+    {
+      hooks: [{ type: "command", command: "bash .harness/loom/hook.sh claude" }],
+    },
+  ];
+  existing.hooks = hooks;
+  await writeFile(settingsPath, JSON.stringify(existing, null, 2) + "\n");
+  return settingsPath;
+}
+
 // Codex hook config shape (verified against codex-rs/hooks/src/engine/config.rs):
 //   { hooks: { Stop: [ { hooks: [ { type: "command", command, timeout } ] } ] } }
 // The shorthand { Stop: [ { command } ] } is a hard parse error under serde.
@@ -325,7 +348,7 @@ async function writeCodexHookConfig(targetRoot: string): Promise<string> {
   hooks.Stop = [
     {
       hooks: [
-        { type: "command", command: "bash .harness/hook.sh codex", timeout: 30 },
+        { type: "command", command: "bash .harness/loom/hook.sh codex", timeout: 30 },
       ],
     },
   ];
@@ -373,7 +396,7 @@ async function writeGeminiHookConfig(targetRoot: string): Promise<string> {
   hooks.AfterAgent = [
     {
       hooks: [
-        { type: "command", command: "bash .harness/hook.sh gemini", timeout: 60000 },
+        { type: "command", command: "bash .harness/loom/hook.sh gemini", timeout: 60000 },
       ],
     },
   ];
@@ -384,29 +407,52 @@ async function writeGeminiHookConfig(targetRoot: string): Promise<string> {
 
 // ---------------------------------------------------------------- deploy
 
+async function deployClaude(targetRoot: string, agents: AgentFile[], skills: SkillDir[]) {
+  const root = join(targetRoot, ".claude");
+  const agentsDir = join(root, "agents");
+  const skillsDir = join(root, "skills");
+  await mkdir(agentsDir, { recursive: true });
+  await mkdir(skillsDir, { recursive: true });
+  const copied: string[] = [];
+  const deleted: string[] = [];
+  // Wipe `harness-*` only — user-owned non-harness agents/skills survive.
+  await wipeHarnessEntries(agentsDir, ".md", deleted);
+  await wipeHarnessEntries(skillsDir, null, deleted);
+  for (const a of agents) {
+    const fm = injectModelIntoFrontmatter(a.frontmatter, PIN.claude);
+    const out = renderClaudeFrontmatter(fm) + a.body;
+    const dst = join(agentsDir, `${a.name}.md`);
+    await writeFile(dst, out);
+    copied.push(dst);
+  }
+  for (const s of skills) {
+    await copyTree(s.sourcePath, join(skillsDir, s.name), copied);
+  }
+  copied.push(await writeClaudeSettings(targetRoot));
+  return { copied, deleted };
+}
+
 async function deployCodex(targetRoot: string, agents: AgentFile[], skills: SkillDir[]) {
   const root = join(targetRoot, ".codex");
   const agentsDir = join(root, "agents");
   const skillsDir = join(root, "skills");
   await mkdir(agentsDir, { recursive: true });
+  await mkdir(skillsDir, { recursive: true });
   const copied: string[] = [];
   const deleted: string[] = [];
+  await wipeHarnessEntries(agentsDir, ".toml", deleted);
+  await wipeHarnessEntries(skillsDir, null, deleted);
   for (const a of agents) {
     const toml = renderCodexAgentToml(a.frontmatter, a.body, PIN.codex);
     const dst = join(agentsDir, `${a.name}.toml`);
     await writeFile(dst, toml);
     copied.push(dst);
   }
-  const canonical = new Set(agents.map((a) => a.name));
-  await cleanStaleAgents(agentsDir, canonical, ".toml", deleted);
   // Codex does NOT duplicate skills under .codex/agents/**; the CLI reads
   // skill trees from the platform root. Mirror them once under .codex/skills/
   // so platform surface matches canonical skill paths for citation.
-  if (skills.length > 0) {
-    if (await exists(skillsDir)) await rm(skillsDir, { recursive: true, force: true });
-    for (const s of skills) {
-      await copyTree(s.sourcePath, join(skillsDir, s.name), copied);
-    }
+  for (const s of skills) {
+    await copyTree(s.sourcePath, join(skillsDir, s.name), copied);
   }
   copied.push(await writeCodexHookConfig(targetRoot));
   copied.push(await writeCodexConfigToml(targetRoot));
@@ -418,8 +464,11 @@ async function deployGemini(targetRoot: string, agents: AgentFile[], skills: Ski
   const agentsDir = join(root, "agents");
   const skillsDir = join(root, "skills");
   await mkdir(agentsDir, { recursive: true });
+  await mkdir(skillsDir, { recursive: true });
   const copied: string[] = [];
   const deleted: string[] = [];
+  await wipeHarnessEntries(agentsDir, ".md", deleted);
+  await wipeHarnessEntries(skillsDir, null, deleted);
   for (const a of agents) {
     const fm = injectModelIntoFrontmatter(a.frontmatter, PIN.gemini);
     // Gemini's localAgentSchema is .strict() and rejects unknown keys like
@@ -432,11 +481,8 @@ async function deployGemini(targetRoot: string, agents: AgentFile[], skills: Ski
     await writeFile(dst, out);
     copied.push(dst);
   }
-  const canonical = new Set(agents.map((a) => a.name));
-  await cleanStaleAgents(agentsDir, canonical, ".md", deleted);
   // Gemini does NOT duplicate skills under .gemini/agents/**; mirror once
   // under .gemini/skills/.
-  if (await exists(skillsDir)) await rm(skillsDir, { recursive: true, force: true });
   for (const s of skills) {
     await copyTree(s.sourcePath, join(skillsDir, s.name), copied);
   }
@@ -452,7 +498,7 @@ export interface SyncReport {
 
 export async function runSync(opts: {
   targetRoot: string;
-  providers: DerivedPlatform[];
+  providers: Platform[];
 }): Promise<SyncReport> {
   if (opts.providers.length === 0) {
     return {};
@@ -460,13 +506,14 @@ export async function runSync(opts: {
   const agents = await loadCanonicalAgents(opts.targetRoot);
   if (agents.length === 0) {
     throw new Error(
-      `no canonical agents found in ${join(opts.targetRoot, ".claude", "agents")}`,
+      `no canonical agents found in ${join(opts.targetRoot, ".harness", "loom", "agents")}`,
     );
   }
   const skills = await loadCanonicalSkills(opts.targetRoot);
   const summary: SyncReport = {};
   for (const t of opts.providers) {
-    if (t === "codex") summary.codex = await deployCodex(opts.targetRoot, agents, skills);
+    if (t === "claude") summary.claude = await deployClaude(opts.targetRoot, agents, skills);
+    else if (t === "codex") summary.codex = await deployCodex(opts.targetRoot, agents, skills);
     else if (t === "gemini") summary.gemini = await deployGemini(opts.targetRoot, agents, skills);
   }
   return summary;
@@ -477,23 +524,14 @@ export async function runSync(opts: {
 async function main() {
   const { providers } = parseProvidersFromArgs(process.argv);
   const targetRoot = process.cwd();
-  const selected: DerivedPlatform[] = providers.size > 0
-    ? [...providers]
-    : await detectDeployedProviders(targetRoot);
 
-  if (selected.length === 0) {
-    process.stdout.write(
-      JSON.stringify(
-        {
-          providers: [],
-          note: "No derived providers detected (.codex/, .gemini/). Pass `--provider codex,gemini` to opt in.",
-        },
-        null,
-        2,
-      ) + "\n",
+  if (providers.size === 0) {
+    die(
+      "no providers selected. Pass `--provider claude,codex,gemini` (any subset) or the individual flags `--claude` / `--codex` / `--gemini`.\n" +
+        "Deploy is always an explicit opt-in — sync does not auto-detect platform trees, because a directory like `.claude/` may predate the harness and overwriting it silently would clobber user settings.",
     );
-    return;
   }
+  const selected: Platform[] = [...providers];
 
   let summary: SyncReport;
   try {

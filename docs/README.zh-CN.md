@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#多平台)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **状态：** 0.1.5 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
+> **状态：** 0.2.0 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
 
 `harness-loom` 是一个工厂型插件：它会把运行时 harness 安装到目标仓库里，并按 pair 的粒度逐步扩展。
 
@@ -29,14 +29,14 @@
 - 所有 subagent 共用的运行时上下文
 - 随时间逐步补充的、面向项目领域的 producer-reviewer pair
 
-`.claude/` 是正本。`.codex/` 和 `.gemini/` 按需从它派生。
+目标项目的 `.harness/` 划分为三个并列的命名空间：`loom/` 是由 install 与 sync 拥有的正本 staging 树，`cycle/` 是由 orchestrator 拥有的运行时状态，`docs/` 是由新引入的内置 `harness-doc-keeper` producer 拥有的文档快照。平台树（`.claude/`、`.codex/`、`.gemini/`）按需从 `.harness/loom/` 派生。
 
 ## 为什么是这种结构
 
 - **先有 skill，再有 agent。** 共享方法论放在每个 pair 的 `SKILL.md` 里，让生产规则与审查规则保持一致。
 - **Producer 加 Reviewer。** 一个 pair 可以扩展为一个或多个 reviewer，每个 reviewer 关注不同的评估维度。
-- **只维护一个正本。** harness 统一写在 `.claude/`，只有在需要时才派生出 `.codex/` 和 `.gemini/`。
-- **由 hook 驱动执行。** orchestrator 把下一次 dispatch 写入 `.harness/state.md`，hook 再无缝把循环接起来。
+- **只维护一个正本。** harness 统一写在 `.harness/loom/`，只有在需要时才派生出 `.claude/`、`.codex/` 和 `.gemini/`。
+- **由 hook 驱动执行。** orchestrator 把下一次 dispatch 写入 `.harness/cycle/state.md`，hook 再无缝把循环接起来。
 - **基于仓库实际情况来写。** 生成 pair 时会读取真实的目标代码库，因此引用的是实际文件与模式，而不是抽象 boilerplate。
 
 ## 会安装什么
@@ -45,36 +45,40 @@
 
 ```text
 target project
-├── .harness/
-│   ├── state.md
-│   ├── events.md
-│   ├── hook.sh
-│   └── epics/
-├── .claude/
-│   ├── agents/
-│   │   └── harness-planner.md
-│   ├── skills/
-│   │   ├── harness-orchestrate/
-│   │   ├── harness-planning/
-│   │   └── harness-context/
-│   └── settings.json
-└── 面向项目领域的 producer / reviewer pair
+└── .harness/
+    ├── loom/                    # 正本 staging（install + sync 拥有）
+    │   ├── skills/
+    │   │   ├── harness-orchestrate/
+    │   │   ├── harness-planning/
+    │   │   ├── harness-context/
+    │   │   └── harness-doc-keeper/
+    │   ├── agents/
+    │   │   ├── harness-planner.md
+    │   │   └── harness-doc-keeper-producer.md
+    │   ├── hook.sh
+    │   └── sync.ts
+    ├── cycle/                   # 运行时状态（orchestrator 拥有）
+    │   ├── state.md
+    │   ├── events.md
+    │   └── epics/
+    ├── docs/                    # 文档快照（harness-doc-keeper 拥有）
+    └── _archive/                # 历史循环；goal-different 复位时创建
 ```
 
-之后，你可以通过 `/harness-pair-dev` 添加领域相关的 pair，也可以在需要时用 `/harness-sync` 派生出 Codex 或 Gemini 专用树。
+之后用 `node .harness/loom/sync.ts --provider claude`（多平台时再加 `codex,gemini`）派生至少一个平台树，再通过 `/harness-pair-dev` 添加领域相关的 pair。内置的 `harness-doc-keeper` 是一个无 reviewer 的 producer，会在每个循环停止前自动运行，把该循环的 task 与 review 产物整理到 `.harness/docs/<module>.md` 与 TOC 形式的 `CLAUDE.md` / `AGENTS.md`。用户不直接调用它；orchestrator 在 halt 之前作为最后一个无 reviewer 的回合自动 dispatch。
 
 ## 要求
 
 - **Node.js ≥ 22.6** —— 脚本通过原生 TypeScript stripping 运行；不需要构建步骤，也没有 `package.json`。
 - **git** —— 在 pair 拆分时，`--split` 会依赖 git 历史来处理回退。
 - **至少一个受支持的助手 CLI**，并且已经完成认证：
-  - [Claude Code](https://code.claude.com/docs) —— 主要目标平台，`.claude/` 是正本。
-  - [Codex CLI](https://developers.openai.com/codex/cli) —— 通过 `/harness-sync --provider codex` 派生。
-  - [Gemini CLI](https://geminicli.com/docs/) —— 通过 `/harness-sync --provider gemini` 派生。
+  - [Claude Code](https://code.claude.com/docs) —— 主要目标平台，正本 staging `.harness/loom/` 通过 `node .harness/loom/sync.ts --provider claude` 派生到 `.claude/`。
+  - [Codex CLI](https://developers.openai.com/codex/cli) —— 通过 `node .harness/loom/sync.ts --provider codex` 派生到 `.codex/`。
+  - [Gemini CLI](https://geminicli.com/docs/) —— 通过 `node .harness/loom/sync.ts --provider gemini` 派生到 `.gemini/`。
 
 ## 安装
 
-工厂采用标准的 `plugins/<name>/` monorepo 布局：仓库根目录放 `.claude-plugin/marketplace.json` 和 `.agents/plugins/marketplace.json`，真正的插件树放在 `plugins/harness-loom/` 下。**工厂本身在 Claude Code 或 Codex CLI 中运行。** Gemini CLI 作为*运行时消费者*被支持（见下文「Gemini CLI (runtime only)」）。
+工厂采用标准的 `plugins/<name>/` monorepo 布局：仓库根目录放 `.claude-plugin/marketplace.json` 和 `.agents/plugins/marketplace.json`，真正的插件树放在 `plugins/harness-loom/` 下。工厂通过 Claude Code 或 Codex CLI 使用，而在目标项目内部则按需派生各个平台树。
 
 ### Claude Code
 
@@ -98,10 +102,10 @@ claude --plugin-dir ./plugins/harness-loom
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
-锁定特定 tag：
+需要时锁定特定 tag：
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
+/plugin marketplace add KingGyuSuh/harness-loom@<tag>
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -116,17 +120,17 @@ codex marketplace add /path/to/harness-loom
 # 公开 git 仓库
 codex marketplace add KingGyuSuh/harness-loom
 
-# 锁定 tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.5
+# 需要时锁定 tag
+codex marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 然后在 Codex TUI 中执行 `/plugins`，打开 `Harness Loom` marketplace 条目并安装插件。
 
-### Gemini CLI (runtime only)
+### Gemini Runtime
 
-harness-loom **工厂自身无法作为 Gemini extension 安装** —— Gemini 的 extension 加载器把 repo 根目录硬编码为 extension 根，与工厂所采用的 Codex / Claude `plugins/<name>/` monorepo 约定冲突。不过 Gemini CLI 作为**在目标项目中消费运行时 harness** 的平台是被支持的：
+工厂从 Claude Code 或 Codex CLI 安装，目标项目里再派生 `.gemini/` 作为 Gemini 运行时使用：
 
-1. 在 Claude Code 或 Codex CLI 里安装工厂，然后在目标项目中运行 `/harness-init` 和 `/harness-sync --provider gemini`。这会在目标端部署 runtime（`.harness/`、`.gemini/agents/`、`.gemini/skills/`，以及带 `AfterAgent` 钩子的 `.gemini/settings.json`）。
+1. 在 Claude Code 或 Codex CLI 里安装工厂，然后在目标项目中运行 `/harness-init` 和 `node .harness/loom/sync.ts --provider gemini`。这会在目标端部署 runtime（`.harness/loom/`、`.harness/cycle/`、`.gemini/agents/`、`.gemini/skills/`，以及带 `AfterAgent` 钩子的 `.gemini/settings.json`）。
 2. `cd` 进入该目标项目，启动 `gemini`。CLI 会自动加载 workspace 范围的 `.gemini/agents/*.md`、`.gemini/skills/<slug>/SKILL.md`，以及 `.gemini/settings.json` 中的 `AfterAgent` 钩子。
 3. orchestrator 循环就能在 Gemini 中端到端运行——工厂侧编写仍走 Claude / Codex，执行可以在三种平台的任意一种。
 
@@ -136,31 +140,37 @@ harness-loom **工厂自身无法作为 Gemini extension 安装** —— Gemini 
 cd your-project
 claude
 
-# 1) 安装正本基础环境
+# 1) 安装正本基础环境（.harness/loom/ + .harness/cycle/）
 /harness-init
 
-# 2) 定义本轮循环的目标
+# 2) 从正本 staging 至少派生一个平台树。
+node .harness/loom/sync.ts --provider claude
+#    多平台时请列出所有希望派生的 provider：
+# node .harness/loom/sync.ts --provider claude,codex,gemini
+
+# 3) 定义本轮循环的目标
 echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 
-# 3) 添加项目专属 pair
-#    `<purpose>` 是第二个位置参数，不再接受 `--purpose` 标志。
+# 4) 添加项目专属 pair
+#    `<purpose>` 是第二个位置参数。编写完成后请再次运行上面的 sync 命令，
+#    用于刷新派生的平台树。
 /harness-pair-dev --add game-design "为 snake.py 编写功能与边界情况说明"
 /harness-pair-dev --add impl "按照说明实现 snake.py" \
   --reviewer code-reviewer --reviewer playtest-reviewer
 
-# 3a) 无 reviewer 的 opt-in：仅用于确定性 / 辅助工作（sync、format、mirror）；
+# 4a) 无 reviewer 的 opt-in：仅用于确定性 / 辅助工作（sync、format、mirror）；
 #     默认仍然是 pair。
 /harness-pair-dev --add asset-mirror "把正本资产复制到派生树" \
   --reviewer none
 
-# 4) （可选）从正本 .claude/ 派生 Codex / Gemini
-/harness-sync --provider codex,gemini
+# 4b) 再次运行 sync，把新 pair 部署到平台树
+node .harness/loom/sync.ts --provider claude
 
 # 5) 运行运行时 harness
 /harness-orchestrate goal.md
 ```
 
-输出会落在 `.harness/epics/EP-N--<slug>/{tasks,reviews}/` 下面。运行时状态保存在 `.harness/state.md`，事件日志保存在 `.harness/events.md`。
+输出会落在 `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` 下面。运行时状态保存在 `.harness/cycle/state.md`，事件日志保存在 `.harness/cycle/events.md`。每个循环停止之前，orchestrator 会自动 dispatch 内置的 `harness-doc-keeper` 无 reviewer producer，把循环审计记录整理到 `.harness/docs/<module>.md` 以及 TOC 形式的 `CLAUDE.md` / `AGENTS.md`。
 
 ## 核心概念
 
@@ -170,34 +180,40 @@ echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 - **Pair** —— 一个 **producer** 加上一个或多个 **reviewer**，共享同一个 `SKILL.md`。这是领域工作的基本编排单元。
 - **Producer** —— 执行实际工作并提出下一步建议的 subagent，例如写代码、写规范、做分析。
 - **Reviewer** —— 沿某个明确维度给 producer 输出打分的 subagent，例如代码质量、规范契合度或安全性。
-- **EPIC / Task** —— EPIC 是 planner 发出的成果单元；Task 是该 EPIC 内一次 producer-reviewer 循环。产物会落在 `.harness/epics/EP-N--<slug>/{tasks,reviews}/` 下。
-- **Orchestrator vs Planner** —— **orchestrator** 拥有 `.harness/state.md`，并保证每次响应只 dispatch 一个 pair。**planner** 则在 orchestrator 循环内部，把目标分解成带 roster 的 EPIC。
+- **EPIC / Task** —— EPIC 是 planner 发出的成果单元；Task 是该 EPIC 内一次 producer-reviewer 循环。产物会落在 `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/` 下。
+- **Orchestrator vs Planner** —— **orchestrator** 拥有 `.harness/cycle/state.md`，并保证每次响应只 dispatch 一个 producer（以及 0、1 或 M 个 reviewer 并行）。**planner** 则在该循环内部把目标分解成 EPIC，为每个 EPIC 选择固定 global roster 中适用的阶段切片，并声明同一阶段上的 upstream gate。
 
 ## 命令
 
 | 命令 | 作用 |
 |---------|---------|
-| `/harness-init [<target>] [--force]` | 在目标项目里搭建正本 `.claude/` 基础环境，写入 `.harness/`、运行时 skill、`harness-planner` agent，以及 hook 连接。 |
-| `/harness-sync [--provider <list>]` | 从正本 `.claude/` 派生 `.codex/` 和 `.gemini/`。这是单向同步，不会回写 `.claude/`。 |
-| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 基于当前代码库编写新的 producer-reviewer pair。`<purpose>` 是第二个位置参数。重复 `--reviewer` 形成 1:N 拓扑；传入 `--reviewer none` 则得到无 reviewer 的 producer-only 组（仅用于确定性/辅助工作；默认仍然是 pair）。 |
-| `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 依据 rubric 与当前代码库重新审视已有 pair，并对其改进。 |
-| `/harness-pair-dev --split <slug>` | 将过于臃肿的 pair 拆成两个更聚焦的 pair。 |
-| `/harness-orchestrate <goal.md>` | 目标侧运行时入口。读取目标后，每次响应 dispatch 一个 pair，并通过 hook 重入推进整个循环。 |
+| `/harness-init [<target>] [--force]` | 在目标项目里搭建正本 `.harness/loom/` staging 树和 `.harness/cycle/` 运行时状态。写入运行时 skill、`harness-planner` agent、内置 `harness-doc-keeper` producer，以及 `.harness/loom/` 内 self-contained 的 `hook.sh` + `sync.ts` 副本。不触碰平台树。 |
+| `node .harness/loom/sync.ts --provider <list>` | 把正本 `.harness/loom/` 派生到平台树（`.claude/`、`.codex/`、`.gemini/`）。单向同步，不会回写 `.harness/loom/`。省略 `--provider` 时仅自动检测磁盘上已存在的平台树。 |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 基于当前代码库编写新的 producer-reviewer pair。`<purpose>` 是第二个位置参数。重复 `--reviewer` 形成 1:N 拓扑；传入 `--reviewer none` 则得到无 reviewer 的 producer-only 组（仅用于确定性/辅助工作；默认仍然是 pair）。写入仅作用于 `.harness/loom/`，结束后请再次运行 `node .harness/loom/sync.ts --provider <list>`。 |
+| `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 依据 rubric 与当前代码库重新审视已有 pair，并对其改进。改进后请再次运行 sync 刷新平台树。 |
+| `/harness-pair-dev --split <slug>` | 将过于臃肿的 pair 拆成两个更聚焦的 pair。拆分后请再次运行 sync。 |
+| `/harness-orchestrate <goal.md>` | 目标侧运行时入口。读取目标后，每次响应 dispatch 一个 producer（以及配对的 reviewer 集合，若适用），并通过 hook 重入推进整个循环。halt 之前会自动 dispatch 内置的 `harness-doc-keeper` 无 reviewer producer，再清空 `Next`。 |
 
 ## 工厂与运行时
 
 ```text
 factory (本仓库)                                target project
 -----------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          安装    ->      .harness/{state,events,hook,epics}/
-plugins/harness-loom/skills/harness-pair-dev/      编写    ->      .claude/agents/<slug>-producer.md
-plugins/harness-loom/skills/harness-sync/          派生    ->      .claude/agents/<reviewer>.md
-plugins/harness-loom/skills/harness-init/references/runtime/ 播种 -> .claude/skills/<slug>/SKILL.md
-                                               .claude/settings.json
+plugins/harness-loom/skills/harness-init/          安装    ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
+plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/}
+plugins/harness-loom/skills/harness-init/references/runtime/ 播种 -> .harness/loom/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-pair-dev/      编写    ->      .harness/loom/agents/<slug>-producer.md
+                                                                    .harness/loom/agents/<reviewer>.md
+                                                                    .harness/loom/skills/<slug>/SKILL.md
                                                      |
-                                                     +-- /harness-sync (按需)
+                                                     +-- node .harness/loom/sync.ts --provider <list>
+                                                         -> .claude/{agents,skills,settings.json}
                                                          -> .codex/
                                                          -> .gemini/
+                                                     |
+                                                     +-- harness-doc-keeper 在循环 halt 时自动运行
+                                                         -> .harness/docs/<module>.md
+                                                         -> CLAUDE.md / AGENTS.md（仅 TOC）
 ```
 
 这样的拆分是有意设计的：
@@ -212,7 +228,7 @@ plugins/harness-loom/skills/harness-init/references/runtime/ 播种 -> .claude/s
 
 | 平台 | 模型 | hook 事件 | 说明 |
 |----------|-------|------------|-------|
-| Claude | `inherit` | `Stop` | `.claude/settings.json` 会触发 `.harness/hook.sh`。 |
+| Claude | `inherit` | `Stop` | `.claude/settings.json` 会触发 `.harness/loom/hook.sh`。 |
 | Codex | `gpt-5.4`, `model_reasoning_effort: xhigh` | `Stop` | subagent 不使用 mini model。 |
 | Gemini | `gemini-3.1-pro-preview` | `AfterAgent` | skill 会镜像到平台树中。 |
 

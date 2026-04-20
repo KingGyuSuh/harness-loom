@@ -6,6 +6,140 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-04-20
+
+### Changed
+
+- **Canonical source moved from `.claude/` to `.harness/loom/`.** Every
+  target now uses a three-namespace `.harness/` layout: `loom/` is the
+  canonical staging tree owned by install + sync, `cycle/` holds runtime
+  state owned by the orchestrator, and `docs/` is owned by the new
+  built-in `harness-doc-keeper` reviewer-less producer. `harness-init` no
+  longer touches `.claude/`; `.claude/` is now a derived platform tree
+  written by the sync script. **Breaking** — pre-0.2.0 targets that
+  authored harness artifacts directly into `.claude/skills/harness-*`
+  must be migrated by hand (see Migration note below).
+- **`/harness-sync` slash skill removed.** The factory's user-facing
+  surface is now two slash skills (`/harness-init`, `/harness-pair-dev`)
+  plus the script entry `node .harness/loom/sync.ts --provider <list>`
+  that `harness-init` copies into every target. The script remains
+  importable as a library (`runSync({ targetRoot, providers })`), so
+  callers that scripted around the old slash skill can switch to the
+  direct script invocation. **Breaking** — any tooling or automation
+  that issued `/harness-sync ...` must replace the call with
+  `node .harness/loom/sync.ts --provider <list>`.
+- **Sync deploy is always an explicit opt-in.** A bare
+  `node .harness/loom/sync.ts` with no `--provider` is now an error.
+  The previous auto-detect (which treated a pre-existing `.claude/`,
+  `.codex/`, or `.gemini/` directory as proof of a prior harness deploy)
+  is removed — a directory may predate the harness, and overwriting it
+  silently would clobber unrelated user settings. **Breaking** for any
+  workflow that invoked sync without flags and expected the discovered
+  platforms to be re-synced.
+- **Cycle reset is performed by the orchestrator directly, not by a
+  separate `init.ts` script.** When `/harness-orchestrate` classifies a
+  new goal as *different*, the orchestrator itself moves the current
+  cycle into `.harness/_archive/<timestamp>/` and reseeds `state.md` /
+  `events.md` in the same response before continuing Cold start.
+  Removing `init.ts` eliminates a duplicate template body and makes the
+  reset path auditable from the orchestrate SKILL alone.
+- **`register-pair.ts --unregister` is scoped to the roster sections
+  only.** Previous implementation removed every line in the target
+  SKILL file that started with `- <pair>:`, which could delete prose
+  examples or other sections that happened to share the prefix. The
+  new implementation is bounded to `## Registered pairs` in the
+  orchestrator SKILL and `## Available departments` in the planning
+  SKILL; narrative elsewhere in those files is preserved.
+- **`/harness-pair-dev` no longer auto-runs sync.** After `--add`,
+  `--improve`, or `--split`, the user re-runs
+  `node .harness/loom/sync.ts --provider <list>` explicitly to deploy
+  authored pairs into platform trees. Removing the implicit sync makes
+  the authoring step idempotent, keeps `.harness/loom/` writes off the
+  hot path of platform deployment, and lets the user batch multiple
+  pair edits before paying for a single sync. **Breaking** — workflows
+  that relied on the implicit sync after `--add` must add the explicit
+  command.
+- **Cycle-end doc-keeper dispatch added to `/harness-orchestrate`.**
+  Every cycle's halt-prep step now auto-dispatches the new built-in
+  `harness-doc-keeper` reviewer-less producer as a final turn before
+  clearing `Next`. The producer walks `.harness/cycle/events.md` plus the
+  cycle's task / review files and rewrites `.harness/docs/<module>.md`
+  together with byte-near-identical TOC-only `CLAUDE.md` / `AGENTS.md`.
+  Verdict comes from the producer's own `Status: PASS|FAIL` per the
+  reviewer-less verdict path; on `FAIL` the slot reworks once and then
+  halts so documentation drift never blocks the cycle. **Breaking** in
+  the sense that every cycle now ends with one extra automatic turn,
+  and any target with a hand-authored `CLAUDE.md` / `AGENTS.md` will
+  see its `## Modules` section rewritten on the next halt (preludes
+  above `## Modules` are preserved verbatim).
+
+### Added
+
+- **`.harness/loom/`, `.harness/cycle/`, `.harness/docs/` namespaces** —
+  the new three-way split of the runtime workspace. Authority is
+  exclusive: install + sync own `loom/`, the orchestrator owns `cycle/`,
+  and `harness-doc-keeper` owns `docs/`. `_archive/` holds past cycles
+  that the orchestrator moves there on a goal-different reset.
+- **`harness-doc-keeper` built-in producer templates.** Two new runtime
+  templates ship under
+  `plugins/harness-loom/skills/harness-init/references/runtime/`:
+  `harness-doc-keeper/SKILL.template.md` defines the reviewer-less
+  rubric (module derivation, per-file structure, TOC-only pointer-doc
+  contract), and `harness-doc-keeper-producer.template.md` provides the
+  producer body (Self-verification carries file-changed counts and per
+  -file line-delta vs the prior cycle). Registration line uses the
+  reviewer-less form `(no reviewer)` without `↔`.
+- **Self-contained target sync.** `harness-init` now copies
+  `sync.ts` next to `hook.sh` under `<target>/.harness/loom/`, so
+  `node .harness/loom/sync.ts --provider <list>` works without the
+  factory plugin being on `node`'s search path.
+
+### Removed
+
+- **`/harness-sync` slash skill** (factory side). Replaced by the
+  `node .harness/loom/sync.ts --provider <list>` script entry that the
+  installer copies into every target.
+- **Auto-sync from `/harness-pair-dev`.** `--add`, `--improve`, and
+  `--split` write only into `.harness/loom/`; the user runs sync as an
+  explicit follow-up.
+- **`init.ts` script.** Cycle reset is now inlined into the orchestrate
+  SKILL (§Goal entry step 3). There is no longer a separate reset tool
+  in the factory or in `.harness/loom/`; one template body fewer to keep
+  in sync.
+- **`detectDeployedProviders` export from `sync.ts`.** The function was
+  only referenced by its own `main()`, and that call site is gone. The
+  public library surface is `runSync({ targetRoot, providers })` only.
+- **Auto-detect fallback in bare `node .harness/loom/sync.ts`.** Every
+  deploy must now come with `--provider <list>` or one of
+  `--claude` / `--codex` / `--gemini`.
+
+### Migration
+
+For projects upgrading from v0.1.x to v0.2.0 there is no automated
+migration script (out of cycle scope). Manual steps:
+
+1. Back up the existing `.harness/` directory and any hand-authored
+   harness files under `.claude/skills/harness-*` and
+   `.claude/agents/harness-*`.
+2. Re-run `/harness-init`. This creates the new
+   `.harness/{loom,cycle}/` layout and seeds the runtime skills,
+   `harness-planner` agent, and the new built-in `harness-doc-keeper`
+   pair under `.harness/loom/`.
+3. Move project-specific harness pairs from
+   `.claude/skills/harness-<pair>/` into
+   `.harness/loom/skills/harness-<pair>/`, and from
+   `.claude/agents/harness-<pair>-{producer,reviewer}.md` into
+   `.harness/loom/agents/`.
+4. Run `node .harness/loom/sync.ts --provider claude,codex,gemini`
+   (use only the providers you actually deploy) to re-derive the
+   platform trees from canonical staging. The script overwrites
+   `.claude/`, `.codex/`, and `.gemini/` deterministically; do not
+   hand-edit them afterward.
+5. Continue normal `/harness-orchestrate` and `/harness-pair-dev`
+   usage; the cycle-end auto-doc-keeper dispatch will populate
+   `.harness/docs/` and TOC-only `CLAUDE.md` / `AGENTS.md` on the next
+   halt.
+
 ## [0.1.5] — 2026-04-20
 
 ### Changed
@@ -248,7 +382,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.0
 [0.1.5]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.5
 [0.1.4]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.4
 [0.1.3]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.3

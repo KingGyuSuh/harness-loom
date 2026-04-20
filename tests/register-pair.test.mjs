@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   makeTempDir,
@@ -28,7 +28,7 @@ test("register-pair writes 1:1 entry with backticks and ↔ arrow", () => {
     assert.equal(r.status, 0, r.stderr);
 
     const orchestrate = readFileSync(
-      join(target, ".claude/skills/harness-orchestrate/SKILL.md"),
+      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
       "utf8",
     );
     assert.match(
@@ -55,7 +55,7 @@ test("register-pair writes 1:M entry as bracketed reviewer list", () => {
     assert.equal(r.status, 0, r.stderr);
 
     const orchestrate = readFileSync(
-      join(target, ".claude/skills/harness-orchestrate/SKILL.md"),
+      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
       "utf8",
     );
     assert.match(
@@ -83,7 +83,7 @@ test("register-pair mirrors the line into harness-planning Available departments
     );
 
     const planning = readFileSync(
-      join(target, ".claude/skills/harness-planning/SKILL.md"),
+      join(target, ".harness/loom/skills/harness-planning/SKILL.md"),
       "utf8",
     );
     assert.match(planning, /## Available departments/);
@@ -91,6 +91,80 @@ test("register-pair mirrors the line into harness-planning Available departments
       planning,
       /- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`/,
     );
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair inserts a new pair before an anchor in both roster sections", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    for (const pair of [
+      {
+        pair: "harness-alpha",
+        producer: "harness-alpha-producer",
+        reviewer: "harness-alpha-reviewer",
+        skill: "harness-alpha",
+      },
+      {
+        pair: "harness-gamma",
+        producer: "harness-gamma-producer",
+        reviewer: "harness-gamma-reviewer",
+        skill: "harness-gamma",
+      },
+    ]) {
+      const r = runNode(REGISTER_PAIR_SCRIPT, [
+        "--target", target,
+        "--pair", pair.pair,
+        "--producer", pair.producer,
+        "--reviewer", pair.reviewer,
+        "--skill", pair.skill,
+      ]);
+      assert.equal(r.status, 0, r.stderr);
+    }
+
+    const inserted = runNode(REGISTER_PAIR_SCRIPT, [
+      "--target", target,
+      "--pair", "harness-beta",
+      "--producer", "harness-beta-producer",
+      "--reviewer", "harness-beta-reviewer",
+      "--skill", "harness-beta",
+      "--before", "harness-gamma",
+    ]);
+    assert.equal(inserted.status, 0, inserted.stderr);
+
+    for (const path of [
+      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
+      join(target, ".harness/loom/skills/harness-planning/SKILL.md"),
+    ]) {
+      const body = readFileSync(path, "utf8");
+      const alpha = body.indexOf("- harness-alpha:");
+      const beta = body.indexOf("- harness-beta:");
+      const gamma = body.indexOf("- harness-gamma:");
+      assert.ok(alpha !== -1 && beta !== -1 && gamma !== -1, `missing pair order markers in ${path}`);
+      assert.ok(alpha < beta, `expected alpha before beta in ${path}`);
+      assert.ok(beta < gamma, `expected beta before gamma in ${path}`);
+    }
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair rejects a missing placement anchor", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--target", target,
+      "--pair", "harness-beta",
+      "--producer", "harness-beta-producer",
+      "--reviewer", "harness-beta-reviewer",
+      "--skill", "harness-beta",
+      "--after", "harness-does-not-exist",
+    ]);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /placement anchor not found/);
   } finally {
     cleanupDir(target);
   }
@@ -154,7 +228,7 @@ test("register-pair writes reviewer-less entry as `(no reviewer)` without ↔ ar
     assert.equal(r.status, 0, r.stderr);
 
     const orchestrate = readFileSync(
-      join(target, ".claude/skills/harness-orchestrate/SKILL.md"),
+      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
       "utf8",
     );
     assert.match(
@@ -169,7 +243,7 @@ test("register-pair writes reviewer-less entry as `(no reviewer)` without ↔ ar
     );
 
     const planning = readFileSync(
-      join(target, ".claude/skills/harness-planning/SKILL.md"),
+      join(target, ".harness/loom/skills/harness-planning/SKILL.md"),
       "utf8",
     );
     assert.match(
@@ -232,6 +306,125 @@ test("register-pair --unregister also enforces the harness- prefix on --pair", (
     ]);
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /must start with "harness-"/);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair --unregister removes the pair from both roster sections", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+
+    // Register, then confirm both roster sections carry the pair, then
+    // unregister and confirm it's gone from both.
+    const orchestratePath = join(
+      target,
+      ".harness/loom/skills/harness-orchestrate/SKILL.md",
+    );
+    const planningPath = join(
+      target,
+      ".harness/loom/skills/harness-planning/SKILL.md",
+    );
+
+    assert.equal(
+      runNode(REGISTER_PAIR_SCRIPT, [
+        "--target", target,
+        "--pair", "harness-unreg",
+        "--producer", "harness-unreg-producer",
+        "--reviewer", "harness-unreg-reviewer",
+        "--skill", "harness-unreg",
+      ]).status,
+      0,
+    );
+    assert.match(readFileSync(orchestratePath, "utf8"), /^- harness-unreg:/m);
+    assert.match(readFileSync(planningPath, "utf8"), /^- harness-unreg:/m);
+
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--unregister",
+      "--target", target,
+      "--pair", "harness-unreg",
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+    const summary = JSON.parse(r.stdout);
+    assert.equal(summary.orchestrate.changed, true);
+    assert.equal(summary.planning.changed, true);
+    assert.doesNotMatch(readFileSync(orchestratePath, "utf8"), /^- harness-unreg:/m);
+    assert.doesNotMatch(readFileSync(planningPath, "utf8"), /^- harness-unreg:/m);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair --unregister is scoped to the roster section only", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+
+    const orchestratePath = join(
+      target,
+      ".harness/loom/skills/harness-orchestrate/SKILL.md",
+    );
+
+    // Register so the roster contains harness-scoped.
+    assert.equal(
+      runNode(REGISTER_PAIR_SCRIPT, [
+        "--target", target,
+        "--pair", "harness-scoped",
+        "--producer", "harness-scoped-producer",
+        "--reviewer", "harness-scoped-reviewer",
+        "--skill", "harness-scoped",
+      ]).status,
+      0,
+    );
+
+    // Append a narrative section AFTER the roster that happens to contain a
+    // line visually identical to a roster entry. Unregister must NOT touch it.
+    const narrative =
+      "\n## Narrative — do not touch\n" +
+      "- harness-scoped: this is prose, not a registration\n";
+    writeFileSync(
+      orchestratePath,
+      readFileSync(orchestratePath, "utf8") + narrative,
+    );
+
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--unregister",
+      "--target", target,
+      "--pair", "harness-scoped",
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+
+    const after = readFileSync(orchestratePath, "utf8");
+    // The roster-scoped entry is gone.
+    assert.doesNotMatch(
+      after,
+      /^## Registered pairs\n[\s\S]*?^- harness-scoped: producer/m,
+    );
+    // The narrative line survives verbatim.
+    assert.match(after, /^- harness-scoped: this is prose, not a registration$/m);
+    assert.match(after, /## Narrative — do not touch/);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("register-pair --unregister reports changed:false on a missing pair", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+
+    // No registration of harness-ghost ever happened; unregister must no-op
+    // deterministically rather than succeeding deceptively.
+    const r = runNode(REGISTER_PAIR_SCRIPT, [
+      "--unregister",
+      "--target", target,
+      "--pair", "harness-ghost",
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+    const summary = JSON.parse(r.stdout);
+    assert.equal(summary.orchestrate.changed, false);
+    assert.equal(summary.planning.changed, false);
   } finally {
     cleanupDir(target);
   }

@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 // Purpose: Maintain the "## Harness Pairs" section in target's CLAUDE.md
 //          and AGENTS.md so that pointer docs stay aligned with the agents
-//          and skills actually installed under `.claude/agents/` and
-//          `.claude/skills/`.
+//          and skills actually installed under `.harness/loom/{agents,skills}/`.
 //
 // Usage:   node <skill-dir>/scripts/docs-sync.ts
 //
 // Behaviour:
 //   - Parses the "## Registered pairs" section of
-//     `<cwd>/.claude/skills/harness-orchestrate/SKILL.md` to discover every
+//     `<cwd>/.harness/loom/skills/harness-orchestrate/SKILL.md` to discover every
 //     live pair. Each line carries slug, producer, reviewer(s) — including
 //     1:M pairs whose reviewer list is `reviewers [<r1>, <r2>]` — and the
 //     shared skill slug. `register-pair.ts` owns writing that section; this
@@ -34,7 +33,8 @@ const TARGET = process.cwd();
 const SECTION_HEADING = "## Harness Pairs";
 const REGISTRATION_SOURCE = join(
   TARGET,
-  ".claude",
+  ".harness",
+  "loom",
   "skills",
   "harness-orchestrate",
   "SKILL.md",
@@ -56,11 +56,11 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-// Parse a registration line emitted by register-pair.ts. Supports three
-// shapes: 1:1 (`reviewer \`x\``), 1:M (`reviewers [\`x\`, \`y\`]`), and the
-// reviewer-less producer-only form `(no reviewer)` introduced for v0.1.5.
-// The reviewer-less form omits the `↔` arrow on purpose; that absence is
-// what the runtime keys on to recognize "not subject to review".
+// Parse a registration line emitted by register-pair.ts. Three shapes are
+// recognized: 1:1 (`reviewer \`x\``), 1:M (`reviewers [\`x\`, \`y\`]`), and
+// the reviewer-less producer-only form `(no reviewer)`. The reviewer-less
+// form omits the `↔` arrow on purpose; that absence is what the runtime
+// keys on to recognize "not subject to review".
 function parseRegistrationLine(line: string): Pair | null {
   // Reviewer-less form first — try it before the `↔` form so the absence of
   // the arrow is treated as a positive signal, not a parse failure.
@@ -105,7 +105,6 @@ async function discoverPairs(): Promise<Pair[]> {
     const p = parseRegistrationLine(trimmed);
     if (p) pairs.push(p);
   }
-  pairs.sort((a, b) => a.slug.localeCompare(b.slug));
   return pairs;
 }
 
