@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 // Purpose: Maintain the "## Harness Pairs" section in target's CLAUDE.md
 //          and AGENTS.md so that pointer docs stay aligned with the agents
-//          and skills actually installed under `.claude/agents/` and
-//          `.claude/skills/`.
+//          and skills actually installed under `.harness/loom/{agents,skills}/`.
 //
 // Usage:   node <skill-dir>/scripts/docs-sync.ts
 //
 // Behaviour:
 //   - Parses the "## Registered pairs" section of
-//     `<cwd>/.claude/skills/harness-orchestrate/SKILL.md` to discover every
+//     `<cwd>/.harness/loom/skills/harness-orchestrate/SKILL.md` to discover every
 //     live pair. Each line carries slug, producer, reviewer(s) — including
 //     1:M pairs whose reviewer list is `reviewers [<r1>, <r2>]` — and the
 //     shared skill slug. `register-pair.ts` owns writing that section; this
@@ -34,7 +33,8 @@ const TARGET = process.cwd();
 const SECTION_HEADING = "## Harness Pairs";
 const REGISTRATION_SOURCE = join(
   TARGET,
-  ".claude",
+  ".harness",
+  "loom",
   "skills",
   "harness-orchestrate",
   "SKILL.md",
@@ -56,11 +56,22 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-// Parse a registration line emitted by register-pair.ts. Supports three
-// shapes: 1:1 (`reviewer \`x\``), 1:M (`reviewers [\`x\`, \`y\`]`), and the
-// reviewer-less producer-only form `(no reviewer)` introduced for v0.1.5.
-// The reviewer-less form omits the `↔` arrow on purpose; that absence is
-// what the runtime keys on to recognize "not subject to review".
+// Read a file and normalize CRLF line endings to LF so parsing and regex
+// anchors work uniformly. The `isCRLF` flag carries back to the write site so
+// the original Windows-style line endings survive the round-trip.
+function normalizeCRLF(raw: string): { body: string; isCRLF: boolean } {
+  const isCRLF = raw.includes("\r\n");
+  return { body: isCRLF ? raw.replace(/\r\n/g, "\n") : raw, isCRLF };
+}
+function restoreCRLF(body: string, isCRLF: boolean): string {
+  return isCRLF ? body.replace(/\n/g, "\r\n") : body;
+}
+
+// Parse a registration line emitted by register-pair.ts. Three shapes are
+// recognized: 1:1 (`reviewer \`x\``), 1:M (`reviewers [\`x\`, \`y\`]`), and
+// the reviewer-less producer-only form `(no reviewer)`. The reviewer-less
+// form omits the `↔` arrow on purpose; that absence is what the runtime
+// keys on to recognize "not subject to review".
 function parseRegistrationLine(line: string): Pair | null {
   // Reviewer-less form first — try it before the `↔` form so the absence of
   // the arrow is treated as a positive signal, not a parse failure.
@@ -90,10 +101,20 @@ function parseRegistrationLine(line: string): Pair | null {
 
 async function discoverPairs(): Promise<Pair[]> {
   if (!(await exists(REGISTRATION_SOURCE))) return [];
-  const raw = await readFile(REGISTRATION_SOURCE, "utf8");
+  const rawFile = await readFile(REGISTRATION_SOURCE, "utf8");
+  const { body: raw } = normalizeCRLF(rawFile);
   // Extract the `## Registered pairs` section body (up to next `## ` heading).
+  // Anchor the heading match to start-of-line + newline so inline backtick
+  // references like `` `## Registered pairs` `` in the surrounding prose do
+  // not get picked up as the real heading.
   const heading = "## Registered pairs";
-  const idx = raw.indexOf(heading);
+  const lineStart = raw.indexOf(`\n${heading}\n`);
+  const idx =
+    lineStart !== -1
+      ? lineStart + 1
+      : raw.startsWith(`${heading}\n`)
+      ? 0
+      : -1;
   if (idx < 0) return [];
   const afterHeading = raw.indexOf("\n", idx);
   const nextHeading = raw.indexOf("\n## ", afterHeading + 1);
@@ -105,7 +126,6 @@ async function discoverPairs(): Promise<Pair[]> {
     const p = parseRegistrationLine(trimmed);
     if (p) pairs.push(p);
   }
-  pairs.sort((a, b) => a.slug.localeCompare(b.slug));
   return pairs;
 }
 
@@ -133,7 +153,8 @@ type UpsertResult = "created" | "replaced" | "unchanged" | "skipped";
 
 async function upsertSection(docPath: string, rendered: string): Promise<UpsertResult> {
   if (!(await exists(docPath))) return "skipped";
-  const raw = await readFile(docPath, "utf8");
+  const rawFile = await readFile(docPath, "utf8");
+  const { body: raw, isCRLF } = normalizeCRLF(rawFile);
   // Match "## Harness Pairs" heading and everything up to the next top-level
   // `## ` heading (not `###`) or true end-of-string. No `m` flag — we need
   // end-of-string anchor, not end-of-line.
@@ -154,8 +175,9 @@ async function upsertSection(docPath: string, rendered: string): Promise<UpsertR
     next = trimmed + "\n\n" + rendered;
     mode = "created";
   }
-  if (next === raw) return "unchanged";
-  await writeFile(docPath, next);
+  const final = restoreCRLF(next, isCRLF);
+  if (final === rawFile) return "unchanged";
+  await writeFile(docPath, final);
   return mode;
 }
 

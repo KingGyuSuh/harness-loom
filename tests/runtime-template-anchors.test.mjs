@@ -19,6 +19,22 @@ const PLANNING_TEMPLATE = join(
   REPO_ROOT,
   "plugins/harness-loom/skills/harness-init/references/runtime/harness-planning/SKILL.template.md",
 );
+const CONTEXT_TEMPLATE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-context/SKILL.template.md",
+);
+const PLANNER_TEMPLATE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-planner.template.md",
+);
+const DOC_KEEPER_SKILL_TEMPLATE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-doc-keeper/SKILL.template.md",
+);
+const DOC_KEEPER_PRODUCER_TEMPLATE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-doc-keeper-producer.template.md",
+);
 
 test("orchestrate template exists at the canonical factory path", () => {
   assert.ok(
@@ -108,4 +124,168 @@ test("planning template acknowledges reviewer-less rosters at the roster shape r
     body.includes("(no reviewer)"),
     "planning template must mention the `(no reviewer)` shape so reviewer-less producers are valid roster slugs",
   );
+});
+
+test("planning template defines rosters as a subsequence of a fixed global roster", () => {
+  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("global roster order"),
+    "planning template must describe the project-global roster order",
+  );
+  assert.ok(
+    body.includes("subsequence"),
+    "planning template must say each EPIC roster is a subsequence of that global roster",
+  );
+});
+
+test("orchestrate template gates dispatch through a ready set at the same global roster position", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("ready set"),
+    "orchestrate template must define a ready set before dispatch",
+  );
+  assert.ok(
+    body.includes("same global roster position"),
+    "orchestrate template must state that upstream gating happens at the same global roster position",
+  );
+});
+
+test("doc-keeper skill template drives a docs-curator layout from project + goal, not a code-module navigator", () => {
+  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /analyze the project and its goal/i,
+    "doc-keeper SKILL.template must open by analyzing project + goal",
+  );
+  assert.match(
+    body,
+    /design the documentation layout that fits this project/i,
+    "doc-keeper SKILL.template must design a project-specific layout",
+  );
+  // Layout building blocks the rubric advertises. A curator-style rubric must
+  // surface these category names so the producer knows what vocabulary it can
+  // draw from.
+  for (const category of [
+    "design-docs",
+    "product-specs",
+    "exec-plans",
+    "generated",
+    "references",
+  ]) {
+    assert.match(
+      body,
+      new RegExp(`docs/${category}/`),
+      `layout building block docs/${category}/ must be named`,
+    );
+  }
+  // Legacy navigator vocabulary must not reappear.
+  for (const token of [
+    "plugins/harness-loom",
+    "skill-authoring.md",
+    "oversized-split.md",
+    "Pass 1",
+    "Pass 2",
+    "Pass 3",
+    "Pass 4",
+    "Pass 5",
+  ]) {
+    assert.ok(
+      !body.includes(token),
+      `doc-keeper SKILL.template must not hardcode ${token}`,
+    );
+  }
+});
+
+test("doc-keeper skill template forbids writing outside the documentation surface", () => {
+  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /never touch source code|does not implement/i,
+    "doc-keeper SKILL.template must forbid writing to code/tests/build scripts",
+  );
+});
+
+test("doc-keeper skill template keeps the CLAUDE.md / AGENTS.md pointer-section surgical contract", () => {
+  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
+  // The pointer section name may evolve (Modules, Documents, etc.) but the
+  // surgical-merge discipline — replace only the pointer section, preserve
+  // everything else — must persist to prevent silent data loss.
+  assert.match(
+    body,
+    /CLAUDE\.md.*AGENTS\.md|AGENTS\.md.*CLAUDE\.md/,
+    "doc-keeper SKILL.template must name both pointer docs",
+  );
+  assert.match(
+    body,
+    /replace only that section|preserve every other section/i,
+    "doc-keeper SKILL.template must keep the surgical-merge contract",
+  );
+});
+
+test("doc-keeper skill template no longer references the stale OpenAI harness-engineering URL", () => {
+  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
+  assert.doesNotMatch(
+    body,
+    /openai\.com\/index\/harness-engineering/,
+    "the OpenAI harness-engineering link belongs to the pre-rewrite template and must stay removed",
+  );
+});
+
+test("doc-keeper producer template emits a curator-style self-verification contract", () => {
+  const body = readFileSync(DOC_KEEPER_PRODUCER_TEMPLATE, "utf8");
+  // The producer must surface docs-curator signals: layout rationale, impact
+  // map from cycle events to docs, pointer-doc status, and an explicit "left
+  // alone intentionally" accounting so the reviewer-less verdict is graded on
+  // scope, not just on presence of outputs.
+  for (const field of [
+    "Files created",
+    "Files modified",
+    "Files left alone",
+    "Layout rationale",
+    "Impact map",
+    "Pointers updated",
+    "Self-verification",
+  ]) {
+    assert.ok(
+      body.includes(field),
+      `doc-keeper producer must emit \`${field}\` in its Output Format`,
+    );
+  }
+  // Byte-count bookkeeping and module-navigator framing must not come back.
+  assert.ok(
+    !body.includes("Preserved prefix/suffix bytes"),
+    "doc-keeper producer should avoid byte-count bookkeeping in its output contract",
+  );
+  assert.ok(
+    !body.includes("Modules covered"),
+    "doc-keeper producer must drop the module-navigator `Modules covered` field",
+  );
+});
+
+test("runtime templates outside doc-keeper do not reference factory-only plugin surfaces", () => {
+  const templates = [
+    ORCHESTRATE_TEMPLATE,
+    PLANNING_TEMPLATE,
+    CONTEXT_TEMPLATE,
+    PLANNER_TEMPLATE,
+  ];
+  const forbidden = [
+    "plugins/harness-loom",
+    "register-pair.ts",
+    "install.ts",
+    "docs-sync.ts",
+    "/harness-pair-dev",
+    "/harness-init",
+    "/harness-sync",
+    "CLAUDE_SKILL_DIR",
+  ];
+  for (const template of templates) {
+    const body = readFileSync(template, "utf8");
+    for (const token of forbidden) {
+      assert.ok(
+        !body.includes(token),
+        `${template} must not reference factory-only token ${token}`,
+      );
+    }
+  }
 });

@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # Purpose: Stop-hook re-entry source for generated harnesses.
-#          Installed by skills/harness-init/scripts/install.ts into <target>/.harness/hook.sh.
-#          Reads .harness/state.md; if `loop: true` is set, emits a
+#          Installed by skills/harness-init/scripts/install.ts into
+#          <target>/.harness/loom/hook.sh.
+#          Reads .harness/cycle/state.md; if `loop: true` is set, emits a
 #          `{"decision":"block","reason":"<orchestrator-command>"}` JSON
 #          payload so the platform re-invokes the orchestrator for the
 #          next Producer-Reviewer pair. Otherwise exits 0 silently.
 #
-# Usage:   bash .harness/hook.sh    (invoked by .claude/settings.json Stop,
-#                                    .codex/hooks.json Stop,
-#                                    .gemini/settings.json AfterAgent)
+# Usage:   bash .harness/loom/hook.sh <platform>
+#            wired by sync.ts into:
+#              .claude/settings.json   Stop       → bash .harness/loom/hook.sh claude
+#              .codex/hooks.json       Stop       → bash .harness/loom/hook.sh codex
+#              .gemini/settings.json   AfterAgent → bash .harness/loom/hook.sh gemini
 #
 # Claude filter: subagent Stop events include a non-null `agent_id` in the
 # hook's stdin JSON payload. We skip those so only main-agent stops trigger
@@ -24,7 +27,7 @@
 
 set -euo pipefail
 
-state_file=".harness/state.md"
+state_file=".harness/cycle/state.md"
 [[ -f "$state_file" ]] || exit 0
 
 # Claude subagent filter: consume stdin JSON if present, skip when agent_id is non-null.
@@ -47,11 +50,14 @@ loop_value="$(printf '%s' "$loop_line" | sed -E 's/.*loop:[[:space:]]*([A-Za-z]+
 #   claude  → /harness-orchestrate   (slash command)
 #   codex   → $harness-orchestrate   (skill mention; /name is reserved for built-ins)
 #   gemini  → /harness-orchestrate   (slash command; AfterAgent event)
-# Platform is passed as $1 by each platform's hook config. Default to claude
-# for back-compat with older harnesses that wired `bash .harness/hook.sh` bare.
-platform="${1:-claude}"
+# Platform is passed as $1 by each platform's hook config (sync.ts writes it
+# explicitly). Missing/unknown platforms are a configuration bug, not a
+# silent-fallback case.
+platform="${1:-}"
 case "$platform" in
-  codex)   reason='$harness-orchestrate' ;;
-  *)       reason='/harness-orchestrate' ;;
+  claude|gemini) reason='/harness-orchestrate' ;;
+  codex)         reason='$harness-orchestrate' ;;
+  "")            printf 'hook.sh: platform argument required (claude|codex|gemini)\n' >&2; exit 2 ;;
+  *)             printf 'hook.sh: unknown platform: %s\n' "$platform" >&2; exit 2 ;;
 esac
 printf '{"decision":"block","reason":"%s"}\n' "$reason"

@@ -1,6 +1,6 @@
 # events.md append format
 
-`.harness/events.md` is an append-only event log. One event equals one line. The orchestrator appends producer/reviewer results and retreat reasons here every turn. `harness-orchestrate/SKILL.md` cites this file as the canonical write format for `events.md`.
+`.harness/cycle/events.md` is an append-only event log. One event equals one line. The orchestrator appends producer/reviewer results and retreat reasons here every turn. `harness-orchestrate/SKILL.md` cites this file as the canonical write format for `events.md`.
 
 ## Line format
 
@@ -17,8 +17,8 @@
 ## Examples
 
 ```
-2026-04-18T13:02:11 T003 skill-writer PASS — draft of skills/auth/SKILL.md; task epics/EP-01/tasks/T003--auth-skill.md
-2026-04-18T13:04:57 T004 skill-reviewer FAIL — missing description-as-trigger; review epics/EP-01/reviews/T003--auth-skill--skill-reviewer.md
+2026-04-18T13:02:11 T003 skill-writer PASS — draft of skills/auth/SKILL.md; task epics/EP-1/tasks/T003--auth-skill.md
+2026-04-18T13:04:57 T004 skill-reviewer FAIL — missing description-as-trigger; review epics/EP-1/reviews/T003--auth-skill--skill-reviewer.md
 2026-04-18T13:08:02 T005 orchestrator retreat — skill-writer → api-designer; OAuth refresh contract undefined
 ```
 

@@ -1,24 +1,34 @@
 #!/usr/bin/env node
-// Purpose: Install the harness runtime into a target project directory.
-//          Creates `<target>/.harness/` (state.md, events.md, hook.sh, epics/)
-//          and scaffolds the canonical `.claude/` tree (skills + planner agent
-//          + Stop hook wiring) — and only that. Non-claude providers
-//          (.codex/, .gemini/) are deployed by `/harness-sync` on explicit
-//          user request, never by install.
+// Purpose: Install the harness into a target project as two parallel
+//          sub-namespaces under `<target>/.harness/`:
+//
+//            .harness/loom/   — canonical staging (skills, agents, hook.sh,
+//                                sync.ts). install/sync own this tree; the
+//                                orchestrator never writes here.
+//            .harness/cycle/  — runtime cycle state (state.md, events.md,
+//                                epics/). orchestrator owns this tree; install
+//                                only seeds it on first install (or --force).
+//
+//          install never touches `<target>/.claude/`, `<target>/.codex/`, or
+//          `<target>/.gemini/`. Those platform trees are produced by
+//          `node .harness/loom/sync.ts --provider <list>` on explicit user
+//          opt-in.
 //
 // Usage:   node skills/harness-init/scripts/install.ts [<target-project-path>] [--force]
 //          Target defaults to process.cwd() when omitted.
 //
-// Related: skills/harness-init/scripts/hook.sh    — copied into <target>/.harness/hook.sh
-//          skills/harness-init/scripts/init.ts    — cycle reset once a Goal arrives
-//          skills/harness-pair-dev/scripts/sync.ts — `/harness-sync` and pair-dev
-//                                                   call this to deploy non-claude
-//                                                   providers from canonical.
+// Related: skills/harness-init/scripts/hook.sh — copied into <target>/.harness/loom/hook.sh
+//          skills/harness-init/scripts/sync.ts — copied into <target>/.harness/loom/sync.ts
+//                                                (platform-tree derivation)
+//          Both copies keep the target self-contained for re-entry and platform
+//          deploys. Cycle reset is not a script; the orchestrator performs it
+//          directly per harness-orchestrate SKILL §Goal entry (archive + reseed
+//          using the schema in references/state-md-schema.md).
 //
 // Design notes:
-//   - `.claude/` is canonical. install does NOT touch `.codex/` or `.gemini/`.
-//     Multi-platform users opt in with `/harness-sync --provider codex,gemini`
-//     after install. Claude-only users do nothing extra.
+//   - default re-run: refresh `.harness/loom/` only; `.harness/cycle/` is
+//     preserved verbatim so the current cycle's audit trail survives a
+//     plugin upgrade. `--force` wipes both.
 //   - state.md / events.md bodies come from
 //     `skills/harness-init/references/runtime/{state,events}.template.md`
 //     with `{{PLACEHOLDER}}` substitution.
@@ -33,6 +43,9 @@ import process from "node:process";
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const HOOK_SOURCE = join(SCRIPT_DIR, "hook.sh");
+// sync.ts is copied verbatim into `.harness/loom/` so the target can derive
+// platform trees without depending on this plugin on disk.
+const SYNC_SOURCE = join(SCRIPT_DIR, "sync.ts");
 // Runtime templates live under harness-init references/, but their filenames
 // end with `.template.md` so recursive skill scanners do not register them as
 // standalone factory skills while still keeping the deployment source close to
@@ -43,11 +56,12 @@ const EVENTS_TEMPLATE = join(TEMPLATES_DIR, "events.template.md");
 const ORCHESTRATE_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-orchestrate");
 const PLANNING_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-planning");
 const CONTEXT_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-context");
+const DOC_KEEPER_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-doc-keeper");
+const DOC_KEEPER_PRODUCER_TEMPLATE = join(TEMPLATES_DIR, "harness-doc-keeper-producer.template.md");
 const PLANNER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-planner.template.md");
 
-// Only the canonical `.claude` pin lives here. sync.ts owns the codex/gemini
-// pins and applies them when deriving from canonical.
-const CLAUDE_MODEL_PIN = "inherit";
+// Pin lives in sync.ts's PIN table now. install.ts only scaffolds canonical
+// staging — it does not render a platform-specific frontmatter pin.
 
 interface Args {
   target: string;
@@ -70,7 +84,7 @@ function parseArgs(argv: string[]): Args {
       process.stdout.write(
         "Usage: node skills/harness-init/scripts/install.ts [<target-project-path>] [--force]\n" +
           "  Target defaults to process.cwd() when omitted.\n" +
-          "  Multi-platform deploy is opt-in via `/harness-sync --provider codex,gemini`.\n",
+          "  Platform deploy is opt-in via `node .harness/loom/sync.ts --provider claude,codex,gemini`.\n",
       );
       process.exit(0);
     } else if (arg.startsWith("--")) die(`unknown flag: ${arg}`);
@@ -89,6 +103,40 @@ async function exists(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+// ---------------------------------------------------------------- foundation set
+
+// The canonical-foundation entries scaffoldLoomCanonical() re-creates on every
+// install run. Anything else under `.harness/loom/{skills,agents}/` is user
+// work (pair-dev output) that default rerun is about to wipe — we surface it
+// as a warning so the loss is not silent.
+const FOUNDATION_SKILL_NAMES = new Set([
+  "harness-orchestrate",
+  "harness-planning",
+  "harness-context",
+  "harness-doc-keeper",
+]);
+const FOUNDATION_AGENT_FILES = new Set([
+  "harness-planner.md",
+  "harness-doc-keeper-producer.md",
+]);
+
+async function collectNonFoundationLoomEntries(loomDir: string): Promise<string[]> {
+  const found: string[] = [];
+  const skillsDir = join(loomDir, "skills");
+  if (await exists(skillsDir)) {
+    for (const entry of await readdir(skillsDir)) {
+      if (!FOUNDATION_SKILL_NAMES.has(entry)) found.push(`skills/${entry}`);
+    }
+  }
+  const agentsDir = join(loomDir, "agents");
+  if (await exists(agentsDir)) {
+    for (const entry of await readdir(agentsDir)) {
+      if (!FOUNDATION_AGENT_FILES.has(entry)) found.push(`agents/${entry}`);
+    }
+  }
+  return found.sort();
 }
 
 // ---------------------------------------------------------------- templates
@@ -145,92 +193,15 @@ async function copyTree(src: string, dst: string, copied: string[]): Promise<voi
   }
 }
 
-// ---------------------------------------------------------------- frontmatter / TOML
+// install never writes platform settings (`.claude/settings.json`,
+// `.codex/hooks.json`, `.gemini/settings.json`). Hook wiring is sync.ts's
+// job and only fires when the user opts into a platform deploy.
 
-function parseFrontmatter(raw: string): { fm: Record<string, unknown>; body: string } {
-  if (!raw.startsWith("---\n")) return { fm: {}, body: raw };
-  const end = raw.indexOf("\n---", 4);
-  if (end < 0) return { fm: {}, body: raw };
-  const header = raw.slice(4, end);
-  const body = raw.slice(end + 4).replace(/^\n/, "");
-  const fm: Record<string, unknown> = {};
-  const lines = header.split("\n");
-  let currentKey: string | null = null;
-  for (const line of lines) {
-    if (/^\s+-\s+/.test(line) && currentKey) {
-      const val = line.replace(/^\s+-\s+/, "").trim();
-      const arr = (fm[currentKey] as string[]) ?? [];
-      arr.push(val);
-      fm[currentKey] = arr;
-      continue;
-    }
-    const m = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
-    if (!m) continue;
-    const [, key, rawVal] = m;
-    currentKey = key;
-    const val = rawVal.trim();
-    if (val === "") fm[key] = [];
-    else fm[key] = stripQuotes(val);
-  }
-  return { fm, body };
-}
+// ---------------------------------------------------------------- loom canonical scaffold
 
-function stripQuotes(s: string): string {
-  if (s.startsWith('"') && s.endsWith('"')) return s.slice(1, -1);
-  return s;
-}
-
-function renderMarkdownFrontmatter(fm: Record<string, unknown>): string {
-  const lines: string[] = ["---"];
-  for (const [k, v] of Object.entries(fm)) {
-    if (Array.isArray(v)) {
-      lines.push(`${k}:`);
-      for (const item of v as string[]) lines.push(`  - ${item}`);
-    } else {
-      const str = String(v);
-      if (str.includes(":") || str.includes('"')) lines.push(`${k}: ${JSON.stringify(str)}`);
-      else lines.push(`${k}: ${str}`);
-    }
-  }
-  lines.push("---");
-  return lines.join("\n") + "\n";
-}
-
-// Codex/Gemini hook wiring + agent rendering live in sync.ts
-// (`skills/harness-pair-dev/scripts/sync.ts`). install.ts only writes the
-// canonical `.claude/` Stop hook; multi-platform setup is opt-in via
-// `/harness-sync`.
-
-// ---------------------------------------------------------------- claude hook wiring
-
-async function writeClaudeSettings(target: string, force: boolean): Promise<string> {
-  const settingsPath = join(target, ".claude", "settings.json");
-  await mkdir(dirname(settingsPath), { recursive: true });
-  let existing: Record<string, unknown> = {};
-  if (await exists(settingsPath)) {
-    try {
-      existing = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
-    } catch {
-      if (!force) die(`${settingsPath} exists but is not valid JSON (use --force to overwrite)`);
-      existing = {};
-    }
-  }
-  const hooks = (existing.hooks as Record<string, unknown>) ?? {};
-  hooks.Stop = [
-    {
-      hooks: [{ type: "command", command: "bash .harness/hook.sh claude" }],
-    },
-  ];
-  existing.hooks = hooks;
-  await writeFile(settingsPath, JSON.stringify(existing, null, 2) + "\n");
-  return settingsPath;
-}
-
-// ---------------------------------------------------------------- skill/agent scaffold
-
-async function scaffoldClaudeFoundation(target: string, copied: string[]): Promise<void> {
-  const skillsRoot = join(target, ".claude", "skills");
-  const agentsRoot = join(target, ".claude", "agents");
+async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promise<void> {
+  const skillsRoot = join(loomRoot, "skills");
+  const agentsRoot = join(loomRoot, "agents");
   await mkdir(skillsRoot, { recursive: true });
   await mkdir(agentsRoot, { recursive: true });
   if (await exists(ORCHESTRATE_SKILL_TEMPLATE)) {
@@ -242,24 +213,21 @@ async function scaffoldClaudeFoundation(target: string, copied: string[]): Promi
   if (await exists(CONTEXT_SKILL_TEMPLATE)) {
     await copyTree(CONTEXT_SKILL_TEMPLATE, join(skillsRoot, "harness-context"), copied);
   }
+  if (await exists(DOC_KEEPER_SKILL_TEMPLATE)) {
+    await copyTree(DOC_KEEPER_SKILL_TEMPLATE, join(skillsRoot, "harness-doc-keeper"), copied);
+  }
+  // Agent templates are authored platform-neutral (no `model:` line); sync.ts
+  // injects the per-platform pin at deploy time. Copy them verbatim.
   if (await exists(PLANNER_AGENT_TEMPLATE)) {
-    const raw = await readFile(PLANNER_AGENT_TEMPLATE, "utf8");
-    const { fm, body } = parseFrontmatter(raw);
-    fm.model = CLAUDE_MODEL_PIN;
-    const out = renderMarkdownFrontmatter(fm) + body;
     const dst = join(agentsRoot, "harness-planner.md");
-    await writeFile(dst, out);
+    await copyFile(PLANNER_AGENT_TEMPLATE, dst);
     copied.push(dst);
   }
-}
-
-// install.ts is canonical-only — it scaffolds `.claude/` and stops.
-// Multi-platform deploy is owned by `/harness-sync` (sync.ts).
-
-async function scaffoldFoundation(target: string): Promise<string[]> {
-  const copied: string[] = [];
-  await scaffoldClaudeFoundation(target, copied);
-  return copied;
+  if (await exists(DOC_KEEPER_PRODUCER_TEMPLATE)) {
+    const dst = join(agentsRoot, "harness-doc-keeper-producer.md");
+    await copyFile(DOC_KEEPER_PRODUCER_TEMPLATE, dst);
+    copied.push(dst);
+  }
 }
 
 // ---------------------------------------------------------------- main
@@ -272,50 +240,95 @@ async function main() {
   if (!targetStat.isDirectory()) die(`target is not a directory: ${target}`);
 
   const harnessDir = join(target, ".harness");
-  if (await exists(harnessDir)) {
-    if (!force) {
-      die(
-        `${harnessDir} already exists. Re-run with --force to overwrite, ` +
-          `or use skills/harness-init/scripts/init.ts for in-place cycle reset.`,
-      );
-    }
-    await rm(harnessDir, { recursive: true, force: true });
+  const loomDir = join(harnessDir, "loom");
+  const cycleDir = join(harnessDir, "cycle");
+
+  // Scan for user-authored pair files before we wipe loom/ so the loss is not
+  // silent. `--force` is an explicit reset, so suppress the warning there; on
+  // default rerun we emit a stderr warning and surface the list in the JSON
+  // summary as `wipedPairs`.
+  const cyclePreExisted = await exists(cycleDir);
+  const loomPreExisted = await exists(loomDir);
+  const wipedPairs = loomPreExisted ? await collectNonFoundationLoomEntries(loomDir) : [];
+  if (!force && wipedPairs.length > 0) {
+    process.stderr.write(
+      `install: warning — default rerun is about to wipe ${wipedPairs.length} non-foundation entr${wipedPairs.length === 1 ? "y" : "ies"} under .harness/loom/:\n`,
+    );
+    for (const p of wipedPairs) process.stderr.write(`  - ${p}\n`);
+    process.stderr.write(
+      "install: re-author pair content with /harness-pair-dev --add after install, " +
+        "or back up .harness/loom/ first if you need to preserve it.\n",
+    );
   }
 
-  await mkdir(join(harnessDir, "epics"), { recursive: true });
+  // Behaviour split:
+  //   --force  : wipe both sub-namespaces and reseed everything.
+  //   default  : refresh `.harness/loom/` (wipe-and-reseed) and preserve
+  //              `.harness/cycle/` verbatim if present. The cycle's audit trail
+  //              survives plugin upgrades that reuse this script.
+  if (force) {
+    if (loomPreExisted) await rm(loomDir, { recursive: true, force: true });
+    if (cyclePreExisted) await rm(cycleDir, { recursive: true, force: true });
+  } else if (loomPreExisted) {
+    await rm(loomDir, { recursive: true, force: true });
+  }
 
-  const stateMdPath = join(harnessDir, "state.md");
-  const eventsMdPath = join(harnessDir, "events.md");
-  await writeFile(stateMdPath, await initialStateMd());
-  await writeFile(eventsMdPath, await initialEventsMd());
+  // cycleAction tells the caller what happened to `.harness/cycle/`:
+  //   seeded     — cycle/ was absent and is now written fresh
+  //   preserved  — cycle/ already existed and default rerun left it intact
+  //   wiped      — --force removed the prior cycle/; it is now reseeded fresh
+  const cycleAction: "seeded" | "preserved" | "wiped" = force
+    ? (cyclePreExisted ? "wiped" : "seeded")
+    : (cyclePreExisted ? "preserved" : "seeded");
 
-  const hookDest = join(harnessDir, "hook.sh");
+  const stateMdPath = join(cycleDir, "state.md");
+  const eventsMdPath = join(cycleDir, "events.md");
+  if (cycleAction !== "preserved") {
+    await mkdir(join(cycleDir, "epics"), { recursive: true });
+    await writeFile(stateMdPath, await initialStateMd());
+    await writeFile(eventsMdPath, await initialEventsMd());
+  }
+
+  // Seed .harness/loom/ fresh on every run (default rerun or --force).
+  await mkdir(loomDir, { recursive: true });
+  const hookDest = join(loomDir, "hook.sh");
   if (!(await exists(HOOK_SOURCE))) die(`missing source hook script: ${HOOK_SOURCE}`);
   await copyFile(HOOK_SOURCE, hookDest);
   await chmod(hookDest, 0o755);
 
-  const claudeSettingsPath = await writeClaudeSettings(target, force);
-  const scaffolded = await scaffoldFoundation(target);
+  // Self-contained sync.ts copy so the target runtime can invoke
+  // `node .harness/loom/sync.ts` without depending on the plugin tree.
+  const syncDest = join(loomDir, "sync.ts");
+  if (!(await exists(SYNC_SOURCE))) die(`missing source sync script: ${SYNC_SOURCE}`);
+  await copyFile(SYNC_SOURCE, syncDest);
+
+  const scaffolded: string[] = [];
+  await scaffoldLoomCanonical(loomDir, scaffolded);
 
   const verification = await verifyInstall(target, {
     stateMd: stateMdPath,
     eventsMd: eventsMdPath,
     hook: hookDest,
+    sync: syncDest,
     scaffolded,
   });
 
   const summary = {
     target,
     harnessDir,
+    loomDir,
+    cycleDir,
+    cycleAction,
+    wipedPairs,
     stateMd: stateMdPath,
     eventsMd: eventsMdPath,
     hook: hookDest,
-    claudeSettings: claudeSettingsPath,
+    sync: syncDest,
     scaffolded,
     verification,
     nextStep:
-      "Run `/harness-sync --provider codex,gemini` if you need Codex or Gemini deploys; " +
-      "otherwise start authoring pairs with `/harness-pair-dev --add ...`.",
+      "Run `node .harness/loom/sync.ts --provider claude,codex,gemini` (any subset) to deploy platform trees. " +
+      "Then author pairs with `/harness-pair-dev --add ...`.",
   };
   process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
   if (!verification.ok) {
@@ -328,7 +341,7 @@ async function main() {
 // report in its JSON output.
 async function verifyInstall(
   target: string,
-  ctx: { stateMd: string; eventsMd: string; hook: string; scaffolded: string[] },
+  ctx: { stateMd: string; eventsMd: string; hook: string; sync: string; scaffolded: string[] },
 ): Promise<{ ok: boolean; checks: Record<string, boolean>; failures: string[]; placeholderResidue: string[] }> {
   const checks: Record<string, boolean> = {};
   const failures: string[] = [];
@@ -348,11 +361,20 @@ async function verifyInstall(
     if (!ok) failures.push(`${label} missing or wrong type: ${path}`);
   };
 
-  // Core `.harness/` runtime files.
-  await expect(".harness/state.md", ctx.stateMd, "file");
-  await expect(".harness/events.md", ctx.eventsMd, "file");
-  await expect(".harness/hook.sh", ctx.hook, "file");
-  await expect(".harness/epics/", join(target, ".harness", "epics"), "dir");
+  // Cycle namespace: runtime state seeded (or preserved) by install.
+  await expect(".harness/cycle/state.md", ctx.stateMd, "file");
+  await expect(".harness/cycle/events.md", ctx.eventsMd, "file");
+  await expect(".harness/cycle/epics/", join(target, ".harness", "cycle", "epics"), "dir");
+
+  // Loom namespace: canonical staging written fresh each run.
+  await expect(".harness/loom/hook.sh", ctx.hook, "file");
+  await expect(".harness/loom/sync.ts", ctx.sync, "file");
+  await expect(".harness/loom/skills/harness-orchestrate/SKILL.md", join(target, ".harness", "loom", "skills", "harness-orchestrate", "SKILL.md"), "file");
+  await expect(".harness/loom/skills/harness-planning/SKILL.md", join(target, ".harness", "loom", "skills", "harness-planning", "SKILL.md"), "file");
+  await expect(".harness/loom/skills/harness-context/SKILL.md", join(target, ".harness", "loom", "skills", "harness-context", "SKILL.md"), "file");
+  await expect(".harness/loom/skills/harness-doc-keeper/SKILL.md", join(target, ".harness", "loom", "skills", "harness-doc-keeper", "SKILL.md"), "file");
+  await expect(".harness/loom/agents/harness-planner.md", join(target, ".harness", "loom", "agents", "harness-planner.md"), "file");
+  await expect(".harness/loom/agents/harness-doc-keeper-producer.md", join(target, ".harness", "loom", "agents", "harness-doc-keeper-producer.md"), "file");
 
   // hook executable bit.
   try {
@@ -364,13 +386,10 @@ async function verifyInstall(
     checks["hook.sh executable"] = false;
   }
 
-  // Canonical `.claude/` scaffold check (only platform install touches).
-  const claudeRoot = join(target, ".claude");
-  await expect("claude/skills/harness-orchestrate/SKILL.md", join(claudeRoot, "skills", "harness-orchestrate", "SKILL.md"), "file");
-  await expect("claude/skills/harness-planning/SKILL.md", join(claudeRoot, "skills", "harness-planning", "SKILL.md"), "file");
-  await expect("claude/skills/harness-context/SKILL.md", join(claudeRoot, "skills", "harness-context", "SKILL.md"), "file");
-  await expect("claude/agents/harness-planner.md", join(claudeRoot, "agents", "harness-planner.md"), "file");
-  await expect("claude/settings.json", join(claudeRoot, "settings.json"), "file");
+  // Platform trees (.claude/, .codex/, .gemini/) are out of install's scope.
+  // Install writes only under `.harness/`, so an existing platform tree —
+  // which a real Claude Code project is very likely to already have — is not
+  // a failure signal. sync.ts is solely responsible for deploying there.
 
   // Placeholder residue: every scaffolded file must have its `{{FOO}}` markers
   // substituted. Residue signals a template-loading bug.

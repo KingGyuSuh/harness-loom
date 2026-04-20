@@ -14,8 +14,8 @@ This document is runtime context delivered to **you**, the currently dispatched 
 
 ### 1. Start from this orientation
 
-- You are one role inside this harness. Your role is either `producer`, `reviewer`, or `planner`, and the agent body gives the concrete identity.
-- Only the orchestrator writes files under `.harness/`. You return **content** shaped for your role; you do not write the control plane directly.
+- You are one role inside this harness: a producer (paired or reviewer-less), a reviewer, or the planner. The agent body gives the concrete identity; reviewer-less shows up in the roster as `(no reviewer)` on the producer's registration line.
+- Only the orchestrator writes files under `.harness/cycle/`. You return **content** shaped for your role; you do not write the control plane directly. (`.harness/loom/` is canonical staging seeded before the cycle; you never write there either.)
 - Routing belongs to the orchestrator. You do not decide `Next`, `current`, `loop`, or the next dispatch.
 - Your effective rubric for this turn is `agent body + pair skill` (or `harness-planning` if you are the planner) `+ harness-context + envelope`.
 
@@ -28,17 +28,17 @@ At dispatch time the orchestrator supplies the following fields in the prompt. T
 - **Task path** — the path this turn's artifact is attached to. A producer returns the task content for that path; a reviewer judges one task file anchored to that path.
 - **Scope** — one sentence defining which files or paths are allowed this turn. Do not modify anything outside it.
 - **Current phase** — the natural-language instruction for what must happen now. This field settles "what do I do in this turn?"
-- **Prior tasks / Prior reviews** — arrays of previous artifact paths. On rework they provide the baseline; on retreat they provide the target to repair; on forward progress they provide upstream PASS artifacts as needed.
+- **Prior tasks / Prior reviews** — arrays of previous artifact paths. On rework they provide the baseline; on retreat they provide the target to repair; on forward progress they provide the upstream stage artifacts needed for the current global-roster gate.
 - **Axis** — reviewer-only field. In a 1:M pair it names the grading axis owned by this reviewer. In 1:1 it is omitted or set to `(entire pair)`.
-- **Existing EPICs / Recent events** — planner-only additions. They provide the current EPIC list and recent state changes.
+- **Existing EPICs / Recent events / Registered roster** — planner-only additions. They provide the current EPIC list, recent state changes, and the project's global roster (the `## Registered pairs` block copied verbatim). The planner uses only these envelope fields and never reads other SKILL files to discover the roster.
 
 ### 3. If you are the producer
 
 - Produce the task artifact by following the pair skill's rubric.
-- Your artifact is the content that will be written to `Task path`. Include the body, evidence, self-verification, and suggested-next-work, but do not write any control-plane fields.
+- Your artifact is the content that will be written to `Task path`. Include the body, evidence, `Self-verification`, and suggested-next-work, but do not write any control-plane fields. When your group is reviewer-less (registered with `(no reviewer)`), your `Status: PASS|FAIL` plus `Self-verification` is also the verdict the orchestrator reads; when paired, the reviewer decides and your `Status` is advisory.
 - Do not modify files outside `Scope`.
 - Do not overwrite the same `T<id>` and erase history. Rework and retreat receive new ids from the orchestrator.
-- If you detect an upstream contract failure that your own pair cannot resolve, leave clear evidence so the review stage can report it as a structural issue rather than flattening it into a generic FAIL.
+- If you detect an upstream contract failure your own role cannot resolve, emit a `## Structural Issue` block instead of flattening it into a generic FAIL. A paired reviewer raises it on your behalf when one is paired; for reviewer-less groups the block stays in your artifact.
 
 ### 4. If you are the reviewer
 
@@ -51,9 +51,8 @@ At dispatch time the orchestrator supplies the following fields in the prompt. T
 ### 5. If you are the planner
 
 - You are a meta-role with no paired reviewer. You do not leave task or review files.
-- Your output field set is **`outcome / upstream / why / roster` only**. `current` and `note` are runtime fields computed and appended by the orchestrator, so you must not emit them.
-- EPIC mutation is **append-only**. You may add new EPICs or mark existing ones as `superseded`, but you must not edit existing `outcome`, `roster`, or `upstream` fields in place.
-- The detailed planner rubric and output block shape belong to `harness-planning`.
+- Follow `harness-planning` for the planner-specific field set, roster rules, and re-plan behavior.
+- The orchestrator owns runtime fields such as `current`, `note`, and `Next`; do not emit them from planner output.
 
 ### 6. Structural issue report shape
 
@@ -88,7 +87,7 @@ Runtime reads the `skills:` list from agent frontmatter and automatically inject
 
 ## Taboos
 
-- Write directly under `.harness/`; return content only.
+- Write directly under `.harness/cycle/` or `.harness/loom/`; return content only.
 - Modify files outside the envelope scope.
 - Replace orchestrator routing by emitting `Next`, `current`, or `loop` in your output.
 - Use producer transcript or tool trace as reviewer evidence.

@@ -1,6 +1,6 @@
 ---
 name: {{PAIR_SLUG}}
-description: "Use when authoring or reviewing {{PAIR_TITLE}} artifacts in this target project. Shared rubric for the `{{PAIR_SLUG}}-producer` ↔ `{{PAIR_SLUG}}-reviewer` pair."
+description: "Use when authoring or reviewing {{PAIR_TITLE}} artifacts in this project. Shared rubric for the `{{PAIR_SLUG}}-producer` ↔ `{{PAIR_SLUG}}-reviewer` pair."
 user-invocable: false
 ---
 

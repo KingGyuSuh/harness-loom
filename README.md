@@ -4,15 +4,13 @@
 
 [English](README.md) | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [Español](docs/README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multi-platform)
 
 **Tune a production-specific harness on top of the generic harness shipped by modern coding assistants.**
 
 <br clear="left" />
-
-> **Status:** 0.1.5 — early release. The public surface may iterate before 1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
 
 `harness-loom` is a factory plugin that installs a runtime harness into a target repository and grows it pair by pair.
 
@@ -29,14 +27,14 @@ This repo is the factory. It seeds a target-side runtime harness made of:
 - a common runtime context for all subagents
 - project-specific producer-reviewer pairs that you add over time
 
-`.claude/` is the canonical source. `.codex/` and `.gemini/` are derived from it on demand.
+A target's `.harness/` is split into three sibling namespaces — `loom/` is the canonical staging tree owned by install and sync, `cycle/` holds runtime state owned by the orchestrator, and `docs/` is the documentation snapshot owned by the new built-in `harness-doc-keeper` producer. Platform trees (`.claude/`, `.codex/`, `.gemini/`) are derived from `.harness/loom/` on demand.
 
 ## Why This Shape
 
 - **Skill-first, agent-second.** Shared methodology lives in one `SKILL.md` per pair, so production rules and review rules stay aligned.
 - **Producer plus reviewers.** A pair can fan out to one or many reviewers, each grading on a separate axis.
-- **Canonical once, derive outward.** Author the harness in `.claude/`; derive `.codex/` and `.gemini/` only when you want them.
-- **Hook-driven execution.** The orchestrator writes the next dispatch into `.harness/state.md`, and hooks re-enter the cycle without manual bookkeeping.
+- **Canonical once, derive outward.** Author the harness in `.harness/loom/`; derive `.claude/`, `.codex/`, and `.gemini/` only when you want them.
+- **Hook-driven execution.** The orchestrator writes the next dispatch into `.harness/cycle/state.md`, and hooks re-enter the cycle without manual bookkeeping.
 - **Repo-anchored authoring.** Pair generation reads the actual target codebase so it can cite real files and patterns instead of generating abstract boilerplate.
 
 ## What Gets Installed
@@ -45,36 +43,39 @@ When you run `/harness-init` inside a target repository, `harness-loom` installs
 
 ```text
 target project
-├── .harness/
-│   ├── state.md
-│   ├── events.md
-│   ├── hook.sh
-│   └── epics/
-├── .claude/
-│   ├── agents/
-│   │   └── harness-planner.md
-│   ├── skills/
-│   │   ├── harness-orchestrate/
-│   │   ├── harness-planning/
-│   │   └── harness-context/
-│   └── settings.json
-└── project-specific producer/reviewer pairs
+└── .harness/
+    ├── loom/                    # canonical staging (install + sync own)
+    │   ├── skills/
+    │   │   ├── harness-orchestrate/
+    │   │   ├── harness-planning/
+    │   │   ├── harness-context/
+    │   │   └── harness-doc-keeper/
+    │   ├── agents/
+    │   │   ├── harness-planner.md
+    │   │   └── harness-doc-keeper-producer.md
+    │   ├── hook.sh
+    │   └── sync.ts
+    ├── cycle/                   # runtime state (orchestrator owns)
+    │   ├── state.md
+    │   ├── events.md
+    │   └── epics/
+    └── _archive/                # past cycles, created on goal-different reset
 ```
 
-You then add domain-specific pairs with `/harness-pair-dev`, and optionally derive Codex or Gemini-specific trees with `/harness-sync`.
+Project documentation (target-root `*.md` files, `docs/`) is authored **directly in the target**, not inside `.harness/`. You then derive at least one platform tree with `node .harness/loom/sync.ts --provider claude` (and add `codex,gemini` for multi-platform), then add domain-specific pairs with `/harness-pair-dev`. The built-in `harness-doc-keeper` is a reviewer-less producer that auto-fires at every cycle's halt; it reads the project + goal + cycle activity and authors or evolves the documentation this project actually needs (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, `docs/design-docs/`, `docs/product-specs/`, `docs/exec-plans/`, etc. — only the subset your project's evidence supports). You do not invoke it directly; the orchestrator dispatches it as the final reviewer-less turn before halting.
 
 ## Requirements
 
 - **Node.js ≥ 22.6** — scripts run via native TypeScript stripping; no build step, no `package.json`.
 - **git** — pair authoring relies on git history for rollback on `--split`.
 - **At least one supported assistant CLI**, authenticated:
-  - [Claude Code](https://code.claude.com/docs) — primary target; `.claude/` is the canonical source.
-  - [Codex CLI](https://developers.openai.com/codex/cli) — derived tree via `/harness-sync --provider codex`.
-  - [Gemini CLI](https://geminicli.com/docs/) — derived tree via `/harness-sync --provider gemini`.
+  - [Claude Code](https://code.claude.com/docs) — primary target; canonical staging in `.harness/loom/` is derived into `.claude/` via `node .harness/loom/sync.ts --provider claude`.
+  - [Codex CLI](https://developers.openai.com/codex/cli) — derived into `.codex/` via `node .harness/loom/sync.ts --provider codex`.
+  - [Gemini CLI](https://geminicli.com/docs/) — derived into `.gemini/` via `node .harness/loom/sync.ts --provider gemini`.
 
 ## Install
 
-The factory ships in the standard `plugins/<name>/` monorepo layout — the repo root holds `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`, and the actual plugin tree lives under `plugins/harness-loom/`. **Factory itself runs on Claude Code or Codex CLI.** Gemini CLI is supported as a *runtime* consumer of harnesses you install into target projects; see the "Gemini CLI (runtime only)" section below.
+The factory ships in the standard `plugins/<name>/` monorepo layout — the repo root holds `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`, and the actual plugin tree lives under `plugins/harness-loom/`. Author the factory from Claude Code or Codex CLI, then derive runtime trees for whichever assistants you want to use inside the target project.
 
 ### Claude Code
 
@@ -98,10 +99,10 @@ Public git repo (GitHub shorthand):
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
-Pin a specific tag:
+Pin a specific tag if needed:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
+/plugin marketplace add KingGyuSuh/harness-loom@<tag>
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -116,17 +117,17 @@ codex marketplace add /path/to/harness-loom
 # public git repo
 codex marketplace add KingGyuSuh/harness-loom
 
-# pin a tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.5
+# pin a tag if needed
+codex marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 Then, inside the Codex TUI, run `/plugins`, open the `Harness Loom` marketplace entry, and install the plugin.
 
-### Gemini CLI (runtime only)
+### Gemini Runtime
 
-harness-loom's **factory** cannot be installed as a Gemini extension — Gemini's extension loader hardcodes the repo root as the extension root, which conflicts with the Codex/Claude `plugins/<name>/` monorepo convention that the factory now follows. Instead, Gemini CLI is supported as a **runtime consumer** of the harness you deploy into a target project:
+Use Claude Code or Codex CLI to install the factory, then derive `.gemini/` inside the target project:
 
-1. From Claude Code or Codex CLI, install the factory and run `/harness-init` + `/harness-sync --provider gemini` inside your target project. This deploys the target-side runtime (`.harness/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` with `AfterAgent` hook).
+1. From Claude Code or Codex CLI, install the factory and run `/harness-init` + `node .harness/loom/sync.ts --provider gemini` inside your target project. This deploys the target-side runtime (`.harness/loom/`, `.harness/cycle/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` with `AfterAgent` hook).
 2. `cd` into that target project and run `gemini`. The CLI auto-loads workspace-scope `.gemini/agents/*.md`, `.gemini/skills/<slug>/SKILL.md`, and the `AfterAgent` hook from `.gemini/settings.json`.
 3. Your orchestrator cycle runs on Gemini end-to-end — factory authoring remains on Claude/Codex, execution can be any of the three.
 
@@ -136,31 +137,37 @@ harness-loom's **factory** cannot be installed as a Gemini extension — Gemini'
 cd your-project
 claude
 
-# 1) install the canonical foundation
+# 1) install the canonical foundation (.harness/loom/ + .harness/cycle/)
 /harness-init
 
-# 2) define the goal for this cycle
+# 2) deploy at least one platform tree from canonical staging.
+node .harness/loom/sync.ts --provider claude
+#    For multi-platform, list every provider you want derived:
+# node .harness/loom/sync.ts --provider claude,codex,gemini
+
+# 3) define the goal for this cycle
 echo "Ship a lightweight terminal Snake game with curses" > goal.md
 
-# 3) add project-specific pairs (unprefixed slugs are auto-prepended with `harness-`)
-#    `<purpose>` is a positional second argument; no `--purpose` flag.
+# 4) add project-specific pairs (unprefixed slugs are auto-prepended with `harness-`).
+#    `<purpose>` is a positional second argument. After authoring, re-run the
+#    sync command above to refresh the derived platform trees.
 /harness-pair-dev --add harness-game-design "Spec snake.py features and edge cases"
 /harness-pair-dev --add harness-impl "Implement snake.py against the spec" \
   --reviewer harness-code-reviewer --reviewer harness-playtest-reviewer
 
-# 3a) reviewer-less opt-in for deterministic / auxiliary work
+# 4a) reviewer-less opt-in for deterministic / auxiliary work
 #     (sync, format, mirror); pair is still the default.
 /harness-pair-dev --add harness-asset-mirror "Copy canonical assets into the derived tree" \
   --reviewer none
 
-# 4) optionally derive Codex / Gemini from canonical .claude/
-/harness-sync --provider codex,gemini
+# 4b) re-run sync to deploy the new pairs into platform trees
+node .harness/loom/sync.ts --provider claude
 
 # 5) run the runtime harness
 /harness-orchestrate goal.md
 ```
 
-Outputs land under `.harness/epics/EP-N--<slug>/{tasks,reviews}/`. Runtime state lives in `.harness/state.md`, and the event log lives in `.harness/events.md`.
+Outputs land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. Runtime state lives in `.harness/cycle/state.md`, and the event log lives in `.harness/cycle/events.md`. At every cycle's halt the orchestrator auto-dispatches the built-in `harness-doc-keeper` reviewer-less producer, which reads the project + goal + cycle activity and authors or evolves project documentation surgically — target-root master files (`CLAUDE.md`, `AGENTS.md`, `ARCHITECTURE.md`, etc.) and a `docs/` subtree (`design-docs/`, `product-specs/`, `exec-plans/`, `generated/`, as the project's evidence warrants). Existing hand-authored content outside the pointer section is preserved byte-for-byte.
 
 ## Concepts
 
@@ -170,34 +177,41 @@ A few terms recur across commands, files, and state. Knowing these six is enough
 - **Pair** — one **producer** plus one or more **reviewers**, sharing a single `SKILL.md`. The authoring unit of domain work.
 - **Producer** — the subagent that performs work for a task (writes code, specs, analysis) and proposes the next action.
 - **Reviewer** — a subagent that grades the producer's output on a specific axis (code quality, spec fit, security, etc.). A pair can fan out to many reviewers, each graded independently.
-- **EPIC / Task** — an EPIC is a unit of outcome emitted by the planner; a Task is a single producer-reviewer round inside that EPIC. Artifacts land under `.harness/epics/EP-N--<slug>/{tasks,reviews}/`.
-- **Orchestrator vs Planner** — the **orchestrator** owns `.harness/state.md` and dispatches exactly one pair per response. The **planner** runs inside the orchestrator's cycle to decompose the goal into EPICs with rosters.
+- **EPIC / Task** — an EPIC is a unit of outcome emitted by the planner; a Task is a single producer-reviewer round inside that EPIC. Artifacts land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`.
+- **Orchestrator vs Planner** — the **orchestrator** owns `.harness/cycle/state.md` and dispatches exactly one producer per response (with 0, 1, or M reviewers in parallel). The **planner** runs inside that loop to decompose the goal into EPICs, choose each EPIC's applicable slice of the fixed global roster, and declare same-stage upstream gates across EPICs.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `/harness-init [<target>] [--force]` | Scaffold the canonical `.claude/` foundation into a target project. Writes `.harness/`, runtime skills, the `harness-planner` agent, and hook wiring. |
-| `/harness-sync [--provider <list>]` | Derive `.codex/` and `.gemini/` from canonical `.claude/`. This is one-way sync; it never writes back into `.claude/`. |
-| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is a positional second argument. Repeat `--reviewer` for 1:N reviewer topology, or pass `--reviewer none` for a reviewer-less producer-only group (deterministic / auxiliary work; pair is still the default). |
-| `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Re-audit an existing pair against the rubric and current codebase, then improve it. |
-| `/harness-pair-dev --split <slug>` | Split an overloaded pair into two narrower pairs. |
-| `/harness-orchestrate <goal.md>` | Target-side runtime entry point. Reads the goal, dispatches one pair per response, and advances the cycle through hook re-entry. |
+| `/harness-init [<target>] [--force]` | Scaffold the canonical `.harness/loom/` staging tree plus the `.harness/cycle/` runtime state into a target project. Writes runtime skills, the `harness-planner` agent, the built-in `harness-doc-keeper` producer, and the `hook.sh` + `sync.ts` self-contained copies under `.harness/loom/`. Touches no platform tree. |
+| `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Without `--provider` it falls back to disk detection of already-existing platform trees. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is a positional second argument. Repeat `--reviewer` for 1:N reviewer topology, or pass `--reviewer none` for a reviewer-less producer-only group (deterministic / auxiliary work; pair is still the default). Authoring writes only into `.harness/loom/`; re-run `node .harness/loom/sync.ts --provider <list>` afterward. |
+| `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Re-audit an existing pair against the rubric and current codebase, then improve it. Re-run sync afterward to refresh platform trees. |
+| `/harness-pair-dev --split <slug>` | Split an overloaded pair into two narrower pairs. Re-run sync afterward. |
+| `/harness-orchestrate <goal.md>` | Target-side runtime entry point. Reads the goal, dispatches one producer per response (with its paired reviewer set when applicable), and advances the cycle through hook re-entry. At halt prep, auto-dispatches the built-in `harness-doc-keeper` reviewer-less producer before clearing `Next`. |
 
 ## Factory And Runtime
 
 ```text
 factory (this repo)                            target project
 -----------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          installs ->      .harness/{state,events,hook,epics}/
-plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .claude/agents/<slug>-producer.md
-plugins/harness-loom/skills/harness-sync/          derives  ->      .claude/agents/<reviewer>.md
-plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .claude/skills/<slug>/SKILL.md
-                                               .claude/settings.json
+plugins/harness-loom/skills/harness-init/          installs ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
+plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/}
+plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .harness/loom/skills/<slug>/SKILL.md
+plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loom/agents/<slug>-producer.md
+                                                                    .harness/loom/agents/<reviewer>.md
+                                                                    .harness/loom/skills/<slug>/SKILL.md
                                                      |
-                                                     +-- /harness-sync (opt-in)
+                                                     +-- node .harness/loom/sync.ts --provider <list>
+                                                         -> .claude/{agents,skills,settings.json}
                                                          -> .codex/
                                                          -> .gemini/
+                                                     |
+                                                     +-- harness-doc-keeper auto-fires at cycle halt
+                                                         -> CLAUDE.md / AGENTS.md (pointer section)
+                                                         -> ARCHITECTURE.md / DESIGN.md / ...
+                                                         -> docs/{design-docs,product-specs,exec-plans,generated,...}/
 ```
 
 This split is intentional:
@@ -212,7 +226,7 @@ Platform pins applied by `sync.ts`:
 
 | Platform | Model | Hook event | Notes |
 |----------|-------|------------|-------|
-| Claude | `inherit` | `Stop` | `.claude/settings.json` triggers `.harness/hook.sh`. |
+| Claude | `inherit` | `Stop` | `.claude/settings.json` triggers `.harness/loom/hook.sh`. |
 | Codex | `gpt-5.4`, `model_reasoning_effort: xhigh` | `Stop` | Subagents do not use mini models. |
 | Gemini | `gemini-3.1-pro-preview` | `AfterAgent` | Skills are mirrored into the platform tree. |
 
@@ -226,17 +240,6 @@ Use `harness-loom` when:
 - you want one canonical authoring surface with deterministic multi-platform derivation
 
 Do not reach for it if you are still evaluating whether the underlying model stack can handle your work at all. This project assumes the generic harness is already useful and focuses on shaping it into a production-specific system.
-
-## Roadmap
-
-Live plan is tracked in [GitHub Milestones](https://github.com/KingGyuSuh/harness-loom/milestones). In short:
-
-- **[v0.2.0](https://github.com/KingGyuSuh/harness-loom/milestone/1)** — break out of the "mirror `.claude/` verbatim" constraint for more authoring flexibility, and add automated docs management.
-- **[v0.3.0](https://github.com/KingGyuSuh/harness-loom/milestone/2)** — auto-recommend and generate producer-reviewer agent sets from goal + repo analysis.
-- **[v0.4.0](https://github.com/KingGyuSuh/harness-loom/milestone/3)** — execution logging and feedback-loop-driven self-improvement suggestions.
-- **[v0.5.0](https://github.com/KingGyuSuh/harness-loom/milestone/4)** — parallel execution mode and a token-efficient mode.
-
-Surface may still iterate pre-1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
 
 ## Contributing
 
