@@ -4,7 +4,7 @@
 
 [English](README.md) | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [Español](docs/README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Status:** 0.1.4 — early release. The public surface may iterate before 1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
+> **Status:** 0.1.5 — early release. The public surface may iterate before 1.0; see [CHANGELOG](./CHANGELOG.md) for breaking changes.
 
 `harness-loom` is a factory plugin that installs a runtime harness into a target repository and grows it pair by pair.
 
@@ -101,7 +101,7 @@ Public git repo (GitHub shorthand):
 Pin a specific tag:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # pin a tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.4
+codex marketplace add KingGyuSuh/harness-loom@v0.1.5
 ```
 
 Then, inside the Codex TUI, run `/plugins`, open the `Harness Loom` marketplace entry, and install the plugin.
@@ -143,9 +143,15 @@ claude
 echo "Ship a lightweight terminal Snake game with curses" > goal.md
 
 # 3) add project-specific pairs (unprefixed slugs are auto-prepended with `harness-`)
-/harness-pair-dev --add harness-game-design --purpose "Spec snake.py features and edge cases"
-/harness-pair-dev --add harness-impl --purpose "Implement snake.py against the spec" \
+#    `<purpose>` is a positional second argument; no `--purpose` flag.
+/harness-pair-dev --add harness-game-design "Spec snake.py features and edge cases"
+/harness-pair-dev --add harness-impl "Implement snake.py against the spec" \
   --reviewer harness-code-reviewer --reviewer harness-playtest-reviewer
+
+# 3a) reviewer-less opt-in for deterministic / auxiliary work
+#     (sync, format, mirror); pair is still the default.
+/harness-pair-dev --add harness-asset-mirror "Copy canonical assets into the derived tree" \
+  --reviewer none
 
 # 4) optionally derive Codex / Gemini from canonical .claude/
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ A few terms recur across commands, files, and state. Knowing these six is enough
 |---------|---------|
 | `/harness-init [<target>] [--force]` | Scaffold the canonical `.claude/` foundation into a target project. Writes `.harness/`, runtime skills, the `harness-planner` agent, and hook wiring. |
 | `/harness-sync [--provider <list>]` | Derive `.codex/` and `.gemini/` from canonical `.claude/`. This is one-way sync; it never writes back into `.claude/`. |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | Author a new producer-reviewer pair anchored to the current codebase. Repeat `--reviewer` for 1:N reviewer topology. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is a positional second argument. Repeat `--reviewer` for 1:N reviewer topology, or pass `--reviewer none` for a reviewer-less producer-only group (deterministic / auxiliary work; pair is still the default). |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Re-audit an existing pair against the rubric and current codebase, then improve it. |
 | `/harness-pair-dev --split <slug>` | Split an overloaded pair into two narrower pairs. |
 | `/harness-orchestrate <goal.md>` | Target-side runtime entry point. Reads the goal, dispatches one pair per response, and advances the cycle through hook re-entry. |

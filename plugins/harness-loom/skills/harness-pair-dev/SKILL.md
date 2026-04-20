@@ -1,7 +1,7 @@
 ---
 name: harness-pair-dev
-description: "Use when `/harness-pair-dev --add|--improve|--split <pair-slug>` is invoked to author, refine, or split a producer-reviewer pair for a target project's harness. `--add` requires `--purpose \"<text>\"` and may repeat `--reviewer <slug>` for 1:M reviewer pairs. `--improve` accepts `--hint \"<free-form>\"`; without a hint it applies rubric hygiene plus codebase-drift fixes."
-argument-hint: "--add <pair-slug> --purpose \"<text>\" [--reviewer <slug> ...] [--target <path>] [--provider <list>] | --improve <pair-slug> [--hint \"<text>\"] [--target <path>] [--provider <list>] | --split <pair-slug> [--target <path>] [--provider <list>]"
+description: "Use when `/harness-pair-dev --add|--improve|--split <pair-slug>` is invoked to author, refine, or split a producer-reviewer pair for a target project's harness. `--add <pair-slug> \"<purpose>\"` takes purpose as a positional argument and may repeat `--reviewer <slug>` for 1:M reviewer pairs; pass `--reviewer none` to register a reviewer-less producer-only group (opt-in escape hatch — pair is still the default). `--improve` accepts `--hint \"<free-form>\"`; without a hint it applies rubric hygiene plus codebase-drift fixes."
+argument-hint: "--add <pair-slug> \"<purpose>\" [--reviewer <slug>|none ...] | --improve <pair-slug> [--hint \"<text>\"] | --split <pair-slug>"
 user-invocable: true
 ---
 
@@ -17,17 +17,17 @@ user-invocable: true
 
 | Mode | Input | Output |
 |------|-------|--------|
-| `--add <pair-slug> --purpose "<text>" [--reviewer <slug> ...]` | new pair slug + required purpose + optional extra reviewer slugs | after codebase analysis, authors one domain-specific producer, M reviewers, and one shared pair skill under `.claude/`, then runs registration + sync |
+| `--add <pair-slug> "<purpose>" [--reviewer <slug>\|none ...]` | new pair slug + required positional purpose text + optional reviewer slugs (or the special `none`) | after codebase analysis, authors one domain-specific producer, M reviewers (or zero when `--reviewer none`), and one shared pair skill under `.claude/`, then runs registration + sync |
 | `--improve <pair-slug> [--hint "<text>"]` | existing pair slug, optionally user intent | performs codebase re-analysis, rubric diagnosis, and optional hint-driven refinement, then edits the `.claude/` files and re-syncs; if a split is required, it recommends that split and stops |
 | `--split <pair-slug>` | overloaded pair slug | creates two sub-pairs under `.claude/`, removes the original pair, then runs registration + sync |
 
-Shared flags: `--target <path>` (default `cwd`), `--provider <list>` (if omitted, target detection decides which providers are synced).
+Target is always the current working directory; no `--target` flag is exposed at this entry. Provider sync is delegated to `sync.ts`'s on-disk detection (claude is always present; codex/gemini only when their derived trees already exist). To enable a new provider for the first time, the user runs `/harness-sync --provider <list>` separately.
 
-### 2. `--add <pair-slug> --purpose "<text>" [--reviewer <slug> ...]`
+### 2. `--add <pair-slug> "<purpose>" [--reviewer <slug>|none ...]`
 
-1. **Parse args and verify preconditions** — if `--purpose` is missing, stop immediately and ask for it. A slug alone cannot fill identity, principles, or the skill body. After resolving the target path, verify that `<target>/.claude/skills/{harness-orchestrate, harness-planning, harness-context}/SKILL.md` exist. If any are missing, require `/harness-init` first and stop.
-   - **Normalize every slug with the `harness-` prefix.** Apply `s.startsWith("harness-") ? s : "harness-" + s` to the pair slug, each `--reviewer` value, and the derived producer and skill slugs. The rule is idempotent, so `--add foo` and `--add harness-foo` both yield `harness-foo`. From step 1 onward, every slug referenced in this skill is the already-normalized form. The downstream `register-pair.ts` hard-rejects any unprefixed slug, so authoring with the normalized form is the only valid path.
-2. **Decide reviewer roster** — if no `--reviewer` flag is present, default to one reviewer slug derived from the normalized pair slug, which is therefore `<pair-slug>-reviewer` (already carrying the `harness-` prefix via its pair base). If one or more flags are provided, each value is normalized per step 1 and becomes a reviewer slug, making the pair 1:M. Reviewer slugs must be kebab-case role names such as `harness-sql-reviewer` or `harness-server-reviewer`. Numeric suffixes are forbidden.
+1. **Parse args and verify preconditions** — `<purpose>` is the second positional argument and is required; if it is missing, stop immediately and ask for it. A slug alone cannot fill identity, principles, or the skill body. Verify that `<cwd>/.claude/skills/{harness-orchestrate, harness-planning, harness-context}/SKILL.md` exist. If any are missing, require `/harness-init` first and stop.
+   - **Normalize every slug with the `harness-` prefix.** Apply `s.startsWith("harness-") ? s : "harness-" + s` to the pair slug, each `--reviewer` value (except the literal `none`), and the derived producer and skill slugs. The rule is idempotent, so `--add foo` and `--add harness-foo` both yield `harness-foo`. From step 1 onward, every slug referenced in this skill is the already-normalized form. The downstream `register-pair.ts` hard-rejects any unprefixed slug, so authoring with the normalized form is the only valid path.
+2. **Decide reviewer roster** — if no `--reviewer` flag is present, default to one reviewer slug derived from the normalized pair slug, which is therefore `<pair-slug>-reviewer` (already carrying the `harness-` prefix via its pair base) — this is the **default pair authoring path**. If one or more `--reviewer <slug>` flags are provided, each value is normalized per step 1 and becomes a reviewer slug, making the pair 1:M. The single special value `--reviewer none` (and only that, never mixed with real slugs) selects the **reviewer-less producer-only path**: no reviewer agent file is created and the registration line carries `(no reviewer)`. Use it only for deterministic / auxiliary work that is genuinely "not subject to review" (sync, format, mirror, mechanical translation), not as a shortcut to skip review on creative or judgment work. Reviewer slugs must be kebab-case role names such as `harness-sql-reviewer` or `harness-server-reviewer`. Numeric suffixes are forbidden.
 3. **Read references** — Claude reads the following references in order:
    - `references/example-agents/` (8 files) for tone and structural examples.
    - `references/example-skills/agent-authoring.md` for strict rules on agent frontmatter, five principles, Task, and Output Format.
@@ -39,20 +39,28 @@ Shared flags: `--target <path>` (default `cwd`), `--provider <list>` (if omitted
    - existing test patterns, if present, to ground how the producer should self-verify.
    If the signal is insufficient, stop and ask the user for more information. **Do not author a generic pair without enough evidence.**
 5. **Design the domain contract** — use `--purpose` plus collected codebase evidence as the primary axis for the producer identity, five principles, task steps, and the shared pair skill's Design Thinking / Methodology / Evaluation Criteria / Taboos. **Every section must cite domain evidence at least once** using real file paths, function names, or pattern names. In 1:M cases, derive each reviewer axis from purpose plus codebase structure, then split and tag the pair skill Evaluation Criteria by reviewer axis.
-6. **Author agents** — replace `templates/producer-agent.md` into `<target>/.claude/agents/<pair-slug>-producer.md`. For each reviewer, replace `templates/reviewer-agent.md` into `<target>/.claude/agents/<reviewer-slug>.md`. For a single-reviewer pair, that file is `<pair-slug>-reviewer.md`; for 1:M pairs, use the user-provided slugs exactly. Slugs here are already normalized with the `harness-` prefix from step 1, so expected file names look like `harness-<pair>-producer.md` and `harness-<reviewer>.md`, and frontmatter `name:` fields match. The identity paragraph must be codebase-specific: not "writes code" but something like "adds a new input handler following the game-loop pattern in `src/engine/snake.py`."
+6. **Author agents** — replace `templates/producer-agent.md` into `<cwd>/.claude/agents/<pair-slug>-producer.md`. For each reviewer, replace `templates/reviewer-agent.md` into `<cwd>/.claude/agents/<reviewer-slug>.md`. For a single-reviewer pair, that file is `<pair-slug>-reviewer.md`; for 1:M pairs, use the user-provided slugs exactly. **For the reviewer-less path (`--reviewer none`), do not create any reviewer agent file at all.** Slugs here are already normalized with the `harness-` prefix from step 1, so expected file names look like `harness-<pair>-producer.md` and `harness-<reviewer>.md`, and frontmatter `name:` fields match. The identity paragraph must be codebase-specific: not "writes code" but something like "adds a new input handler following the game-loop pattern in `src/engine/snake.py`."
 7. **Author the pair skill** — replace `templates/pair-skill.md` into `<target>/.claude/skills/<pair-slug>/SKILL.md`. Design Thinking must answer, with code evidence, why this domain is hard in this codebase and what must be protected. Evaluation Criteria must be tagged by reviewer axis where applicable, such as `- [sql-reviewer] ...` and `- [server-reviewer] ...`, and every item must remain gradeable by citing codebase patterns/files rather than vague rubric language.
 8. **Attach extra skills when needed** — if the producer or a reviewer needs domain knowledge beyond the shared pair skill, append extra slugs to that agent's frontmatter `skills:` list. For example, add `data-schema` to the producer or `sql-conventions` to `sql-reviewer`. **Always keep the required two entries `<pair-slug>` and `harness-context` first**, then append extras. Extra slugs must point to real on-disk `skills/<slug>/SKILL.md`.
 9. **Run registration**:
 
    ```bash
+   # Default pair (1:1) or 1:M:
    node ${CLAUDE_SKILL_DIR}/scripts/register-pair.ts \
-     --target <path> --pair <slug> \
+     --target <cwd> --pair <slug> \
      --producer <slug>-producer \
      --reviewer <reviewer-slug-1> [--reviewer <reviewer-slug-2> ...] \
      --skill <slug>
+
+   # Reviewer-less producer-only group:
+   node ${CLAUDE_SKILL_DIR}/scripts/register-pair.ts \
+     --target <cwd> --pair <slug> \
+     --producer <slug>-producer \
+     --reviewer none \
+     --skill <slug>
    ```
 
-   The script updates the "Registered pairs" and "Available departments" sections inside the target's `harness-orchestrate` and `harness-planning` skills idempotently. In 1:M cases, it records the reviewer set as `reviewers [<r1>, <r2>, ...]`.
+   The script updates the "Registered pairs" and "Available departments" sections inside the target's `harness-orchestrate` and `harness-planning` skills idempotently. In 1:M cases, it records the reviewer set as `reviewers [<r1>, <r2>, ...]`. In the reviewer-less case it records `(no reviewer)` and omits the `↔` arrow so the runtime can recognize the producer-only group as "not subject to review". `register-pair.ts` is still invoked with an internal `--target` flag here (the user-facing `/harness-pair-dev` CLI no longer exposes it; target is always `cwd`).
 10. **Sync pointer docs** — run `node ${CLAUDE_SKILL_DIR}/scripts/docs-sync.ts`. If the target has `CLAUDE.md` or `AGENTS.md`, re-render the `## Harness Pairs` section from the registration lines while preserving 1:M formatting. If either file is absent, skip it.
 11. **Run provider sync** — run `node ${CLAUDE_SKILL_DIR}/scripts/sync.ts`. If the user explicitly passed `--provider`, forward it unchanged. Otherwise `sync.ts` auto-detects derived providers already on disk and derives only those trees. This is safe for single-platform projects because it becomes a no-op. To add codex/gemini for the first time, the user must explicitly call `/harness-sync --provider codex`. **Sync must never write back into `.claude/`**.
 
@@ -87,13 +95,22 @@ Claude must read those references before it starts authoring.
 
 The producer and reviewer templates always declare **two required entries** in frontmatter `skills:`: the pair-specific `{{SKILL_SLUG}}` and the shared `harness-context`. At dispatch time Claude Code injects both skills automatically, so the subagent reads its own rubric together with the shared law covering pair/cycle rhythm, authority, the reviewed-work contract, and structural-issue shape in the same turn. Any other skill referenced from the pair skill's `## References` section, such as `../rest-conventions/SKILL.md`, is also brought in. **One subagent turn's context = agent body + pair skill + harness-context + linked skills**. The two templates generated by `--add` already include `harness-context`, so users do not need to add it manually.
 
-### 7. Registration contract
+### 7. When reviewer-less is appropriate
+
+`--reviewer none` is a **narrow opt-in escape hatch**, not a productivity shortcut. Pair authoring is the default, and every produced agent/skill body must read as pair-first; reviewer-less is the named exception. The choice is justified only when the work is genuinely **"not subject to review"** in the reviewed-work contract sense (goals.md:L21), never as "passed without review".
+
+- **Use `--reviewer none` when** the producer's job is deterministic, auxiliary, and mechanically verifiable: sync (e.g., a `harness-mirror` producer that just rewrites canonical artifacts into a derived tree), format (a `harness-format` producer that runs a formatter and reports the diff), mirror (a `harness-translate-mirror` producer that copies one source-of-truth file into a sibling), or other single-function script wrappers whose output a reviewer could only rubber-stamp. In these cases the producer's own `Status: PASS|FAIL` plus `Self-verification` evidence (script exit code, byte-equivalence check, lint output) is the verdict source.
+- **Do not use `--reviewer none` when** the producer's job involves judgment, generation, or creative composition: code authoring, doc writing, marketing copy, planning, schema design, anything that could be rubber-stamped in form but wrong in substance. Those domains exist precisely because a paired reviewer adds signal that the producer cannot self-detect; defaulting to reviewer-less in those domains hollows out the reviewed-work contract (goals.md:L21, L39).
+- **The opt-in must be self-evident at every layer**: the user types the literal string `none` on the command line (goals.md:L23, L34), the registration line carries the load-bearing `(no reviewer)` token without `↔` (see §8 below), and the produced pair-skill Design Thinking explicitly names which deterministic axis makes review unnecessary. If you cannot write that one-sentence justification, the work probably is not reviewer-less — fall back to a paired reviewer.
+
+### 8. Registration contract
 
 `register-pair.ts` edits two target skill bodies:
 
-- It appends one line into `<target>/.claude/skills/harness-orchestrate/SKILL.md` under `## Registered pairs`, matching the exact output shape from `register-pair.ts:181`:
+- It appends one line into `<target>/.claude/skills/harness-orchestrate/SKILL.md` under `## Registered pairs`, matching the exact output shape produced by `register-pair.ts` `main()`:
   - 1:1 example: `` - harness-sql: producer `harness-sql-producer` ↔ reviewer `harness-sql-reviewer`, skill `harness-sql` ``
   - 1:M example: `` - harness-api: producer `harness-api-producer` ↔ reviewers [`harness-api-reviewer`, `harness-security-reviewer`], skill `harness-api` ``
+  - reviewer-less example: `` - harness-mirror: producer `harness-mirror-producer` (no reviewer), skill `harness-mirror` `` — the missing `↔` is the load-bearing token that distinguishes producer-only registration from a pair.
 - It appends the same line as a department registration under `## Available departments` in `<target>/.claude/skills/harness-planning/SKILL.md`.
 
 The pair slug becomes the **phase name** in the target runtime. That means the `Phase:` field in `state.md` and the phase reference in `Next` use that slug directly. Therefore slugs must start with `harness-`, remain kebab-case English role nouns after the prefix, and must avoid numeric suffixes such as `pair-1`. `register-pair.ts` enforces this with a hard-reject regex.
@@ -102,7 +119,11 @@ The pair slug becomes the **phase name** in the target runtime. That means the `
 
 ## Evaluation Criteria
 
-- `--add` always receives a required `--purpose "<text>"`, and that text is used as the primary axis for the producer identity, five principles, and pair skill Design Thinking.
+- `--add` always receives a required positional `<purpose>` second argument (the legacy `--purpose "<text>"` flag is gone), and that text is used as the primary axis for the producer identity, five principles, and pair skill Design Thinking.
+- `--add` no longer accepts the user-facing `--target` or `--provider` flags (target is fixed to `cwd`; provider is delegated to `sync.ts` disk detection). First-time multi-platform support is opted into via `/harness-sync --provider <list>`.
+- `--reviewer none` is treated as the **only** reviewer-less opt-in syntax (no separate `--reviewerless` flag), it is mutually exclusive with any real `--reviewer <slug>` value, and the choice is justified for deterministic / auxiliary work only — sync, format, mirror, mechanical translation — never for creative / judgment / generative work (goals.md:L21, L39).
+- The reviewer-less path produces **no reviewer agent file**, and the produced pair-skill Design Thinking explicitly names the deterministic axis that makes review unnecessary (goals.md:L21; framing is grounded in §7).
+- Pair-first identity is preserved across produced agents and skills even when reviewer-less is chosen: the rubric still describes pair authoring as the default path, the Modes table still lists `--reviewer none` as an opt-in branch (not a sibling default), and produced bodies do not weaken pair-centric narrative (goals.md:L18, L34).
 - Both `--add` and `--improve` start with codebase analysis, and the resulting producer identity plus pair skill Design Thinking and Evaluation Criteria all cite **project-specific evidence** at least once: real file paths, function names, pattern names, or test locations. The body must anchor into the domain, not say abstract things like "writes code".
 - New producer/reviewer agent files satisfy every rule in `references/example-skills/agent-authoring.md`: correct frontmatter, five principles, 5-10 task steps, and the correct Output Format shape.
 - Each agent frontmatter `skills` list includes the **two required entries** `<pair-slug>` and `harness-context` in that order, followed by zero or more optional extra domain skills that resolve to real on-disk `skills/<slug>/SKILL.md`.
@@ -120,7 +141,8 @@ The pair slug becomes the **phase name** in the target runtime. That means the `
 ## Taboos
 
 - Running `--add` before `harness-init`; without target `harness-orchestrate`, `harness-planning`, and `harness-context`, registration breaks and new pair agents cannot read the shared law.
-- Running `--add` without `--purpose`; a slug alone cannot justify identity, principles, or skill-body content and leads either to placeholder residue or hallucinated filler.
+- Running `--add` without the positional `<purpose>` argument; a slug alone cannot justify identity, principles, or skill-body content and leads either to placeholder residue or hallucinated filler. The legacy `--purpose "<text>"` flag form is no longer accepted.
+- Treating `--reviewer none` as anything other than a narrow opt-in for deterministic / auxiliary work — invoking it on creative / judgment / generative work, reframing produced bodies as "passed without review" or "auto-approved" instead of "not subject to review" anchored to a deterministic axis, or letting it weaken the pair-first default in rubric or examples (goals.md:L18, L21, L34, §7 of this skill).
 - Skipping codebase analysis and improvising generic producer/reviewer/skill bodies; a pair that ignores the real patterns, files, and tests of the project will not work anywhere. Grepping the purpose keywords and listing related directories is the minimum baseline.
 - Leaving producer identity or pair skill body with zero codebase evidence citations; without domain anchors the reviewer cannot grade reliably.
 - Removing either `harness-context` or the pair-specific skill from an agent's `skills`; the subagent would lose either the shared law or the pair rubric.

@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multiplataforma)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Estado:** 0.1.4 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
+> **Estado:** 0.1.5 — primera versión pública. La superficie pública todavía puede cambiar antes de 1.0; revisa el [CHANGELOG](../CHANGELOG.md) para ver cambios importantes.
 
 `harness-loom` es un plugin de fábrica que instala un harness de ejecución en un repositorio de destino y lo va ampliando pair a pair.
 
@@ -101,7 +101,7 @@ Repositorio git público (GitHub shorthand):
 Fijar un tag específico:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # fijar un tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.4
+codex marketplace add KingGyuSuh/harness-loom@v0.1.5
 ```
 
 Después, dentro del TUI de Codex, ejecuta `/plugins`, abre la entrada `Harness Loom` del marketplace e instala el plugin.
@@ -143,9 +143,15 @@ claude
 echo "Publicar un juego ligero de Snake en terminal con curses" > goal.md
 
 # 3) añadir pairs específicos del proyecto
-/harness-pair-dev --add game-design --purpose "Especificar las funcionalidades y casos límite de snake.py"
-/harness-pair-dev --add impl --purpose "Implementar snake.py conforme a la especificación" \
+#    `<purpose>` es el segundo argumento posicional. La forma `--purpose` ya no se acepta.
+/harness-pair-dev --add game-design "Especificar las funcionalidades y casos límite de snake.py"
+/harness-pair-dev --add impl "Implementar snake.py conforme a la especificación" \
   --reviewer code-reviewer --reviewer playtest-reviewer
+
+# 3a) opt-in sin reviewer para trabajo determinista / auxiliar
+#     (sync, format, mirror); por defecto sigue siendo pair.
+/harness-pair-dev --add asset-mirror "Copiar los activos canónicos al árbol derivado" \
+  --reviewer none
 
 # 4) opcionalmente derivar Codex / Gemini desde la base canónica .claude/
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ Hay varios términos que aparecen una y otra vez en comandos, archivos y estados
 |---------|---------|
 | `/harness-init [<target>] [--force]` | Construye la base canónica `.claude/` dentro de un proyecto de destino. Escribe `.harness/`, los skills de runtime, el agent `harness-planner` y la configuración de hooks. |
 | `/harness-sync [--provider <list>]` | Deriva `.codex/` y `.gemini/` a partir de la base canónica `.claude/`. Es una sincronización en un solo sentido; nunca reescribe `.claude/`. |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | Crea un nuevo pair producer-reviewer apoyado en el código actual. Repite `--reviewer` para una topología 1:N de reviewers. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | Crea un nuevo pair producer-reviewer apoyado en el código actual. `<purpose>` es el segundo argumento posicional. Repite `--reviewer` para una topología 1:N, o pasa `--reviewer none` para un grupo producer-only sin reviewer (trabajo determinista / auxiliar; el pair sigue siendo el predeterminado). |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Reaudita un pair existente según la rúbrica y el estado actual del código, y luego lo mejora. |
 | `/harness-pair-dev --split <slug>` | Divide un pair demasiado grande en dos pairs más acotados. |
 | `/harness-orchestrate <goal.md>` | Punto de entrada del runtime en el repositorio objetivo. Lee el objetivo, despacha un pair por respuesta y avanza el ciclo mediante la reentrada del hook. |

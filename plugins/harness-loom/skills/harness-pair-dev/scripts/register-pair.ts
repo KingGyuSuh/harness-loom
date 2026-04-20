@@ -10,10 +10,18 @@
 // parallel in a single response; each reviewer grades a different axis of
 // the producer's task.
 //
+// Also supports a reviewer-less producer-only group via the special value
+// `--reviewer none`. In that mode no reviewer agent is expected and the
+// registration line carries `(no reviewer)` instead of the `↔ reviewer …`
+// segment. `none` may not be combined with real reviewer slugs.
+//
 // Usage:
 //   node skills/harness-pair-dev/scripts/register-pair.ts \
 //     --target <path> --pair <slug> --producer <slug> \
 //     --reviewer <slug> [--reviewer <slug> ...] --skill <slug>
+//   node skills/harness-pair-dev/scripts/register-pair.ts \
+//     --target <path> --pair <slug> --producer <slug> \
+//     --reviewer none --skill <slug>
 //
 // Idempotent: if the exact roster line already exists we leave the file
 // unchanged. Both skill files must already exist (run /harness-init first).
@@ -28,9 +36,15 @@ interface Args {
   pair: string;
   producer: string;
   reviewers: string[];
+  reviewerless: boolean;
   skill: string;
   unregister: boolean;
 }
+
+// Special value for `--reviewer` that selects a reviewer-less producer-only
+// group. Kept as a top-level constant so the docs string and the parser stay
+// in sync.
+const REVIEWER_NONE = "none";
 
 function die(message: string, code = 1): never {
   process.stderr.write(`register-pair: ${message}\n`);
@@ -41,6 +55,7 @@ function parseArgs(argv: string[]): Args {
   const rest = argv.slice(2);
   const out: Partial<Args> & { reviewers?: string[]; unregister?: boolean } = {
     reviewers: [],
+    reviewerless: false,
     unregister: false,
   };
   for (let i = 0; i < rest.length; i++) {
@@ -51,8 +66,12 @@ function parseArgs(argv: string[]): Args {
           "--target <path> --pair <harness-slug> --producer <harness-slug> " +
           "--reviewer <harness-slug> [--reviewer <harness-slug> ...] --skill <harness-slug>\n" +
           "       node skills/harness-pair-dev/scripts/register-pair.ts " +
+          "--target <path> --pair <harness-slug> --producer <harness-slug> " +
+          "--reviewer none --skill <harness-slug>\n" +
+          "       node skills/harness-pair-dev/scripts/register-pair.ts " +
           "--unregister --target <path> --pair <harness-slug>\n" +
-          "All pair/producer/reviewer/skill slugs must start with \"harness-\".\n",
+          "All pair/producer/reviewer/skill slugs must start with \"harness-\".\n" +
+          "Pass `--reviewer none` (and only that) to register a reviewer-less producer-only group.\n",
       );
       process.exit(0);
     } else if (arg === "--unregister") out.unregister = true;
@@ -74,12 +93,22 @@ function parseArgs(argv: string[]): Args {
     }
     if (!prefixRe.test(out.pair as string))
       die(`--pair must start with "harness-" (got: ${out.pair})`);
-    return { ...out, producer: "", skill: "", reviewers: [] } as Args;
+    return { ...out, producer: "", skill: "", reviewers: [], reviewerless: false } as Args;
   }
   for (const key of ["target", "pair", "producer", "skill"] as const) {
     if (!out[key]) die(`--${key} is required`);
   }
   if (!out.reviewers || out.reviewers.length === 0) die("at least one --reviewer is required");
+  // Reviewer-less mode: `--reviewer none` is the only allowed value when present.
+  // Mixing it with real reviewer slugs is rejected because it would silently
+  // discard either the reviewer roster or the reviewer-less intent.
+  const noneCount = out.reviewers.filter((r) => r === REVIEWER_NONE).length;
+  if (noneCount > 0) {
+    if (out.reviewers.length !== 1)
+      die(`--reviewer ${REVIEWER_NONE} cannot be combined with other --reviewer values`);
+    out.reviewerless = true;
+    out.reviewers = [];
+  }
   for (const key of ["pair", "producer", "skill"] as const) {
     if (!prefixRe.test(out[key] as string))
       die(`--${key} must start with "harness-" (got: ${out[key]})`);
@@ -173,12 +202,24 @@ async function main() {
     return;
   }
 
-  const reviewerList = args.reviewers.map((r) => `\`${r}\``).join(", ");
-  const reviewerField =
-    args.reviewers.length === 1
-      ? `reviewer ${reviewerList}`
-      : `reviewers [${reviewerList}]`;
-  const entry = `- ${args.pair}: producer \`${args.producer}\` ↔ ${reviewerField}, skill \`${args.skill}\``;
+  // Three registration shapes, distinguishable by token without ambiguity:
+  //   1:1     - <pair>: producer `<p>` ↔ reviewer `<r>`, skill `<s>`
+  //   1:M     - <pair>: producer `<p>` ↔ reviewers [`<r1>`, `<r2>`], skill `<s>`
+  //   1:0     - <pair>: producer `<p>` (no reviewer), skill `<s>`
+  // The `↔` arrow is the load-bearing token: present iff a reviewer roster
+  // exists. The runtime (EP-2) uses its absence to recognize a producer-only
+  // group that is "not subject to review" rather than "passed without review".
+  let entry: string;
+  if (args.reviewerless) {
+    entry = `- ${args.pair}: producer \`${args.producer}\` (no reviewer), skill \`${args.skill}\``;
+  } else {
+    const reviewerList = args.reviewers.map((r) => `\`${r}\``).join(", ");
+    const reviewerField =
+      args.reviewers.length === 1
+        ? `reviewer ${reviewerList}`
+        : `reviewers [${reviewerList}]`;
+    entry = `- ${args.pair}: producer \`${args.producer}\` ↔ ${reviewerField}, skill \`${args.skill}\``;
+  }
 
   const orchestrate = await appendSection(orchestratePath, "Registered pairs", entry);
   const planning = await appendSection(planningPath, "Available departments", entry);

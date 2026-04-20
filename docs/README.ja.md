@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#マルチプラットフォーム)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **ステータス:** 0.1.4 — 初期公開版です。1.0 までは公開インターフェースが変わる可能性があります。重要な変更は [CHANGELOG](../CHANGELOG.md) を確認してください。
+> **ステータス:** 0.1.5 — 初期公開版です。1.0 までは公開インターフェースが変わる可能性があります。重要な変更は [CHANGELOG](../CHANGELOG.md) を確認してください。
 
 `harness-loom` は、対象リポジトリにランタイムハーネスを導入し、pair ごとに少しずつ育てていくファクトリプラグインです。
 
@@ -101,7 +101,7 @@ claude --plugin-dir ./plugins/harness-loom
 特定タグを固定:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # タグを固定
-codex marketplace add KingGyuSuh/harness-loom@v0.1.4
+codex marketplace add KingGyuSuh/harness-loom@v0.1.5
 ```
 
 その後、Codex TUI で `/plugins` を実行し、`Harness Loom` marketplace エントリを開いてプラグインをインストールします。
@@ -143,9 +143,15 @@ claude
 echo "curses を使った軽量なターミナル Snake ゲームを出荷する" > goal.md
 
 # 3) プロジェクト固有の pair を追加
-/harness-pair-dev --add game-design --purpose "snake.py の機能とエッジケースを仕様化する"
-/harness-pair-dev --add impl --purpose "仕様に沿って snake.py を実装する" \
+#    `<purpose>` は 2 番目の位置引数です。`--purpose` フラグはもう受け付けません。
+/harness-pair-dev --add game-design "snake.py の機能とエッジケースを仕様化する"
+/harness-pair-dev --add impl "仕様に沿って snake.py を実装する" \
   --reviewer code-reviewer --reviewer playtest-reviewer
+
+# 3a) reviewer なしの opt-in: 決定論的 / 補助タスク (sync, format, mirror) 専用。
+#     既定はあくまで pair です。
+/harness-pair-dev --add asset-mirror "正本アセットを派生ツリーへコピーする" \
+  --reviewer none
 
 # 4) （任意）正本 .claude/ から Codex / Gemini 向けツリーを派生
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ echo "curses を使った軽量なターミナル Snake ゲームを出荷する
 |---------|---------|
 | `/harness-init [<target>] [--force]` | 対象プロジェクトに正本 `.claude/` の基盤を組み込みます。`.harness/`、ランタイムスキル、`harness-planner` エージェント、フック接続を生成します。 |
 | `/harness-sync [--provider <list>]` | 正本 `.claude/` から `.codex/` と `.gemini/` を派生します。一方向同期であり、`.claude/` には書き戻しません。 |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | 現在のコードベースに根ざした新しい producer-reviewer pair を作成します。`--reviewer` を繰り返すことで 1:N reviewer 構成を作れます。 |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 現在のコードベースに根ざした新しい producer-reviewer pair を作成します。`<purpose>` は 2 番目の位置引数です。`--reviewer` を繰り返せば 1:N 構成、`--reviewer none` を渡せば reviewer 無しの producer-only グループになります（決定論的 / 補助タスク専用、既定はあくまで pair）。 |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 既存 pair をルーブリックと現在のコードベースに照らして再監査し、改善します。 |
 | `/harness-pair-dev --split <slug>` | 肥大化した pair を、より狭い 2 つの pair に分割します。 |
 | `/harness-orchestrate <goal.md>` | 対象側ランタイムの入口です。ゴールを読み、応答ごとに 1 つの pair を dispatch し、フック再入でサイクルを進めます。 |

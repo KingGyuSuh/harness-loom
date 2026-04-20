@@ -120,6 +120,18 @@ Advisory-next: "{advisory suggestion, orchestrator synthesizes actual Next-actio
 
 **Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, may replace the Producer shape's `Files created / Files modified / Diff summary` fields with role-specific return fields such as `EPICs / Remaining / Next-action / Additional pairs required`. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
 
+## Reviewer-less Producer Authoring (Opt-in Branch)
+
+The default authoring path remains a **paired** producer-reviewer set: one `<pair-slug>-producer.md` and at least one `<reviewer-slug>.md`. The reviewer-less branch is a narrow opt-in selected by `--reviewer none` on `/harness-pair-dev --add` and is reserved for deterministic / auxiliary work that is genuinely "not subject to review" — sync, format, mirror, mechanical translation. Use it only when a paired reviewer would have nothing to grade beyond "did the script run". When in doubt, default to a paired reviewer; the cost of one extra agent file is far smaller than the cost of a hollow rubber-stamp pair.
+
+When this branch fires, the agent-authoring rules above still apply to the producer file with these deltas:
+
+- **No reviewer agent file is written.** Do not author a `<pair-slug>-reviewer.md` placeholder, an empty stub, or a "trivially passes" reviewer. The absence of the file is the on-disk signal.
+- **The producer's frontmatter `description` should not promise a paired reviewer.** Write it in the form `Use when the target's /harness-orchestrate dispatches the <pair-slug> producer phase. Produces the task specified in the pair's shared skill rubric. Returns Producer-shape Output Format; this producer has no paired reviewer because the work is not subject to review (see <pair-slug>/SKILL.md Design Thinking).` The trigger keyword stays imperative; the closing clause names the reviewer-less posture so the description does not mislead.
+- **The producer's `skills:` list still carries the two required entries** — the pair-specific `<pair-slug>` first, `harness-context` second — even with no paired reviewer. The shared law (envelope reading, output shape, structural-issue report shape) is identical for paired and reviewer-less producers.
+- **The Producer Output Format shape is unchanged.** The producer still emits `Status: PASS / FAIL` plus `Self-verification`. For a reviewer-less turn the orchestrator reads that `Status` line and the `Self-verification` evidence as the verdict source (sibling skill `harness-orchestrate` Authority Rules), so a vague self-verification block is a hard fail; the producer must cite script exit code, byte-equivalence diff, lint output, or equivalent mechanical evidence.
+- **Registration shape signals reviewer-less.** `register-pair.ts` emits `- <pair>: producer \`<p>\` (no reviewer), skill \`<s>\`` for this branch — the missing `↔` arrow plus the literal `(no reviewer)` substring are the two load-bearing tokens. Do not hand-author this line; let the script emit it.
+
 ## Anti-patterns
 
 - Emojis. They add noise to trigger heuristics.
@@ -145,6 +157,7 @@ When a pair reviewer grades an agent with this rubric, it checks:
 - `## Output Format` exposes the correct fenced block for the role type (Producer or Reviewer).
 - There is no procedural drift, skill-body duplication, or embedded pair-reviewer criteria.
 - No emojis are present.
+- For a reviewer-less producer (chosen via `--reviewer none`): no paired `<pair-slug>-reviewer.md` was authored; the producer's `description` does not promise a paired reviewer and instead names the "not subject to review" posture; the registration line emitted by `register-pair.ts` carries `(no reviewer)` without the `↔` token.
 
 ## Taboos
 

@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#멀티-플랫폼)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.1.4 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
+> **상태:** 0.1.5 — 초기 공개 버전입니다. 1.0 이전까지는 공개 인터페이스가 바뀔 수 있습니다. 변경 내역은 [CHANGELOG](../CHANGELOG.md)를 확인하세요.
 
 `harness-loom`은 대상 리포지토리에 런타임 하네스를 설치하고, 프로젝트에 맞는 pair를 하나씩 키워 가는 팩토리 플러그인입니다.
 
@@ -101,7 +101,7 @@ claude --plugin-dir ./plugins/harness-loom
 특정 태그 고정:
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # 태그 고정
-codex marketplace add KingGyuSuh/harness-loom@v0.1.4
+codex marketplace add KingGyuSuh/harness-loom@v0.1.5
 ```
 
 그다음 Codex TUI 안에서 `/plugins` 를 실행하고, `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.
@@ -143,9 +143,15 @@ claude
 echo "curses를 사용한 가벼운 터미널 스네이크 게임 출시" > goal.md
 
 # 3) 프로젝트별 pair 추가
-/harness-pair-dev --add game-design --purpose "snake.py 기능과 엣지 케이스 명세 작성"
-/harness-pair-dev --add impl --purpose "명세에 맞춰 snake.py 구현" \
+#    `<purpose>`는 두 번째 위치 인자입니다. `--purpose` 플래그는 더 이상 받지 않습니다.
+/harness-pair-dev --add game-design "snake.py 기능과 엣지 케이스 명세 작성"
+/harness-pair-dev --add impl "명세에 맞춰 snake.py 구현" \
   --reviewer code-reviewer --reviewer playtest-reviewer
+
+# 3a) reviewer 없는 opt-in: 결정론적/보조 작업(sync, format, mirror) 전용.
+#     기본은 여전히 pair 입니다.
+/harness-pair-dev --add asset-mirror "정본 자산을 파생 트리로 복사" \
+  --reviewer none
 
 # 4) (선택) 정본 .claude/에서 Codex / Gemini 파생
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ echo "curses를 사용한 가벼운 터미널 스네이크 게임 출시" > goal
 |---------|---------|
 | `/harness-init [<target>] [--force]` | 대상 프로젝트에 정본 `.claude/` 기반을 설치합니다. `.harness/`, 런타임 스킬, `harness-planner` 에이전트, 훅 연결을 생성합니다. |
 | `/harness-sync [--provider <list>]` | 정본 `.claude/`에서 `.codex/`와 `.gemini/`를 파생합니다. 단방향 동기화이며 `.claude/`로는 절대 되돌려 쓰지 않습니다. |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | 현재 코드베이스에 맞는 새 producer-reviewer pair를 작성합니다. `--reviewer`를 반복하면 1:N reviewer 구성을 만들 수 있습니다. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 현재 코드베이스에 맞는 새 producer-reviewer pair를 작성합니다. `<purpose>`는 두 번째 위치 인자입니다. `--reviewer`를 반복하면 1:N 구성이 되고, `--reviewer none`을 넘기면 reviewer 없는 producer-only 그룹이 됩니다(결정론적/보조 작업 전용; 기본은 여전히 pair). |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 기존 pair를 루브릭과 현재 코드베이스 기준으로 다시 점검하고 개선합니다. |
 | `/harness-pair-dev --split <slug>` | 과도하게 커진 pair를 더 좁은 두 pair로 나눕니다. |
 | `/harness-orchestrate <goal.md>` | 대상 측 런타임 진입점입니다. 목표를 읽고 응답당 하나의 pair를 디스패치하며, 훅 재진입을 통해 사이클을 이어갑니다. |

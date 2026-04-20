@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.1.4-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#多平台)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **状态：** 0.1.4 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
+> **状态：** 0.1.5 —— 初始公开版本。1.0 之前公共接口仍可能调整；涉及破坏性变更时请查看 [CHANGELOG](../CHANGELOG.md)。
 
 `harness-loom` 是一个工厂型插件：它会把运行时 harness 安装到目标仓库里，并按 pair 的粒度逐步扩展。
 
@@ -101,7 +101,7 @@ claude --plugin-dir ./plugins/harness-loom
 锁定特定 tag：
 
 ```text
-/plugin marketplace add KingGyuSuh/harness-loom@v0.1.4
+/plugin marketplace add KingGyuSuh/harness-loom@v0.1.5
 /plugin install harness-loom@harness-loom-marketplace
 ```
 
@@ -117,7 +117,7 @@ codex marketplace add /path/to/harness-loom
 codex marketplace add KingGyuSuh/harness-loom
 
 # 锁定 tag
-codex marketplace add KingGyuSuh/harness-loom@v0.1.4
+codex marketplace add KingGyuSuh/harness-loom@v0.1.5
 ```
 
 然后在 Codex TUI 中执行 `/plugins`，打开 `Harness Loom` marketplace 条目并安装插件。
@@ -143,9 +143,15 @@ claude
 echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 
 # 3) 添加项目专属 pair
-/harness-pair-dev --add game-design --purpose "为 snake.py 编写功能与边界情况说明"
-/harness-pair-dev --add impl --purpose "按照说明实现 snake.py" \
+#    `<purpose>` 是第二个位置参数，不再接受 `--purpose` 标志。
+/harness-pair-dev --add game-design "为 snake.py 编写功能与边界情况说明"
+/harness-pair-dev --add impl "按照说明实现 snake.py" \
   --reviewer code-reviewer --reviewer playtest-reviewer
+
+# 3a) 无 reviewer 的 opt-in：仅用于确定性 / 辅助工作（sync、format、mirror）；
+#     默认仍然是 pair。
+/harness-pair-dev --add asset-mirror "把正本资产复制到派生树" \
+  --reviewer none
 
 # 4) （可选）从正本 .claude/ 派生 Codex / Gemini
 /harness-sync --provider codex,gemini
@@ -173,7 +179,7 @@ echo "发布一个基于 curses 的轻量级终端贪吃蛇游戏" > goal.md
 |---------|---------|
 | `/harness-init [<target>] [--force]` | 在目标项目里搭建正本 `.claude/` 基础环境，写入 `.harness/`、运行时 skill、`harness-planner` agent，以及 hook 连接。 |
 | `/harness-sync [--provider <list>]` | 从正本 `.claude/` 派生 `.codex/` 和 `.gemini/`。这是单向同步，不会回写 `.claude/`。 |
-| `/harness-pair-dev --add <slug> --purpose "<text>" [--reviewer <slug> ...]` | 基于当前代码库编写新的 producer-reviewer pair。重复 `--reviewer` 可以组成 1:N reviewer 拓扑。 |
+| `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug>\|none ...]` | 基于当前代码库编写新的 producer-reviewer pair。`<purpose>` 是第二个位置参数。重复 `--reviewer` 形成 1:N 拓扑；传入 `--reviewer none` 则得到无 reviewer 的 producer-only 组（仅用于确定性/辅助工作；默认仍然是 pair）。 |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | 依据 rubric 与当前代码库重新审视已有 pair，并对其改进。 |
 | `/harness-pair-dev --split <slug>` | 将过于臃肿的 pair 拆成两个更聚焦的 pair。 |
 | `/harness-orchestrate <goal.md>` | 目标侧运行时入口。读取目标后，每次响应 dispatch 一个 pair，并通过 hook 重入推进整个循环。 |
