@@ -24,7 +24,7 @@
 
 ## 关键命令
 
-- `/harness-init [<target>] [--force]`
+- `/harness-init [<target>]`
   在目标项目中安装基于 `.harness/loom/` 与 `.harness/cycle/` 的运行时。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   将 canonical staging 部署到所需的平台树。
@@ -42,4 +42,3 @@
 - 安装流程、quickstart、概念说明: [English README](../README.md)
 - 本次发布的变化: [CHANGELOG](../CHANGELOG.md)
 - 贡献指南: [CONTRIBUTING.md](../CONTRIBUTING.md)
-

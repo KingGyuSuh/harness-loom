@@ -157,6 +157,8 @@ Open the target repository in Claude Code or Codex CLI and run:
 
 This writes the canonical staging tree under `.harness/loom/` and the runtime state scaffold under `.harness/cycle/`. It does not create `.claude/`, `.codex/`, or `.gemini/` yet.
 
+If you rerun `/harness-init` later, treat it as a reset of the target-side harness scaffolding: pair-authored `.harness/loom/` content and the current `.harness/cycle/` state are reseeded rather than preserved.
+
 ### 2. Deploy The Assistant Runtime You Actually Want To Use
 
 Derive at least one platform tree from canonical staging:
@@ -248,7 +250,7 @@ A few terms recur across commands, files, and state. Knowing these is enough to 
 | Command | Purpose |
 |---------|---------|
 | `/harness-init [<target>]` | Scaffold the canonical `.harness/loom/` staging tree plus the `.harness/cycle/` runtime state into a target project. Writes runtime skills, the `harness-planner` agent, the generic `harness-finalizer` cycle-end skeleton, and the `hook.sh` + `sync.ts` self-contained copies under `.harness/loom/`. Rerunning install reseeds both namespaces. Touches no platform tree. |
-| `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Without `--provider` it falls back to disk detection of already-existing platform trees. |
+| `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Provider selection is explicit: a bare invocation with no provider flags is an error. |
 | `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug> ...]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is a positional second argument. Default is 1:1; repeat `--reviewer` for 1:N reviewer topology. Every pair carries at least one reviewer — cycle-end reviewer-less work belongs in the singleton `harness-finalizer`, not in the pair roster. Authoring writes only into `.harness/loom/`; re-run `node .harness/loom/sync.ts --provider <list>` afterward. |
 | `/harness-pair-dev --improve <slug> [--hint "<text>"]` | Re-audit an existing pair against the rubric and current codebase, then improve it. Re-run sync afterward to refresh platform trees. |
 | `/harness-pair-dev --split <slug>` | Split an overloaded pair into two narrower pairs. Re-run sync afterward. |

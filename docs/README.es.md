@@ -24,7 +24,7 @@
 
 ## Comandos principales
 
-- `/harness-init [<target>] [--force]`
+- `/harness-init [<target>]`
   Instala el runtime basado en `.harness/loom/` y `.harness/cycle/` dentro del proyecto objetivo.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   Despliega el canonical staging hacia los árboles de plataforma necesarios.
@@ -42,4 +42,3 @@
 - Instalación completa, quickstart y conceptos: [README en inglés](../README.md)
 - Cambios de esta versión: [CHANGELOG](../CHANGELOG.md)
 - Guía de contribución: [CONTRIBUTING.md](../CONTRIBUTING.md)
-

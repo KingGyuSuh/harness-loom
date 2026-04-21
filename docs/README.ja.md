@@ -24,7 +24,7 @@
 
 ## 主なコマンド
 
-- `/harness-init [<target>] [--force]`
+- `/harness-init [<target>]`
   対象プロジェクトに `.harness/loom/` と `.harness/cycle/` ベースのランタイムを導入します。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging を必要なプラットフォームツリーへ配備します。
@@ -42,4 +42,3 @@
 - インストール手順、quickstart、概念説明: [English README](../README.md)
 - 今回のリリース変更点: [CHANGELOG](../CHANGELOG.md)
 - コントリビューションガイド: [CONTRIBUTING.md](../CONTRIBUTING.md)
-

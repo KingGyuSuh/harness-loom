@@ -24,7 +24,7 @@
 
 ## 핵심 명령
 
-- `/harness-init [<target>] [--force]`
+- `/harness-init [<target>]`
   타깃 프로젝트에 `.harness/loom/` 과 `.harness/cycle/` 기반 런타임을 설치합니다.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging을 원하는 플랫폼 트리로 배포합니다.
@@ -42,4 +42,3 @@
 - 전체 설치 흐름, quickstart, 개념 설명: [English README](../README.md)
 - 이번 릴리스 변경점: [CHANGELOG](../CHANGELOG.md)
 - 기여 가이드: [CONTRIBUTING.md](../CONTRIBUTING.md)
-
