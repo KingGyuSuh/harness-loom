@@ -1,7 +1,7 @@
 ---
 name: harness-init
-description: "Use when `/harness-init [<target>] [--force]` is invoked to install the target-side runtime foundation. Scaffolds `.harness/loom/` canonical staging plus `.harness/cycle/` runtime state, copies target-local `hook.sh` and `sync.ts`, and stops there. Platform trees are derived later by `node .harness/loom/sync.ts --provider <list>`."
-argument-hint: "[target-path] [--force]"
+description: "Use when `/harness-init [<target>]` is invoked to install the target-side runtime foundation. Scaffolds `.harness/loom/` canonical staging plus `.harness/cycle/` runtime state, copies target-local `hook.sh` and `sync.ts`, and stops there. Platform trees are derived later by `node .harness/loom/sync.ts --provider <list>`."
+argument-hint: "[target-path]"
 user-invocable: true
 ---
 
@@ -21,12 +21,9 @@ That boundary is strict:
 
 ### 1. Arguments
 
-`/harness-init [<target>] [--force]`
+`/harness-init [<target>]`
 
 - `<target>` — target project root path. If omitted, `process.cwd()` is the target.
-- `--force` — replace both `.harness/loom/` and `.harness/cycle/`.
-
-Without `--force`, install refreshes `.harness/loom/` and preserves an existing `.harness/cycle/` audit trail.
 
 ### 2. Execution
 
@@ -56,10 +53,11 @@ Install does **not** create `.claude/`, `.codex/`, or `.gemini/`. Those are deri
 
 ### 4. Re-run behavior
 
-- Default rerun: refresh `.harness/loom/`, preserve `.harness/cycle/`
-- `--force`: refresh both `.harness/loom/` and `.harness/cycle/`
+- Every rerun reseeds both `.harness/loom/` and `.harness/cycle/`.
+- Pair-authored content under `.harness/loom/` is wipe-on-rerun and must be re-authored afterward.
+- Runtime state under `.harness/cycle/` is also reseeded. Finished-cycle preservation belongs to the orchestrator's goal-different archive path, not to `harness-init`.
 
-If the script reports that pair-authored content inside `.harness/loom/` was removed during a default refresh, surface that clearly to the user so they can re-author those pairs afterward.
+If the script reports that pair-authored content inside `.harness/loom/` was removed during a rerun, surface that clearly to the user so they can re-author those pairs afterward.
 
 ### 5. Verification
 
@@ -92,8 +90,7 @@ node .harness/loom/sync.ts --provider claude,codex,gemini
 - Install writes `.harness/loom/` and `.harness/cycle/` in the target project.
 - Install copies target-local `hook.sh` and `sync.ts` into `.harness/loom/`.
 - Install does not create `.claude/`, `.codex/`, or `.gemini/`.
-- Default rerun preserves `.harness/cycle/` and refreshes `.harness/loom/`.
-- `--force` refreshes both `.harness/loom/` and `.harness/cycle/`.
+- Rerun reseeds both `.harness/loom/` and `.harness/cycle/`.
 - Verification is described in terms of the install summary, not ad hoc shell inspection.
 - The post-install workflow points to target-local `node .harness/loom/sync.ts --provider <list>`.
 - The skill consistently treats `.template.md` outputs as target-side runtime artifacts, not as factory-side working files.

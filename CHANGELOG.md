@@ -25,6 +25,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `harness-finalizer` turn, and `registry.md` is reduced to pair-roster
   SSOT only. Install seeds that singleton as a safe no-op skeleton so
   fresh targets halt cleanly even before they customize cycle-end work.
+- **`harness-init` rerun semantics were simplified.**
+  Re-running install now reseeds both `.harness/loom/` and
+  `.harness/cycle/` every time, and the `--force` flag is removed.
+  This drops the older mixed mode where loom was wiped while cycle was
+  preserved, and it avoids stale registry / old-layout upgrade drift on
+  reinstall. Pair-authored loom content and current cycle state are now
+  explicitly wipe-on-rerun; preservation of finished cycle history
+  remains the orchestrator's archive path.
 - **Reviewer-less pair authoring removed from `/harness-pair-dev`.**
   Pair authoring now always requires at least one reviewer (1:1 or
   1:M). Reviewer-less cycle-end work is modeled only through the

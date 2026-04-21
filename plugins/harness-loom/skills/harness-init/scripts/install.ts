@@ -7,8 +7,8 @@
 //                                orchestrator never writes here.
 //            .harness/cycle/  — runtime cycle state (state.md, events.md,
 //                                epics/, finalizer/). orchestrator owns this
-//                                tree; install only seeds it on first install
-//                                (or --force). The epics/ subtree holds pair
+//                                tree; install reseeds it on every install
+//                                run. The epics/ subtree holds pair
 //                                artifacts per EPIC slug; the finalizer/tasks/
 //                                subtree holds the singleton cycle-end artifact.
 //
@@ -17,7 +17,7 @@
 //          `node .harness/loom/sync.ts --provider <list>` on explicit user
 //          opt-in.
 //
-// Usage:   node skills/harness-init/scripts/install.ts [<target-project-path>] [--force]
+// Usage:   node skills/harness-init/scripts/install.ts [<target-project-path>]
 //          Target defaults to process.cwd() when omitted.
 //
 // Related: skills/harness-init/scripts/hook.sh — copied into <target>/.harness/loom/hook.sh
@@ -29,9 +29,9 @@
 //          using the schema in references/state-md-schema.md).
 //
 // Design notes:
-//   - default re-run: refresh `.harness/loom/` only; `.harness/cycle/` is
-//     preserved verbatim so the current cycle's audit trail survives a
-//     plugin upgrade. `--force` wipes both.
+//   - every install run reseeds both `.harness/loom/` and `.harness/cycle/`.
+//     Pair-authored loom content is therefore wipe-on-rerun and surfaced as a
+//     warning before removal.
 //   - state.md / events.md bodies come from
 //     `skills/harness-init/references/runtime/{state,events}.template.md`
 //     with `{{PLACEHOLDER}}` substitution.
@@ -68,7 +68,6 @@ const PLANNER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-planner.template.md"
 
 interface Args {
   target: string;
-  force: boolean;
 }
 
 function die(message: string, code = 1): never {
@@ -78,14 +77,12 @@ function die(message: string, code = 1): never {
 
 function parseArgs(argv: string[]): Args {
   const rest = argv.slice(2);
-  let force = false;
   const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
-    if (arg === "--force") force = true;
-    else if (arg === "--help" || arg === "-h") {
+    if (arg === "--help" || arg === "-h") {
       process.stdout.write(
-        "Usage: node skills/harness-init/scripts/install.ts [<target-project-path>] [--force]\n" +
+        "Usage: node skills/harness-init/scripts/install.ts [<target-project-path>]\n" +
           "  Target defaults to process.cwd() when omitted.\n" +
           "  Platform deploy is opt-in via `node .harness/loom/sync.ts --provider claude,codex,gemini`.\n",
       );
@@ -96,7 +93,7 @@ function parseArgs(argv: string[]): Args {
   if (positional.length > 1) die("at most one <target-project-path> accepted");
   const targetArg = positional[0] ?? process.cwd();
   const target = isAbsolute(targetArg) ? targetArg : resolve(process.cwd(), targetArg);
-  return { target, force };
+  return { target };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -112,8 +109,8 @@ async function exists(path: string): Promise<boolean> {
 
 // The canonical-foundation entries scaffoldLoomCanonical() re-creates on every
 // install run. Anything else under `.harness/loom/{skills,agents}/` is user
-// work (pair-dev output) that default rerun is about to wipe — we surface it
-// as a warning so the loss is not silent.
+// work (pair-dev output) that a rerun is about to wipe — we surface it as a
+// warning so the loss is not silent.
 const FOUNDATION_SKILL_NAMES = new Set([
   "harness-orchestrate",
   "harness-planning",
@@ -240,7 +237,7 @@ async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promis
 // ---------------------------------------------------------------- main
 
 async function main() {
-  const { target, force } = parseArgs(process.argv);
+  const { target } = parseArgs(process.argv);
 
   if (!(await exists(target))) die(`target does not exist: ${target}`);
   const targetStat = await stat(target);
@@ -251,15 +248,15 @@ async function main() {
   const cycleDir = join(harnessDir, "cycle");
 
   // Scan for user-authored pair files before we wipe loom/ so the loss is not
-  // silent. `--force` is an explicit reset, so suppress the warning there; on
-  // default rerun we emit a stderr warning and surface the list in the JSON
-  // summary as `wipedPairs`.
+  // silent. Rerunning install intentionally resets both loom/ and cycle/, so
+  // pair-authored loom content is surfaced explicitly in stderr and in the
+  // JSON summary as `wipedPairs`.
   const cyclePreExisted = await exists(cycleDir);
   const loomPreExisted = await exists(loomDir);
   const wipedPairs = loomPreExisted ? await collectNonFoundationLoomEntries(loomDir) : [];
-  if (!force && wipedPairs.length > 0) {
+  if (wipedPairs.length > 0) {
     process.stderr.write(
-      `install: warning — default rerun is about to wipe ${wipedPairs.length} non-foundation entr${wipedPairs.length === 1 ? "y" : "ies"} under .harness/loom/:\n`,
+      `install: warning — rerun is about to wipe ${wipedPairs.length} non-foundation entr${wipedPairs.length === 1 ? "y" : "ies"} under .harness/loom/:\n`,
     );
     for (const p of wipedPairs) process.stderr.write(`  - ${p}\n`);
     process.stderr.write(
@@ -268,53 +265,27 @@ async function main() {
     );
   }
 
-  // Behaviour split:
-  //   --force  : wipe both sub-namespaces and reseed everything.
-  //   default  : refresh `.harness/loom/` (wipe-and-reseed) and preserve
-  //              `.harness/cycle/` verbatim if present. The cycle's audit trail
-  //              survives plugin upgrades that reuse this script.
-  //
-  // Registry preservation: `.harness/loom/registry.md` holds volatile pair
-  // and finalizer registrations the user (or pair-dev tooling) has accumulated.
-  // Default rerun would otherwise clobber it along with the rest of loom/, so
-  // we back it up before wipe and restore it after the canonical scaffold.
-  // `--force` is an explicit reset, so it discards the backup deliberately.
-  const registryPath = join(loomDir, "registry.md");
-  let registryBackup: string | null = null;
-  if (!force && loomPreExisted && (await exists(registryPath))) {
-    registryBackup = await readFile(registryPath, "utf8");
-  }
-  if (force) {
-    if (loomPreExisted) await rm(loomDir, { recursive: true, force: true });
-    if (cyclePreExisted) await rm(cycleDir, { recursive: true, force: true });
-  } else if (loomPreExisted) {
-    await rm(loomDir, { recursive: true, force: true });
-  }
+  if (loomPreExisted) await rm(loomDir, { recursive: true, force: true });
+  if (cyclePreExisted) await rm(cycleDir, { recursive: true, force: true });
 
   // cycleAction tells the caller what happened to `.harness/cycle/`:
-  //   seeded     — cycle/ was absent and is now written fresh
-  //   preserved  — cycle/ already existed and default rerun left it intact
-  //   wiped      — --force removed the prior cycle/; it is now reseeded fresh
-  const cycleAction: "seeded" | "preserved" | "wiped" = force
-    ? (cyclePreExisted ? "wiped" : "seeded")
-    : (cyclePreExisted ? "preserved" : "seeded");
+  //   seeded  — cycle/ was absent and is now written fresh
+  //   wiped   — cycle/ already existed and was removed before reseed
+  const cycleAction: "seeded" | "wiped" = cyclePreExisted ? "wiped" : "seeded";
 
   const stateMdPath = join(cycleDir, "state.md");
   const eventsMdPath = join(cycleDir, "events.md");
-  if (cycleAction !== "preserved") {
-    // Pair artifacts live under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`
-    // (slug-nested). Finalizer artifacts live under
-    // `.harness/cycle/finalizer/tasks/` (flat, singleton). Seed both subtree
-    // roots up front so the orchestrator never has to branch on "does this
-    // cycle dir exist yet" at dispatch time, and so the goal-reset archive
-    // procedure has a symmetric pair/finalizer pair to move.
-    await mkdir(join(cycleDir, "epics"), { recursive: true });
-    await mkdir(join(cycleDir, "finalizer", "tasks"), { recursive: true });
-    await writeFile(stateMdPath, await initialStateMd());
-    await writeFile(eventsMdPath, await initialEventsMd());
-  }
+  // Pair artifacts live under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`
+  // (slug-nested). Finalizer artifacts live under
+  // `.harness/cycle/finalizer/tasks/` (flat, singleton). Seed both subtree
+  // roots up front so the orchestrator never has to branch on "does this
+  // cycle dir exist yet" at dispatch time.
+  await mkdir(join(cycleDir, "epics"), { recursive: true });
+  await mkdir(join(cycleDir, "finalizer", "tasks"), { recursive: true });
+  await writeFile(stateMdPath, await initialStateMd());
+  await writeFile(eventsMdPath, await initialEventsMd());
 
-  // Seed .harness/loom/ fresh on every run (default rerun or --force).
+  // Seed .harness/loom/ fresh on every run.
   await mkdir(loomDir, { recursive: true });
   const hookDest = join(loomDir, "hook.sh");
   if (!(await exists(HOOK_SOURCE))) die(`missing source hook script: ${HOOK_SOURCE}`);
@@ -329,16 +300,6 @@ async function main() {
 
   const scaffolded: string[] = [];
   await scaffoldLoomCanonical(loomDir, scaffolded);
-
-  // Restore the user's registry from the pre-wipe backup so default rerun
-  // does not silently clobber accumulated pair/finalizer registrations.
-  // `--force` already discarded the backup above (registryBackup stays null),
-  // so this branch is a no-op on explicit reset.
-  let registryRestored = false;
-  if (registryBackup !== null) {
-    await writeFile(registryPath, registryBackup);
-    registryRestored = true;
-  }
 
   const verification = await verifyInstall(target, {
     stateMd: stateMdPath,
@@ -355,7 +316,6 @@ async function main() {
     cycleDir,
     cycleAction,
     wipedPairs,
-    registryRestored,
     stateMd: stateMdPath,
     eventsMd: eventsMdPath,
     hook: hookDest,
