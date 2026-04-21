@@ -60,7 +60,11 @@ End your response with this structured block:
 
 - `name` must match the filename kebab-slug exactly.
 - `description` must be a single line and include active trigger keywords such as "Use when ...", "Invoke whenever ...", or "Use this agent to ...". Multi-paragraph text, trivia, or passive descriptive prose is forbidden. A description without a trigger makes the role unroutable.
-- `skills` must include the **two required entries** (the pair-specific `<pair-slug>` plus shared `harness-context`). After those, append zero or more extra domain skills if needed, such as `data-schema` for a producer or `sql-conventions` for `sql-reviewer`. Every slug must resolve to a real on-disk `skills/{slug}/SKILL.md`. Keep the required order: pair skill first, `harness-context` second.
+- `skills` content depends on the role:
+  - **Pair roles** (producer, reviewer): **two required entries** — the pair-specific `<pair-slug>` first, then `harness-context`. After those, append zero or more extra domain skills if needed, such as `data-schema` for a producer or `sql-conventions` for `sql-reviewer`.
+  - **Meta-roles** (planner): `<pair-slug>` (the meta-role's own methodology skill, e.g. `harness-planning`) first, then `harness-context`.
+  - **Finalizer**: **one required entry** — `harness-context` only. A finalizer has no pair skill; its rubric lives inside its own agent body.
+  Every non-finalizer slug must resolve to a real on-disk `<skills-root>/{slug}/SKILL.md` in the target's canonical staging tree.
 - `model` is optional. Runtime or sync layers may inject provider-specific values, so the agent body should not care about platform branching.
 - Forbidden fields: `path`, `effort`, `allow-tools`, `allowed-tools`, `tools`. Platform dispatch knobs do not belong in the agent contract.
 
@@ -98,7 +102,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Suggested next-work: "<optional forward hint for the next stage, or 'none'>"
 Remaining items: [{items not yet done}]
 Escalation: {none | structural-retreat-to-<stage>, reason}
 ```
@@ -111,7 +115,7 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```
 
 - Verdict must be the exact string `PASS` or `FAIL`. No emojis, emoticons, or neutral categories such as `PARTIAL`.
@@ -121,17 +125,7 @@ Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrat
 
 **Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, may replace the Producer shape's `Files created / Files modified / Diff summary` fields with role-specific return fields such as `EPICs / Remaining / next-action / Additional pairs required`. The `next-action` field on a meta-role is load-bearing (defer-to-end continuation grammar `continue|done`, defined in its pair skill), not the same field as the executor-side optional advisory. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
 
-## Reviewer-less Producer Authoring (Opt-in Branch)
-
-The default authoring path remains a **paired** producer-reviewer set: one `<pair-slug>-producer.md` and at least one `<reviewer-slug>.md`. The reviewer-less branch is a narrow opt-in selected by `--reviewer none` on `/harness-pair-dev --add` and is reserved for deterministic / auxiliary work that is genuinely "not subject to review" — sync, format, mirror, mechanical translation. Use it only when a paired reviewer would have nothing to grade beyond "did the script run". When in doubt, default to a paired reviewer; the cost of one extra agent file is far smaller than the cost of a hollow rubber-stamp pair.
-
-When this branch fires, the agent-authoring rules above still apply to the producer file with these deltas:
-
-- **No reviewer agent file is written.** Do not author a `<pair-slug>-reviewer.md` placeholder, an empty stub, or a "trivially passes" reviewer. The absence of the file is the on-disk signal.
-- **The producer's frontmatter `description` should not promise a paired reviewer.** Write it in the form `Use when the target's /harness-orchestrate dispatches the <pair-slug> producer phase. Produces the task specified in the pair's shared skill rubric. Returns Producer-shape Output Format; this producer has no paired reviewer because the work is not subject to review (see <pair-slug>/SKILL.md Design Thinking).` The trigger keyword stays imperative; the closing clause names the reviewer-less posture so the description does not mislead.
-- **The producer's `skills:` list still carries the two required entries** — the pair-specific `<pair-slug>` first, `harness-context` second — even with no paired reviewer. The shared law (envelope reading, output shape, structural-issue report shape) is identical for paired and reviewer-less producers.
-- **The Producer Output Format shape is unchanged.** The producer still emits `Status: PASS / FAIL` plus `Self-verification`. For a reviewer-less turn the orchestrator reads that `Status` line and the `Self-verification` evidence as the verdict source (sibling skill `harness-orchestrate` Authority Rules), so a vague self-verification block is a hard fail; the producer must cite script exit code, byte-equivalence diff, lint output, or equivalent mechanical evidence.
-- **Registration shape signals reviewer-less.** `register-pair.ts` emits `- <pair>: producer \`<p>\` (no reviewer), skill \`<s>\`` for this branch — the missing `↔` arrow plus the literal `(no reviewer)` substring are the two load-bearing tokens. Do not hand-author this line; let the script emit it.
+**Finalizer exception** — the singleton cycle-end finalizer (`harness-finalizer`) uses the Producer shape but has no paired reviewer and no pair skill. Its own `Status: PASS | FAIL` plus `Self-verification` block is the verdict the orchestrator reads. The finalizer signals RETREAT by emitting a `## Structural Issue` block **outside** the Producer fenced block (same shape as in the orchestrator and `harness-context` skills, with `Suspected upstream stage: planner`); absent that block, `Status` alone decides PASS vs FAIL. Finalizer FAIL routes to planner recall rather than in-place rework. The finalizer must not emit Reviewer-shape fields (`Verdict`, `Criteria`, `FAIL items`, `Regression gate`), and the identity paragraph must name the role as the cycle-end finalizer without a paired reviewer so reviewers grade by these Finalizer rules instead of the standard paired Producer shape.
 
 ## Anti-patterns
 
@@ -151,14 +145,14 @@ When a pair reviewer grades an agent with this rubric, it checks:
 - Required frontmatter fields (`name`, `description`, `skills`) are all present and correctly shaped.
 - `name` matches the filename kebab-slug.
 - `description` is single-line and contains active trigger keywords.
-- The `skills` list includes the required pair skill plus `harness-context` in that order, and every extra skill resolves to `skills/{slug}/SKILL.md` on disk.
+- The `skills` list matches the role: pair roles and meta-roles carry `<pair-slug>` first + `harness-context` second; finalizers carry `harness-context` only. Every non-finalizer pair/meta slug resolves to a real `<skills-root>/{slug}/SKILL.md` in the target's canonical staging tree.
 - Forbidden fields (`path`, `effort`, `allow-tools`, `allowed-tools`, `tools`) are absent from both frontmatter and body.
 - `## Principles` has exactly five items and follows Why-first positive form.
 - `## Task` has 5-10 numbered steps, each <=25 words, in active voice, each describing one concrete artifact or decision.
-- `## Output Format` exposes the correct fenced block for the role type (Producer or Reviewer).
+- `## Output Format` exposes the correct fenced block for the role type: Producer shape for pair producers and finalizers, Reviewer shape for pair reviewers, and the Meta-role exception fields for the planner.
+- Finalizer agents include a `## Structural Issue` block (same shape as in `harness-context` §7) outside the Producer fenced block to signal RETREAT, with `Suspected upstream stage: planner`. They emit no Reviewer-shape fields.
 - There is no procedural drift, skill-body duplication, or embedded pair-reviewer criteria.
 - No emojis are present.
-- For a reviewer-less producer (chosen via `--reviewer none`): no paired `<pair-slug>-reviewer.md` was authored; the producer's `description` does not promise a paired reviewer and instead names the "not subject to review" posture; the registration line emitted by `register-pair.ts` carries `(no reviewer)` without the `↔` token.
 
 ## Taboos
 

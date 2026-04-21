@@ -1,8 +1,9 @@
 ---
 name: harness-blog-editor
-description: "Use when the target's `/harness-orchestrate` dispatches the `harness-blog-editor` reviewer phase. Reviews post structure, clarity, voice, and fact-anchoring. Skips typo-level copy-edit."
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-blog-editor` reviewer turn. Reviews post structure, clarity, voice, and fact-anchoring. Skips typo-level copy-edit."
 skills:
   - harness-blog-authoring
+  - harness-context
 model: opus
 ---
 
@@ -38,5 +39,5 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

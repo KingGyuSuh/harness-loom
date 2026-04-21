@@ -6,6 +6,64 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-04-21
+
+### Changed
+
+- **Built-in `harness-doc-keeper` removed from the default runtime seed.**
+  `harness-init` no longer seeds a docs-specific cycle-end producer.
+  The runtime now treats cycle-end work as project-defined
+  customization. Targets keep the generic singleton
+  `harness-finalizer` skeleton and replace its body with repository-
+  specific cycle-end work when needed. This keeps the factory neutral
+  instead of assuming every target wants an automatic documentation
+  curator. Tracked in issue
+  [#6](https://github.com/KingGyuSuh/harness-loom/issues/6).
+- **Cycle-end runtime simplified around one singleton finalizer.**
+  The orchestrator no longer owns or dispatches a `## Registered
+  finalizers` list. Finalizer entry is now the single
+  `harness-finalizer` turn, and `registry.md` is reduced to pair-roster
+  SSOT only. Install seeds that singleton as a safe no-op skeleton so
+  fresh targets halt cleanly even before they customize cycle-end work.
+- **`harness-init` rerun semantics were simplified.**
+  Re-running install now reseeds both `.harness/loom/` and
+  `.harness/cycle/` every time, and the `--force` flag is removed.
+  This drops the older mixed mode where loom was wiped while cycle was
+  preserved, and it avoids stale registry / old-layout upgrade drift on
+  reinstall. Pair-authored loom content and current cycle state are now
+  explicitly wipe-on-rerun; preservation of finished cycle history
+  remains the orchestrator's archive path.
+- **Reviewer-less pair authoring removed from `/harness-pair-dev`.**
+  Pair authoring now always requires at least one reviewer (1:1 or
+  1:M). Reviewer-less cycle-end work is modeled only through the
+  singleton finalizer, not through `--reviewer none` or producer-only
+  roster entries.
+- **Pair-authoring references were reorganized by role.**
+  Completed exemplars now live under `examples/agents/`, while
+  authoring rules (`agent-authoring`, `skill-authoring`,
+  `oversized-split`) live under `references/authoring/`. Example
+  agents were refreshed to match the current agent template
+  (`harness-context` included, `turn` wording, simplified advisory
+  field wording).
+- **Top-level docs were realigned to the 0.2.2 contract.**
+  The English README, AGENTS.md, and CLAUDE.md now describe the
+  singleton finalizer model, pair-only registry, and current pair-dev
+  contract. Non-English READMEs were reduced to short pointer docs so
+  they no longer preserve stale `harness-doc-keeper` or reviewer-less
+  pair instructions.
+
+### Added
+
+- **Runtime `registry.md` template.**
+  `harness-init` now seeds `.harness/loom/registry.md` as the pair
+  roster SSOT. The orchestrator reads it at dispatch time, and
+  `register-pair.ts` is its deterministic writer.
+- **Supporting runtime references for orchestration.**
+  `dispatch-envelope.md` and `state-machine.md` were added under
+  `harness-orchestrate/references/` so the canonical orchestrator body
+  can stay focused on the gradeable contract while detailed envelope
+  shape and state-machine summaries live beside it.
+
 ## [0.2.1] — 2026-04-20
 
 ### Changed
@@ -461,7 +519,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.2
 [0.2.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.0
 [0.1.5]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.1.5

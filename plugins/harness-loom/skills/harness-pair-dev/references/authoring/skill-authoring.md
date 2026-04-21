@@ -68,17 +68,7 @@ When splitting, use `oversized-split.md` sections 1-5 as the canonical rule for 
 
 Do not rename, rearrange, or absorb existing sibling reference files such as `references/some-topic.md`. New split work owns only net-new material. If an existing file already covers part of the topic, cite it with `references/{existing-topic}.md:{line-range}`. Do not create duplication across reference files in the same skill; duplication makes it ambiguous which file the reviewer should treat as the grading source.
 
-### 5. Reviewer-less pair-skill posture
-
-The default authoring path remains a paired producer-reviewer set, and the pair-skill body must keep that posture: Design Thinking still describes what producer **and reviewer** judge, Evaluation Criteria still reads as a reviewer-citable checklist, and reviewer axes (`[<reviewer-slug>] ...`) are still tagged in 1:M skills. The pair-skill body's center of gravity is reviewer-graded, even when other producers in the same project use the reviewer-less branch.
-
-For the narrow reviewer-less branch (`--reviewer none` on `/harness-pair-dev --add`), the same body shape still applies, with these deltas:
-
-- **Design Thinking carries a one-sentence justification** of why the work is "not subject to review", anchored to a deterministic axis: sync ("the producer just rewrites canonical artifacts into a derived tree; the only meaningful check is byte equivalence, which the producer self-verifies"), format ("the producer runs a formatter; correctness is what the formatter declares"), mirror ("the producer copies one source-of-truth file into a sibling and asserts hash match"). Without that sentence, the body cannot be graded for the reviewer-less posture and the producer turn would silently degrade into "passed without review" — the framing `harness-pair-dev/SKILL.md` §7 forbids.
-- **Evaluation Criteria still lists reviewer-citable checks**, but the consumer shifts to the orchestrator's verdict-source rule (it reads the producer's `Status` line plus `Self-verification` block). Phrase each criterion so the producer can self-cite it from script output, exit code, diff, or lint result — vague criteria that only a human reviewer could grade are a hard fail in the reviewer-less branch.
-- **Examples (BAD / GOOD) blocks**, if used, should contrast a deterministic-axis Design Thinking sentence (GOOD) against a hand-wave like "this work is small so review is optional" (BAD). The latter re-creates the rubber-stamp pair the branch exists to retire.
-
-### 6. Non-goals
+### 5. Non-goals
 
 This rubric does **not** define:
 
@@ -94,7 +84,7 @@ When reviewing a skill artifact, cite failures directly against these items:
 2. **Description-as-trigger pattern** — imperative form plus specific trigger vocabulary. No passive descriptions such as "This skill helps with ..." and no authority phrases such as "Loaded ONLY by X".
 3. **Section-order compliance** — Design Thinking -> Methodology -> Evaluation Criteria -> Taboos. Optional blocks come after that.
 4. **Design Thinking density** — at least one paragraph explains why the skill exists and what the producer/reviewer are judging.
-5. **Line budget (<= 200 lines)** — if it goes past 200, a split is required, unless the skill qualifies for the §3 SSOT runtime-law exception.
+5. **Line budget (<= 200 lines)** — if it goes past 200, a split is required (unless the skill qualifies for the §3 SSOT runtime-law exception, in which case only the 300-line hard cap applies).
 6. **Reference split applied** — if any threshold from §3 is met and no split exists (and the SSOT exception does not apply), fail it.
 7. **Reference naming convention** — only `references/{kebab-topic}.md` is allowed. Generic names such as `notes.md`, `details.md`, `misc.md`, or version suffixes such as `v2.md` are forbidden.
 8. **Reference readability floor** — no reference file exceeds 300 lines.
@@ -102,7 +92,6 @@ When reviewing a skill artifact, cite failures directly against these items:
 10. **Taboo presence** — at least four concrete taboos exist.
 11. **English prose, English identifiers** — body prose is English, identifiers and frontmatter keys are English, and there are no emojis.
 12. **Non-goal clarity** — neighboring concerns such as sync, agent shape, or pointer docs are clearly delegated elsewhere.
-13. **Reviewer-less posture (when applicable)** — for a pair authored with `--reviewer none`, Design Thinking carries a one-sentence "not subject to review" justification anchored to a deterministic axis (sync, format, mirror, mechanical translation), and every Evaluation Criteria item can be cited by the producer from script output, exit code, diff, or lint result; vague criteria that only a human reviewer could grade fail this check (`harness-pair-dev/SKILL.md` §7).
 
 ## Taboos
 

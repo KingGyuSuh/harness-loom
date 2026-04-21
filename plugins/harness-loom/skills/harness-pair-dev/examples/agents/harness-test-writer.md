@@ -1,8 +1,9 @@
 ---
 name: harness-test-writer
-description: "Use when the target's `/harness-orchestrate` dispatches the `harness-test-writer` producer phase. Authors unit tests covering a newly added module's public surface."
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-test-writer` producer turn. Authors unit tests covering a newly added module's public surface."
 skills:
   - harness-test-authoring
+  - harness-context
 model: opus
 ---
 
@@ -38,7 +39,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Suggested next-work: "<optional forward hint for the next stage, or 'none'>"
 Remaining items: [{items not yet done}]
 Escalation: {none | structural-retreat-to-<stage>, reason}
 ```

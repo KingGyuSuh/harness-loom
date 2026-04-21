@@ -1,1 +1,1 @@
-{{TIMESTAMP}} T0 orchestrator install — harness seeded
+{{TIMESTAMP}} T0 orchestrator bootstrap — runtime seeded

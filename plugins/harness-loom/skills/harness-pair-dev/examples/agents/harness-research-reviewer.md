@@ -1,8 +1,9 @@
 ---
 name: harness-research-reviewer
-description: "Use when the target's `/harness-orchestrate` dispatches the `harness-research-reviewer` reviewer phase. Grades citation coverage, synthesis quality, and whether open questions are surfaced clearly."
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-research-reviewer` reviewer turn. Grades citation coverage, synthesis quality, and whether open questions are surfaced clearly."
 skills:
   - harness-research-synthesis
+  - harness-context
 model: opus
 ---
 
@@ -38,5 +39,5 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

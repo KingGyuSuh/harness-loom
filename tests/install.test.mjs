@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import {
   makeTempDir,
@@ -21,12 +21,15 @@ test("install.ts scaffolds .harness/cycle/ + .harness/loom/ and skips .claude/",
       ".harness/cycle/state.md",
       ".harness/cycle/events.md",
       ".harness/cycle/epics",
+      ".harness/cycle/finalizer/tasks",
       ".harness/loom/hook.sh",
       ".harness/loom/sync.ts",
+      ".harness/loom/registry.md",
       ".harness/loom/skills/harness-orchestrate/SKILL.md",
       ".harness/loom/skills/harness-planning/SKILL.md",
       ".harness/loom/skills/harness-context/SKILL.md",
       ".harness/loom/agents/harness-planner.md",
+      ".harness/loom/agents/harness-finalizer.md",
     ]) {
       assert.ok(existsSync(join(target, p)), `expected ${p} to exist`);
     }
@@ -52,7 +55,7 @@ test("install.ts produces events.md without absolute-path leak", () => {
   try {
     assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
     const events = readFileSync(join(target, ".harness/cycle/events.md"), "utf8");
-    assert.match(events, /T0 orchestrator install — harness seeded\s*$/);
+    assert.match(events, /T0 orchestrator bootstrap — runtime seeded\s*$/);
     assert.doesNotMatch(events, /\/Users\/|\/home\/|\\Users\\/);
     assert.doesNotMatch(events, /\{\{[A-Z_]+\}\}/);
   } finally {
@@ -77,30 +80,31 @@ test("install.ts produces state.md matching the new schema", () => {
   }
 });
 
-test("install.ts default rerun refreshes loom/ but preserves cycle/", () => {
+test("install.ts rerun wipes both .harness/loom/ and .harness/cycle/ before reseed", () => {
   const target = makeTempDir();
   try {
     assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
 
     // Mutate cycle/state.md to a recognizable sentinel and add an EPIC dir so we
-    // can confirm preservation across the second install run.
+    // can confirm the rerun wipes and reseeds the cycle namespace.
     const statePath = join(target, ".harness/cycle/state.md");
-    const sentinelLine = "<!-- preserved-sentinel -->";
+    const sentinelLine = "<!-- wiped-sentinel -->";
     writeFileSync(statePath, sentinelLine + "\n" + readFileSync(statePath, "utf8"));
     mkdirSync(join(target, ".harness/cycle/epics/EP-X--keepme"), { recursive: true });
 
-    // Mutate loom/hook.sh to a non-canonical body — default rerun must overwrite.
+    // Mutate loom/hook.sh to a non-canonical body — rerun must overwrite.
     const hookPath = join(target, ".harness/loom/hook.sh");
     writeFileSync(hookPath, "#!/usr/bin/env bash\necho stale\n");
 
     const r = runNode(INSTALL_SCRIPT, [target]);
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
-    assert.equal(summary.cycleAction, "preserved");
+    assert.equal(summary.cycleAction, "wiped");
 
-    // cycle/ assets must still carry the sentinel and the EPIC dir.
-    assert.match(readFileSync(statePath, "utf8"), /preserved-sentinel/);
-    assert.ok(existsSync(join(target, ".harness/cycle/epics/EP-X--keepme")));
+    // cycle/ assets must be reseeded fresh.
+    assert.doesNotMatch(readFileSync(statePath, "utf8"), /wiped-sentinel/);
+    assert.ok(!existsSync(join(target, ".harness/cycle/epics/EP-X--keepme")));
+    assert.ok(existsSync(join(target, ".harness/cycle/finalizer/tasks")));
 
     // loom/hook.sh must be the canonical body again (not the stale stub).
     assert.doesNotMatch(readFileSync(hookPath, "utf8"), /echo stale/);
@@ -110,31 +114,35 @@ test("install.ts default rerun refreshes loom/ but preserves cycle/", () => {
   }
 });
 
-test("install.ts --force wipes both .harness/loom/ AND .harness/cycle/", () => {
+test("install.ts rerun succeeds against an older cycle layout missing finalizer/tasks", () => {
   const target = makeTempDir();
   try {
     assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    rmSync(join(target, ".harness/cycle/finalizer"), { recursive: true, force: true });
 
-    // Drop a sentinel into cycle/ that --force must obliterate.
-    const sentinelPath = join(target, ".harness/cycle/sentinel.txt");
-    writeFileSync(sentinelPath, "force-target");
-    mkdirSync(join(target, ".harness/cycle/epics/EP-Y--byebye"), { recursive: true });
-
-    const r = runNode(INSTALL_SCRIPT, [target, "--force"]);
+    const r = runNode(INSTALL_SCRIPT, [target]);
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
     assert.equal(summary.verification.ok, true);
     assert.equal(summary.cycleAction, "wiped");
-
-    // Sentinel and the deleted EPIC dir must be gone.
-    assert.ok(!existsSync(sentinelPath), "cycle sentinel must be wiped on --force");
-    assert.ok(!existsSync(join(target, ".harness/cycle/epics/EP-Y--byebye")));
+    assert.ok(existsSync(join(target, ".harness/cycle/finalizer/tasks")));
   } finally {
     cleanupDir(target);
   }
 });
 
-test("install.ts default rerun warns about non-foundation loom entries before wiping them", () => {
+test("install.ts rejects removed --force flag", () => {
+  const target = makeTempDir();
+  try {
+    const r = runNode(INSTALL_SCRIPT, [target, "--force"]);
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /unknown flag: --force/);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("install.ts rerun warns about non-foundation loom entries before wiping them", () => {
   const target = makeTempDir();
   try {
     assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
@@ -147,6 +155,10 @@ test("install.ts default rerun warns about non-foundation loom entries before wi
       join(target, ".harness/loom/agents/harness-demo-producer.md"),
       "---\nname: harness-demo-producer\n---\nbody\n",
     );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      "## Registered pairs\n\n- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`\n",
+    );
 
     const r = runNode(INSTALL_SCRIPT, [target]);
     assert.equal(r.status, 0, r.stderr);
@@ -157,13 +169,15 @@ test("install.ts default rerun warns about non-foundation loom entries before wi
       summary.wipedPairs.sort(),
       ["agents/harness-demo-producer.md", "skills/harness-demo"],
     );
-    assert.match(r.stderr, /default rerun is about to wipe/);
+    assert.match(r.stderr, /rerun is about to wipe/);
     assert.match(r.stderr, /skills\/harness-demo/);
     assert.match(r.stderr, /agents\/harness-demo-producer\.md/);
 
-    // And the wipe actually happened (documented behaviour — warning is the mitigation).
+    // And the wipe actually happened, including registry reset.
     assert.ok(!existsSync(pairSkillDir));
     assert.ok(!existsSync(join(target, ".harness/loom/agents/harness-demo-producer.md")));
+    const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
+    assert.doesNotMatch(registry, /harness-demo/);
   } finally {
     cleanupDir(target);
   }
@@ -196,4 +210,3 @@ test("install.ts seeds a self-contained sync.ts copy under .harness/loom/", () =
     cleanupDir(target);
   }
 });
-

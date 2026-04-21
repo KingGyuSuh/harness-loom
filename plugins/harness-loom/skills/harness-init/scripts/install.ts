@@ -6,15 +6,18 @@
 //                                sync.ts). install/sync own this tree; the
 //                                orchestrator never writes here.
 //            .harness/cycle/  — runtime cycle state (state.md, events.md,
-//                                epics/). orchestrator owns this tree; install
-//                                only seeds it on first install (or --force).
+//                                epics/, finalizer/). orchestrator owns this
+//                                tree; install reseeds it on every install
+//                                run. The epics/ subtree holds pair
+//                                artifacts per EPIC slug; the finalizer/tasks/
+//                                subtree holds the singleton cycle-end artifact.
 //
 //          install never touches `<target>/.claude/`, `<target>/.codex/`, or
 //          `<target>/.gemini/`. Those platform trees are produced by
 //          `node .harness/loom/sync.ts --provider <list>` on explicit user
 //          opt-in.
 //
-// Usage:   node skills/harness-init/scripts/install.ts [<target-project-path>] [--force]
+// Usage:   node skills/harness-init/scripts/install.ts [<target-project-path>]
 //          Target defaults to process.cwd() when omitted.
 //
 // Related: skills/harness-init/scripts/hook.sh — copied into <target>/.harness/loom/hook.sh
@@ -26,9 +29,9 @@
 //          using the schema in references/state-md-schema.md).
 //
 // Design notes:
-//   - default re-run: refresh `.harness/loom/` only; `.harness/cycle/` is
-//     preserved verbatim so the current cycle's audit trail survives a
-//     plugin upgrade. `--force` wipes both.
+//   - every install run reseeds both `.harness/loom/` and `.harness/cycle/`.
+//     Pair-authored loom content is therefore wipe-on-rerun and surfaced as a
+//     warning before removal.
 //   - state.md / events.md bodies come from
 //     `skills/harness-init/references/runtime/{state,events}.template.md`
 //     with `{{PLACEHOLDER}}` substitution.
@@ -53,11 +56,11 @@ const SYNC_SOURCE = join(SCRIPT_DIR, "sync.ts");
 const TEMPLATES_DIR = resolve(SCRIPT_DIR, "..", "references", "runtime");
 const STATE_TEMPLATE = join(TEMPLATES_DIR, "state.template.md");
 const EVENTS_TEMPLATE = join(TEMPLATES_DIR, "events.template.md");
+const REGISTRY_TEMPLATE = join(TEMPLATES_DIR, "registry.md");
 const ORCHESTRATE_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-orchestrate");
 const PLANNING_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-planning");
 const CONTEXT_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-context");
-const DOC_KEEPER_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-doc-keeper");
-const DOC_KEEPER_PRODUCER_TEMPLATE = join(TEMPLATES_DIR, "harness-doc-keeper-producer.template.md");
+const FINALIZER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-finalizer.template.md");
 const PLANNER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-planner.template.md");
 
 // Pin lives in sync.ts's PIN table now. install.ts only scaffolds canonical
@@ -65,7 +68,6 @@ const PLANNER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-planner.template.md"
 
 interface Args {
   target: string;
-  force: boolean;
 }
 
 function die(message: string, code = 1): never {
@@ -75,14 +77,12 @@ function die(message: string, code = 1): never {
 
 function parseArgs(argv: string[]): Args {
   const rest = argv.slice(2);
-  let force = false;
   const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
-    if (arg === "--force") force = true;
-    else if (arg === "--help" || arg === "-h") {
+    if (arg === "--help" || arg === "-h") {
       process.stdout.write(
-        "Usage: node skills/harness-init/scripts/install.ts [<target-project-path>] [--force]\n" +
+        "Usage: node skills/harness-init/scripts/install.ts [<target-project-path>]\n" +
           "  Target defaults to process.cwd() when omitted.\n" +
           "  Platform deploy is opt-in via `node .harness/loom/sync.ts --provider claude,codex,gemini`.\n",
       );
@@ -93,7 +93,7 @@ function parseArgs(argv: string[]): Args {
   if (positional.length > 1) die("at most one <target-project-path> accepted");
   const targetArg = positional[0] ?? process.cwd();
   const target = isAbsolute(targetArg) ? targetArg : resolve(process.cwd(), targetArg);
-  return { target, force };
+  return { target };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -109,17 +109,16 @@ async function exists(path: string): Promise<boolean> {
 
 // The canonical-foundation entries scaffoldLoomCanonical() re-creates on every
 // install run. Anything else under `.harness/loom/{skills,agents}/` is user
-// work (pair-dev output) that default rerun is about to wipe — we surface it
-// as a warning so the loss is not silent.
+// work (pair-dev output) that a rerun is about to wipe — we surface it as a
+// warning so the loss is not silent.
 const FOUNDATION_SKILL_NAMES = new Set([
   "harness-orchestrate",
   "harness-planning",
   "harness-context",
-  "harness-doc-keeper",
 ]);
 const FOUNDATION_AGENT_FILES = new Set([
   "harness-planner.md",
-  "harness-doc-keeper-producer.md",
+  "harness-finalizer.md",
 ]);
 
 async function collectNonFoundationLoomEntries(loomDir: string): Promise<string[]> {
@@ -213,9 +212,6 @@ async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promis
   if (await exists(CONTEXT_SKILL_TEMPLATE)) {
     await copyTree(CONTEXT_SKILL_TEMPLATE, join(skillsRoot, "harness-context"), copied);
   }
-  if (await exists(DOC_KEEPER_SKILL_TEMPLATE)) {
-    await copyTree(DOC_KEEPER_SKILL_TEMPLATE, join(skillsRoot, "harness-doc-keeper"), copied);
-  }
   // Agent templates are authored platform-neutral (no `model:` line); sync.ts
   // injects the per-platform pin at deploy time. Copy them verbatim.
   if (await exists(PLANNER_AGENT_TEMPLATE)) {
@@ -223,9 +219,17 @@ async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promis
     await copyFile(PLANNER_AGENT_TEMPLATE, dst);
     copied.push(dst);
   }
-  if (await exists(DOC_KEEPER_PRODUCER_TEMPLATE)) {
-    const dst = join(agentsRoot, "harness-doc-keeper-producer.md");
-    await copyFile(DOC_KEEPER_PRODUCER_TEMPLATE, dst);
+  if (await exists(FINALIZER_AGENT_TEMPLATE)) {
+    const dst = join(agentsRoot, "harness-finalizer.md");
+    await copyFile(FINALIZER_AGENT_TEMPLATE, dst);
+    copied.push(dst);
+  }
+  // Registry lives at loom root because both the orchestrator (read) and
+  // pair-authoring tooling (write) consume it; placing it under any single
+  // skill's subtree would create a weak ownership boundary.
+  if (await exists(REGISTRY_TEMPLATE)) {
+    const dst = join(loomRoot, "registry.md");
+    await copyFile(REGISTRY_TEMPLATE, dst);
     copied.push(dst);
   }
 }
@@ -233,7 +237,7 @@ async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promis
 // ---------------------------------------------------------------- main
 
 async function main() {
-  const { target, force } = parseArgs(process.argv);
+  const { target } = parseArgs(process.argv);
 
   if (!(await exists(target))) die(`target does not exist: ${target}`);
   const targetStat = await stat(target);
@@ -244,15 +248,15 @@ async function main() {
   const cycleDir = join(harnessDir, "cycle");
 
   // Scan for user-authored pair files before we wipe loom/ so the loss is not
-  // silent. `--force` is an explicit reset, so suppress the warning there; on
-  // default rerun we emit a stderr warning and surface the list in the JSON
-  // summary as `wipedPairs`.
+  // silent. Rerunning install intentionally resets both loom/ and cycle/, so
+  // pair-authored loom content is surfaced explicitly in stderr and in the
+  // JSON summary as `wipedPairs`.
   const cyclePreExisted = await exists(cycleDir);
   const loomPreExisted = await exists(loomDir);
   const wipedPairs = loomPreExisted ? await collectNonFoundationLoomEntries(loomDir) : [];
-  if (!force && wipedPairs.length > 0) {
+  if (wipedPairs.length > 0) {
     process.stderr.write(
-      `install: warning — default rerun is about to wipe ${wipedPairs.length} non-foundation entr${wipedPairs.length === 1 ? "y" : "ies"} under .harness/loom/:\n`,
+      `install: warning — rerun is about to wipe ${wipedPairs.length} non-foundation entr${wipedPairs.length === 1 ? "y" : "ies"} under .harness/loom/:\n`,
     );
     for (const p of wipedPairs) process.stderr.write(`  - ${p}\n`);
     process.stderr.write(
@@ -261,35 +265,27 @@ async function main() {
     );
   }
 
-  // Behaviour split:
-  //   --force  : wipe both sub-namespaces and reseed everything.
-  //   default  : refresh `.harness/loom/` (wipe-and-reseed) and preserve
-  //              `.harness/cycle/` verbatim if present. The cycle's audit trail
-  //              survives plugin upgrades that reuse this script.
-  if (force) {
-    if (loomPreExisted) await rm(loomDir, { recursive: true, force: true });
-    if (cyclePreExisted) await rm(cycleDir, { recursive: true, force: true });
-  } else if (loomPreExisted) {
-    await rm(loomDir, { recursive: true, force: true });
-  }
+  if (loomPreExisted) await rm(loomDir, { recursive: true, force: true });
+  if (cyclePreExisted) await rm(cycleDir, { recursive: true, force: true });
 
   // cycleAction tells the caller what happened to `.harness/cycle/`:
-  //   seeded     — cycle/ was absent and is now written fresh
-  //   preserved  — cycle/ already existed and default rerun left it intact
-  //   wiped      — --force removed the prior cycle/; it is now reseeded fresh
-  const cycleAction: "seeded" | "preserved" | "wiped" = force
-    ? (cyclePreExisted ? "wiped" : "seeded")
-    : (cyclePreExisted ? "preserved" : "seeded");
+  //   seeded  — cycle/ was absent and is now written fresh
+  //   wiped   — cycle/ already existed and was removed before reseed
+  const cycleAction: "seeded" | "wiped" = cyclePreExisted ? "wiped" : "seeded";
 
   const stateMdPath = join(cycleDir, "state.md");
   const eventsMdPath = join(cycleDir, "events.md");
-  if (cycleAction !== "preserved") {
-    await mkdir(join(cycleDir, "epics"), { recursive: true });
-    await writeFile(stateMdPath, await initialStateMd());
-    await writeFile(eventsMdPath, await initialEventsMd());
-  }
+  // Pair artifacts live under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`
+  // (slug-nested). Finalizer artifacts live under
+  // `.harness/cycle/finalizer/tasks/` (flat, singleton). Seed both subtree
+  // roots up front so the orchestrator never has to branch on "does this
+  // cycle dir exist yet" at dispatch time.
+  await mkdir(join(cycleDir, "epics"), { recursive: true });
+  await mkdir(join(cycleDir, "finalizer", "tasks"), { recursive: true });
+  await writeFile(stateMdPath, await initialStateMd());
+  await writeFile(eventsMdPath, await initialEventsMd());
 
-  // Seed .harness/loom/ fresh on every run (default rerun or --force).
+  // Seed .harness/loom/ fresh on every run.
   await mkdir(loomDir, { recursive: true });
   const hookDest = join(loomDir, "hook.sh");
   if (!(await exists(HOOK_SOURCE))) die(`missing source hook script: ${HOOK_SOURCE}`);
@@ -365,6 +361,7 @@ async function verifyInstall(
   await expect(".harness/cycle/state.md", ctx.stateMd, "file");
   await expect(".harness/cycle/events.md", ctx.eventsMd, "file");
   await expect(".harness/cycle/epics/", join(target, ".harness", "cycle", "epics"), "dir");
+  await expect(".harness/cycle/finalizer/tasks/", join(target, ".harness", "cycle", "finalizer", "tasks"), "dir");
 
   // Loom namespace: canonical staging written fresh each run.
   await expect(".harness/loom/hook.sh", ctx.hook, "file");
@@ -372,9 +369,9 @@ async function verifyInstall(
   await expect(".harness/loom/skills/harness-orchestrate/SKILL.md", join(target, ".harness", "loom", "skills", "harness-orchestrate", "SKILL.md"), "file");
   await expect(".harness/loom/skills/harness-planning/SKILL.md", join(target, ".harness", "loom", "skills", "harness-planning", "SKILL.md"), "file");
   await expect(".harness/loom/skills/harness-context/SKILL.md", join(target, ".harness", "loom", "skills", "harness-context", "SKILL.md"), "file");
-  await expect(".harness/loom/skills/harness-doc-keeper/SKILL.md", join(target, ".harness", "loom", "skills", "harness-doc-keeper", "SKILL.md"), "file");
   await expect(".harness/loom/agents/harness-planner.md", join(target, ".harness", "loom", "agents", "harness-planner.md"), "file");
-  await expect(".harness/loom/agents/harness-doc-keeper-producer.md", join(target, ".harness", "loom", "agents", "harness-doc-keeper-producer.md"), "file");
+  await expect(".harness/loom/agents/harness-finalizer.md", join(target, ".harness", "loom", "agents", "harness-finalizer.md"), "file");
+  await expect(".harness/loom/registry.md", join(target, ".harness", "loom", "registry.md"), "file");
 
   // hook executable bit.
   try {

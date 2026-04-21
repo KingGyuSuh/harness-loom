@@ -10,7 +10,6 @@ export const REPO_ROOT = resolve(HERE, "..");
 export const INSTALL_SCRIPT = join(REPO_ROOT, "plugins/harness-loom/skills/harness-init/scripts/install.ts");
 export const SYNC_SCRIPT = join(REPO_ROOT, "plugins/harness-loom/skills/harness-init/scripts/sync.ts");
 export const REGISTER_PAIR_SCRIPT = join(REPO_ROOT, "plugins/harness-loom/skills/harness-pair-dev/scripts/register-pair.ts");
-export const DOCS_SYNC_SCRIPT = join(REPO_ROOT, "plugins/harness-loom/skills/harness-pair-dev/scripts/docs-sync.ts");
 
 export function makeTempDir(prefix = "harness-loom-") {
   return mkdtempSync(join(tmpdir(), prefix));

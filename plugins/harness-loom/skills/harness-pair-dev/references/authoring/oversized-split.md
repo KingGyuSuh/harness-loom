@@ -1,3 +1,9 @@
+---
+name: oversized-split
+description: "Use when deciding whether a canonical `SKILL.md` body has grown past the split thresholds and how to move the overflow into `references/`. Invoke whenever a producer drafts a split or a reviewer grades whether a large skill body should remain one file or fan out into kebab-named references."
+user-invocable: false
+---
+
 # Oversized SKILL.md Split Spec
 
 This file is the authoritative spec for deciding **when** a canonical `SKILL.md` must be split and **how** that split must be carried out once references become necessary. Producers and reviewers read it as the shared basis for split decisions. `skill-authoring.md` §3 cites this file as canonical.
@@ -6,7 +12,7 @@ This file is the authoritative spec for deciding **when** a canonical `SKILL.md`
 
 If **any one** of the following three quantitative thresholds is true, that `SKILL.md` is a split candidate. The producer should propose the split in the same pair turn and cite this spec. If multiple conditions are true at once, move the largest block into references first.
 
-- **>= 300 lines** — if the canonical `SKILL.md` body exceeds 300 lines, it must be split. Claude plugin best practice treats `SKILL.md` as "on-trigger context loaded only when needed"; once it goes beyond 300 lines, both producer and reviewer start losing the thread and rereading the same sections. This protects the lower bound of a body that can still be read at a glance. Separately, the authoring rubric uses 200 lines as the first control line, so you should try splitting earlier and treat 300 as a hard ceiling.
+- **>= 300 lines** — if the canonical `SKILL.md` body exceeds 300 lines, it must be split. Claude plugin best practice treats `SKILL.md` as "on-trigger context loaded only when needed"; once it goes beyond 300 lines, both producer and reviewer start losing the thread and rereading the same sections. This protects the lower bound of a body that can still be read at a glance. The authoring rubric also uses 200 lines as a separate soft-cap control line (see `skill-authoring.md` §3); 200 is the "should split" signal, 300 is this hard ceiling.
 - **>= 3 authority-citation blocks** — if one file contains three or more contract-defining blocks such as "State.md Contract", "Pair/Cycle Law", or "Ledger-Driven Routing Synthesis" that upstream docs cite by line range, move those blocks into references. Authority blocks are external anchors; crowding them into one file means editing one contract can shift unrelated line ranges. This threshold protects line-range stability.
 - **>= 2 example blocks** — if one `SKILL.md` contains two or more GOOD/BAD pairs, templates, or long concrete samples, move the examples into references. Examples are supporting material, so the more they accumulate in the main body, the weaker the "why" signal becomes. This threshold protects an insight-first main body.
 

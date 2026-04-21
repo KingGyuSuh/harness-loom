@@ -1,8 +1,9 @@
 ---
 name: harness-test-reviewer
-description: "Use when the target's `/harness-orchestrate` dispatches the `harness-test-reviewer` reviewer phase. Judges unit-test coverage breadth and edge-case discipline, not code style."
+description: "Use when the target's `/harness-orchestrate` dispatches the `harness-test-reviewer` reviewer turn. Judges unit-test coverage breadth and edge-case discipline, not code style."
 skills:
   - harness-test-authoring
+  - harness-context
 model: opus
 ---
 
@@ -38,5 +39,5 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

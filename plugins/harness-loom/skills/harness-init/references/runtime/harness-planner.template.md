@@ -20,15 +20,16 @@ The producer responsible for decomposing the current goal into outcome EPICs and
 
 ## Task
 
-1. Read `Goal`, `Existing EPICs`, `Recent events`, and `Registered roster` from the envelope. Treat `Registered roster` as the authoritative pair list for this turn; do not consult any SKILL file to discover roster state.
-2. Scan this project's README, root docs, and major directories for domain signals.
-3. Turn the goal markdown into citation-ready notes such as `goal.md:Lxx`.
-4. Name downstream EPIC slugs starting at `EP-1--{outcome-slug}`; on re-plan turns, continue numbering after the last existing EPIC.
-5. For each EPIC, emit `outcome`, `upstream`, `why`, and `roster`.
-6. Treat `upstream` as a same-stage gate across EPICs.
-7. Keep the turn small. Describe unplanned work informationally under `Remaining`, and use the load-bearing `next-action` grammar (`continue — <reason>` vs `done`) to actually trigger or end re-dispatch.
-8. If an unregistered pair is required, list it under `Additional pairs required` and do not emit that blocked EPIC as executable work.
-9. End with the Output Format block below. Do not write files under `.harness/` yourself.
+1. Determine the turn mode from the envelope before planning: initial plan, structural recall (`Current phase` starts with `(retreat reason: ...)`), or defer-to-end continuation recall (`Current phase` starts with `(planner continuation: ...)`).
+2. Read `Goal`, `Existing EPICs`, `Current phase`, `Prior tasks`, `Prior reviews`, `Recent events`, and `Registered roster` from the envelope. Treat `Registered roster` as the authoritative pair list for this turn; do not consult any SKILL file to discover roster state.
+3. Scan this project's README, root docs, and major directories for domain signals.
+4. Turn the goal markdown into citation-ready notes. Prefer `goal.md:Lxx "quoted phrase"` when line numbering is available; otherwise cite the quoted goal phrase from `Goal`.
+5. Name downstream EPIC slugs starting at `EP-1--{outcome-slug}`; on re-plan turns, continue numbering after the last existing EPIC.
+6. For each EPIC, emit `outcome`, `upstream`, `why`, and `roster`.
+7. Treat `upstream` as a same-stage gate across EPICs.
+8. Keep the turn small. Describe unplanned work informationally under `Remaining`, and use the load-bearing `next-action` grammar (`continue — <reason>` vs `done`) to actually trigger or end re-dispatch.
+9. If an unregistered pair is required, list it under `Additional pairs required` and do not emit that blocked EPIC as executable work.
+10. End with the Output Format block below. Do not write files under `.harness/` yourself.
 
 ## Output Format
 
@@ -42,13 +43,13 @@ EPICs (this turn):
 EP-N--<slug>
 - outcome: ...
 - upstream: <EP-M--slug, ...> | none
-- why: goal.md:L<line> "<quoted phrase>"
+- why: goal.md:L<line> "<quoted phrase>" | Goal: "<quoted phrase>"
 - roster: <pair1-producer> → <pair3-producer> [→ <pair5-producer> ...]
 
 Remaining: <"More EPICs still need to be emitted" | "none">
 next-action: <"done" | "continue — <one-sentence reason>">
 Additional pairs required: <"<desired-slug>: <purpose>" lines | "none">
-Escalation: <"none" | structural issue report block>
+Escalation: none
 ```
 
-`next-action` is load-bearing: the orchestrator's prefix matcher reads it verbatim. A line starting with `continue` writes `planner-continuation: pending` into `state.md`, which recalls the planner **after all currently-live EPICs reach terminal** (defer-to-end, not next-turn). Any other value (canonically `done`) clears the flag and lets execution flow into the cycle-end doc-keeper at terminal. Do not invent phrasing such as `maybe` or `further analysis needed` — those degrade silently to `done`. A zero-emit safety forces `done` if a continuation-recalled planner turn produces no new executable EPICs, so the cycle cannot stall at halt.
+`next-action` is load-bearing: the orchestrator's prefix matcher reads it verbatim. A line starting with `continue` writes `planner-continuation: pending` into `state.md`, which recalls the planner **after all currently-live EPICs reach terminal** (defer-to-end, not next-turn). Any other value (canonically `done`) clears the flag and lets execution enter the cycle-end **Finalizer** state at terminal (dispatching the singleton `harness-finalizer` agent). Do not invent phrasing such as `maybe` or `further analysis needed` — those degrade silently to `done`. A zero-emit safety forces `done` if a continuation-recalled planner turn produces no new executable EPICs, so the cycle cannot stall at halt. `Escalation` stays `none`: planner turns repair the plan by emitting replacement EPICs or by resolving with zero EPICs plus `next-action: done`; they do not emit structural-issue blocks themselves.
