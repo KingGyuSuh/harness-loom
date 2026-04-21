@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 // Purpose: Register a newly authored producer-reviewer pair into an existing
 //          target harness. Inserts a roster line into
-//          `<target>/.harness/loom/skills/harness-orchestrate/SKILL.md`
-//          `## Registered pairs`. That section is the sole roster SSOT; the
-//          planner receives the current roster through the orchestrator's
-//          dispatch envelope (`Registered roster`), so no planner-side file
-//          is edited here.
+//          `<target>/.harness/loom/registry.md` `## Registered pairs`. The
+//          registry is the sole roster SSOT; the planner receives the current
+//          roster through the orchestrator's dispatch envelope (`Registered
+//          roster`), so no planner-side file is edited here.
 //
 //          Registrations write to `.harness/loom/` (canonical staging), not to
 //          any derived platform tree. Pair agent/skill files authored alongside
@@ -16,29 +15,20 @@
 // Supports 1:M pairs (one producer, multiple reviewers) via repeated
 // `--reviewer <slug>` flags. The orchestrator dispatches all reviewers in
 // parallel in a single response; each reviewer grades a different axis of
-// the producer's task.
-//
-// Also supports a reviewer-less producer-only group via the special value
-// `--reviewer none`. In that mode no reviewer agent is expected and the
-// registration line carries `(no reviewer)` instead of the `↔ reviewer …`
-// segment. `none` may not be combined with real reviewer slugs.
+// the producer's task. Every pair carries at least one reviewer.
 //
 // Usage:
 //   node skills/harness-pair-dev/scripts/register-pair.ts \
 //     --target <path> --pair <slug> --producer <slug> \
 //     --reviewer <slug> [--reviewer <slug> ...] --skill <slug> \
 //     [--before <pair-slug> | --after <pair-slug>]
-//   node skills/harness-pair-dev/scripts/register-pair.ts \
-//     --target <path> --pair <slug> --producer <slug> \
-//     --reviewer none --skill <slug> \
-//     [--before <pair-slug> | --after <pair-slug>]
 //
 // Idempotent with one nuance: re-registering the same pair slug without
 // `--before`/`--after` is an in-place replace (roster position is preserved);
 // re-registering WITH an anchor removes the old line and re-inserts at the
 // anchor (that is how a caller deliberately moves a pair). See `insertEntry`
-// below for the full semantics matrix. The target orchestrator SKILL file
-// must already exist (run /harness-init first).
+// below for the full semantics matrix. The target registry file must already
+// exist (run /harness-init first).
 
 import { readFile, writeFile, access } from "node:fs/promises";
 import { constants as FS } from "node:fs";
@@ -50,7 +40,6 @@ interface Args {
   pair: string;
   producer: string;
   reviewers: string[];
-  reviewerless: boolean;
   skill: string;
   before?: string;
   after?: string;
@@ -62,11 +51,6 @@ interface Placement {
   anchor?: string;
 }
 
-// Special value for `--reviewer` that selects a reviewer-less producer-only
-// group. Kept as a top-level constant so the docs string and the parser stay
-// in sync.
-const REVIEWER_NONE = "none";
-
 function die(message: string, code = 1): never {
   process.stderr.write(`register-pair: ${message}\n`);
   process.exit(code);
@@ -76,7 +60,6 @@ function parseArgs(argv: string[]): Args {
   const rest = argv.slice(2);
   const out: Partial<Args> & { reviewers?: string[]; unregister?: boolean } = {
     reviewers: [],
-    reviewerless: false,
     unregister: false,
   };
   for (let i = 0; i < rest.length; i++) {
@@ -88,14 +71,10 @@ function parseArgs(argv: string[]): Args {
           "--reviewer <harness-slug> [--reviewer <harness-slug> ...] --skill <harness-slug> " +
           "[--before <harness-pair> | --after <harness-pair>]\n" +
           "       node skills/harness-pair-dev/scripts/register-pair.ts " +
-          "--target <path> --pair <harness-slug> --producer <harness-slug> " +
-          "--reviewer none --skill <harness-slug> " +
-          "[--before <harness-pair> | --after <harness-pair>]\n" +
-          "       node skills/harness-pair-dev/scripts/register-pair.ts " +
           "--unregister --target <path> --pair <harness-slug>\n" +
           "All pair/producer/reviewer/skill slugs must start with \"harness-\".\n" +
           "Use --before/--after to place the pair in the global roster order.\n" +
-          "Pass `--reviewer none` (and only that) to register a reviewer-less producer-only group.\n",
+          "Every pair requires at least one --reviewer.\n",
       );
       process.exit(0);
     } else if (arg === "--unregister") out.unregister = true;
@@ -128,23 +107,14 @@ function parseArgs(argv: string[]): Args {
     if (out.before || out.after) die("--before/--after cannot be used with --unregister");
     if (!prefixRe.test(out.pair as string))
       die(`--pair must start with "harness-" (got: ${out.pair})`);
-    return { ...out, producer: "", skill: "", reviewers: [], reviewerless: false } as Args;
+    return { ...out, producer: "", skill: "", reviewers: [] } as Args;
   }
   for (const key of ["target", "pair", "producer", "skill"] as const) {
     if (!out[key]) die(`--${key} is required`);
   }
   if (out.before && out.after) die("use either --before or --after, not both");
-  if (!out.reviewers || out.reviewers.length === 0) die("at least one --reviewer is required");
-  // Reviewer-less mode: `--reviewer none` is the only allowed value when present.
-  // Mixing it with real reviewer slugs is rejected because it would silently
-  // discard either the reviewer roster or the reviewer-less intent.
-  const noneCount = out.reviewers.filter((r) => r === REVIEWER_NONE).length;
-  if (noneCount > 0) {
-    if (out.reviewers.length !== 1)
-      die(`--reviewer ${REVIEWER_NONE} cannot be combined with other --reviewer values`);
-    out.reviewerless = true;
-    out.reviewers = [];
-  }
+  if (!out.reviewers || out.reviewers.length === 0)
+    die("at least one --reviewer is required");
   for (const key of ["pair", "producer", "skill"] as const) {
     if (!prefixRe.test(out[key] as string))
       die(`--${key} must start with "harness-" (got: ${out[key]})`);
@@ -198,8 +168,9 @@ function placementFromArgs(args: Args): Placement {
   return { mode: "append" };
 }
 
-// Re-registration semantics (important for docs-sync and orchestrator roster
-// reads, both of which are position-sensitive):
+// Re-registration semantics (important for registry consumers such as the
+// orchestrator and any pointer docs that describe roster order, both of which
+// are position-sensitive):
 //
 //   - `append` mode + pair already present → in-place replace (position held).
 //     Running `--add` twice with no anchor is idempotent for the roster order.
@@ -335,44 +306,35 @@ async function removeFromSection(
 async function main() {
   const args = parseArgs(process.argv);
   const target = isAbsolute(args.target) ? args.target : resolve(process.cwd(), args.target);
-  const orchestratePath = join(target, ".harness", "loom", "skills", "harness-orchestrate", "SKILL.md");
+  const registryPath = join(target, ".harness", "loom", "registry.md");
 
-  if (!(await exists(orchestratePath))) die(`missing ${orchestratePath} (run /harness-init first)`);
+  if (!(await exists(registryPath))) die(`missing ${registryPath} (run /harness-init first)`);
 
   if (args.unregister) {
-    const orchestrate = await removeFromSection(orchestratePath, "Registered pairs", args.pair);
+    const registry = await removeFromSection(registryPath, "Registered pairs", args.pair);
     const summary = {
       target,
       pair: args.pair,
       action: "unregister",
-      orchestrate: { path: orchestratePath, changed: orchestrate.changed },
+      registry: { path: registryPath, changed: registry.changed },
     };
     process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
     return;
   }
 
-  // Three registration shapes, distinguishable by token without ambiguity:
-  //   1:1     - <pair>: producer `<p>` ↔ reviewer `<r>`, skill `<s>`
-  //   1:M     - <pair>: producer `<p>` ↔ reviewers [`<r1>`, `<r2>`], skill `<s>`
-  //   1:0     - <pair>: producer `<p>` (no reviewer), skill `<s>`
-  // The `↔` arrow is the load-bearing token: present iff a reviewer roster
-  // exists. The orchestrator uses its absence to recognize a producer-only
-  // group that is "not subject to review" rather than "passed without review".
-  let entry: string;
-  if (args.reviewerless) {
-    entry = `- ${args.pair}: producer \`${args.producer}\` (no reviewer), skill \`${args.skill}\``;
-  } else {
-    const reviewerList = args.reviewers.map((r) => `\`${r}\``).join(", ");
-    const reviewerField =
-      args.reviewers.length === 1
-        ? `reviewer ${reviewerList}`
-        : `reviewers [${reviewerList}]`;
-    entry = `- ${args.pair}: producer \`${args.producer}\` ↔ ${reviewerField}, skill \`${args.skill}\``;
-  }
+  // Two registration shapes:
+  //   1:1 - <pair>: producer `<p>` ↔ reviewer `<r>`, skill `<s>`
+  //   1:M - <pair>: producer `<p>` ↔ reviewers [`<r1>`, `<r2>`], skill `<s>`
+  const reviewerList = args.reviewers.map((r) => `\`${r}\``).join(", ");
+  const reviewerField =
+    args.reviewers.length === 1
+      ? `reviewer ${reviewerList}`
+      : `reviewers [${reviewerList}]`;
+  const entry = `- ${args.pair}: producer \`${args.producer}\` ↔ ${reviewerField}, skill \`${args.skill}\``;
 
   const placement = placementFromArgs(args);
-  const orchestrate = await upsertSection(
-    orchestratePath,
+  const registry = await upsertSection(
+    registryPath,
     "Registered pairs",
     args.pair,
     entry,
@@ -384,7 +346,7 @@ async function main() {
     pair: args.pair,
     entry,
     placement,
-    orchestrate: { path: orchestratePath, changed: orchestrate.changed },
+    registry: { path: registryPath, changed: registry.changed },
   };
   process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
 }

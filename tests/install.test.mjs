@@ -21,12 +21,15 @@ test("install.ts scaffolds .harness/cycle/ + .harness/loom/ and skips .claude/",
       ".harness/cycle/state.md",
       ".harness/cycle/events.md",
       ".harness/cycle/epics",
+      ".harness/cycle/finalizer/tasks",
       ".harness/loom/hook.sh",
       ".harness/loom/sync.ts",
+      ".harness/loom/registry.md",
       ".harness/loom/skills/harness-orchestrate/SKILL.md",
       ".harness/loom/skills/harness-planning/SKILL.md",
       ".harness/loom/skills/harness-context/SKILL.md",
       ".harness/loom/agents/harness-planner.md",
+      ".harness/loom/agents/harness-finalizer.md",
     ]) {
       assert.ok(existsSync(join(target, p)), `expected ${p} to exist`);
     }
@@ -52,7 +55,7 @@ test("install.ts produces events.md without absolute-path leak", () => {
   try {
     assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
     const events = readFileSync(join(target, ".harness/cycle/events.md"), "utf8");
-    assert.match(events, /T0 orchestrator install — harness seeded\s*$/);
+    assert.match(events, /T0 orchestrator bootstrap — runtime seeded\s*$/);
     assert.doesNotMatch(events, /\/Users\/|\/home\/|\\Users\\/);
     assert.doesNotMatch(events, /\{\{[A-Z_]+\}\}/);
   } finally {

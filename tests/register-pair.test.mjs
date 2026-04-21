@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  REPO_ROOT,
   makeTempDir,
   cleanupDir,
   runNode,
@@ -13,6 +14,24 @@ import {
 function installTo(target) {
   assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
 }
+
+test("README claim about prefix handling matches register-pair contract", () => {
+  // README must NOT promise auto-prepending of unprefixed slugs — register-pair
+  // strictly rejects unprefixed slugs (see prefixRe in register-pair.ts and
+  // the dedicated rejection test below).
+  const readme = readFileSync(join(REPO_ROOT, "README.md"), "utf8");
+  assert.doesNotMatch(
+    readme,
+    /unprefixed slugs are auto-prepended/i,
+    "README must not promise auto-prepend; register-pair.ts rejects unprefixed slugs",
+  );
+  // Quickstart should surface the actual rule so users do not feed bare slugs.
+  assert.match(
+    readme,
+    /must start with the `harness-` prefix|register-pair\.ts rejects unprefixed/i,
+    "README must surface the actual register-pair prefix requirement",
+  );
+});
 
 test("register-pair writes 1:1 entry with backticks and ↔ arrow", () => {
   const target = makeTempDir();
@@ -27,10 +46,8 @@ test("register-pair writes 1:1 entry with backticks and ↔ arrow", () => {
     ]);
     assert.equal(r.status, 0, r.stderr);
 
-    const orchestrate = readFileSync(
-      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
-      "utf8",
-    );
+    const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
+    const orchestrate = registry;
     assert.match(
       orchestrate,
       /- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`/,
@@ -54,10 +71,8 @@ test("register-pair writes 1:M entry as bracketed reviewer list", () => {
     ]);
     assert.equal(r.status, 0, r.stderr);
 
-    const orchestrate = readFileSync(
-      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
-      "utf8",
-    );
+    const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
+    const orchestrate = registry;
     assert.match(
       orchestrate,
       /- harness-api: producer `harness-api-producer` ↔ reviewers \[`harness-api-reviewer`, `harness-security-reviewer`\], skill `harness-api`/,
@@ -134,8 +149,7 @@ test("register-pair inserts a new pair before an anchor in the Registered pairs 
     ]);
     assert.equal(inserted.status, 0, inserted.stderr);
 
-    const orchestratePath = join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md");
-    const body = readFileSync(orchestratePath, "utf8");
+    const body = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
     const alpha = body.indexOf("- harness-alpha:");
     const beta = body.indexOf("- harness-beta:");
     const gamma = body.indexOf("- harness-gamma:");
@@ -210,7 +224,7 @@ test("register-pair rejects slugs that are missing the harness- prefix", () => {
   }
 });
 
-test("register-pair writes reviewer-less entry as `(no reviewer)` without ↔ arrow", () => {
+test("register-pair requires at least one --reviewer", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -218,65 +232,10 @@ test("register-pair writes reviewer-less entry as `(no reviewer)` without ↔ ar
       "--target", target,
       "--pair", "harness-mirror",
       "--producer", "harness-mirror-producer",
-      "--reviewer", "none",
       "--skill", "harness-mirror",
     ]);
-    assert.equal(r.status, 0, r.stderr);
-
-    const orchestrate = readFileSync(
-      join(target, ".harness/loom/skills/harness-orchestrate/SKILL.md"),
-      "utf8",
-    );
-    assert.match(
-      orchestrate,
-      /- harness-mirror: producer `harness-mirror-producer` \(no reviewer\), skill `harness-mirror`/,
-    );
-    // Load-bearing: the `↔` arrow must be absent from the reviewer-less line
-    // so the runtime can distinguish "not subject to review" from a pair.
-    assert.ok(
-      !/- harness-mirror:.*↔/.test(orchestrate),
-      "reviewer-less line must not contain the ↔ arrow",
-    );
-  } finally {
-    cleanupDir(target);
-  }
-});
-
-test("register-pair rejects mixing --reviewer none with real reviewer slugs", () => {
-  const target = makeTempDir();
-  try {
-    installTo(target);
-    const r = runNode(REGISTER_PAIR_SCRIPT, [
-      "--target", target,
-      "--pair", "harness-mirror",
-      "--producer", "harness-mirror-producer",
-      "--reviewer", "none",
-      "--reviewer", "harness-mirror-reviewer",
-      "--skill", "harness-mirror",
-    ]);
-    assert.notEqual(r.status, 0, "mixing none with a real reviewer must fail");
-    assert.match(r.stderr, /none/);
-    assert.match(r.stderr, /cannot be combined/);
-  } finally {
-    cleanupDir(target);
-  }
-});
-
-test("register-pair reviewer-less mode does not require harness- prefix on the literal `none`", () => {
-  const target = makeTempDir();
-  try {
-    installTo(target);
-    // Sanity: `none` is a magic value, not a slug, so the prefix regex does
-    // not apply to it. Real reviewer slugs are still rejected when unprefixed
-    // (covered by the existing prefix-rejection test).
-    const r = runNode(REGISTER_PAIR_SCRIPT, [
-      "--target", target,
-      "--pair", "harness-mirror",
-      "--producer", "harness-mirror-producer",
-      "--reviewer", "none",
-      "--skill", "harness-mirror",
-    ]);
-    assert.equal(r.status, 0, r.stderr);
+    assert.notEqual(r.status, 0, "pair without --reviewer must fail");
+    assert.match(r.stderr, /at least one --reviewer is required/);
   } finally {
     cleanupDir(target);
   }
@@ -303,10 +262,7 @@ test("register-pair --unregister removes the pair from the Registered pairs sect
   try {
     installTo(target);
 
-    const orchestratePath = join(
-      target,
-      ".harness/loom/skills/harness-orchestrate/SKILL.md",
-    );
+    const registryPath = join(target, ".harness/loom/registry.md");
 
     assert.equal(
       runNode(REGISTER_PAIR_SCRIPT, [
@@ -318,7 +274,7 @@ test("register-pair --unregister removes the pair from the Registered pairs sect
       ]).status,
       0,
     );
-    assert.match(readFileSync(orchestratePath, "utf8"), /^- harness-unreg:/m);
+    assert.match(readFileSync(registryPath, "utf8"), /^- harness-unreg:/m);
 
     const r = runNode(REGISTER_PAIR_SCRIPT, [
       "--unregister",
@@ -327,9 +283,9 @@ test("register-pair --unregister removes the pair from the Registered pairs sect
     ]);
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
-    assert.equal(summary.orchestrate.changed, true);
+    assert.equal(summary.registry.changed, true);
     assert.equal(summary.planning, undefined, "summary must not carry a planning field");
-    assert.doesNotMatch(readFileSync(orchestratePath, "utf8"), /^- harness-unreg:/m);
+    assert.doesNotMatch(readFileSync(registryPath, "utf8"), /^- harness-unreg:/m);
   } finally {
     cleanupDir(target);
   }
@@ -340,10 +296,7 @@ test("register-pair --unregister is scoped to the roster section only", () => {
   try {
     installTo(target);
 
-    const orchestratePath = join(
-      target,
-      ".harness/loom/skills/harness-orchestrate/SKILL.md",
-    );
+    const registryPath = join(target, ".harness/loom/registry.md");
 
     // Register so the roster contains harness-scoped.
     assert.equal(
@@ -363,8 +316,8 @@ test("register-pair --unregister is scoped to the roster section only", () => {
       "\n## Narrative — do not touch\n" +
       "- harness-scoped: this is prose, not a registration\n";
     writeFileSync(
-      orchestratePath,
-      readFileSync(orchestratePath, "utf8") + narrative,
+      registryPath,
+      readFileSync(registryPath, "utf8") + narrative,
     );
 
     const r = runNode(REGISTER_PAIR_SCRIPT, [
@@ -374,7 +327,7 @@ test("register-pair --unregister is scoped to the roster section only", () => {
     ]);
     assert.equal(r.status, 0, r.stderr);
 
-    const after = readFileSync(orchestratePath, "utf8");
+    const after = readFileSync(registryPath, "utf8");
     // The roster-scoped entry is gone.
     assert.doesNotMatch(
       after,
@@ -402,26 +355,23 @@ test("register-pair --unregister reports changed:false on a missing pair", () =>
     ]);
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
-    assert.equal(summary.orchestrate.changed, false);
+    assert.equal(summary.registry.changed, false);
   } finally {
     cleanupDir(target);
   }
 });
 
-test("register-pair tolerates CRLF line endings in orchestrator SKILL.md", () => {
+test("register-pair tolerates CRLF line endings in registry.md", () => {
   const target = makeTempDir();
   try {
     installTo(target);
 
-    // Rewrite the orchestrator SKILL with CRLF endings (simulates a Windows
-    // checkout where `git config core.autocrlf=true` converted on checkout).
-    const orchestratePath = join(
-      target,
-      ".harness/loom/skills/harness-orchestrate/SKILL.md",
-    );
-    const lfBody = readFileSync(orchestratePath, "utf8");
+    // Rewrite the registry with CRLF endings (simulates a Windows checkout
+    // where `git config core.autocrlf=true` converted on checkout).
+    const registryPath = join(target, ".harness/loom/registry.md");
+    const lfBody = readFileSync(registryPath, "utf8");
     const crlfBody = lfBody.replace(/\n/g, "\r\n");
-    writeFileSync(orchestratePath, crlfBody);
+    writeFileSync(registryPath, crlfBody);
 
     // Register a pair — should find `## Registered pairs` despite CRLF, insert
     // into that section (not append a second duplicate heading), and preserve
@@ -430,18 +380,20 @@ test("register-pair tolerates CRLF line endings in orchestrator SKILL.md", () =>
       "--target", target,
       "--pair", "harness-crlf",
       "--producer", "harness-crlf-producer",
-      "--reviewer", "none",
+      "--reviewer", "harness-crlf-reviewer",
       "--skill", "harness-crlf",
-      "--before", "harness-doc-keeper",
     ]);
     assert.equal(r.status, 0, r.stderr);
 
-    const after = readFileSync(orchestratePath, "utf8");
+    const after = readFileSync(registryPath, "utf8");
     // Exactly one `## Registered pairs` heading at line-start — not duplicated.
     const headingCount = (after.match(/(^|\r\n|\n)## Registered pairs(\r\n|\n)/g) || []).length;
     assert.equal(headingCount, 1, `expected exactly one Registered pairs heading, got ${headingCount}`);
     // The new entry landed in the section.
-    assert.match(after, /- harness-crlf: producer `harness-crlf-producer` \(no reviewer\), skill `harness-crlf`/);
+    assert.match(
+      after,
+      /- harness-crlf: producer `harness-crlf-producer` ↔ reviewer `harness-crlf-reviewer`, skill `harness-crlf`/,
+    );
     // CRLF preserved on write — the file must still contain \r\n.
     assert.ok(after.includes("\r\n"), "CRLF line endings must survive the round-trip");
   } finally {

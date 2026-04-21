@@ -47,8 +47,8 @@ Install seeds two namespaces:
 
 On a fresh install, the target receives at least:
 
-- `.harness/loom/skills/{harness-orchestrate,harness-planning,harness-context,harness-doc-keeper}/`
-- `.harness/loom/agents/{harness-planner,harness-doc-keeper-producer}.md`
+- `.harness/loom/skills/{harness-orchestrate,harness-planning,harness-context}/`
+- `.harness/loom/agents/{harness-planner,harness-finalizer}.md` — `harness-finalizer.md` is a generic skeleton; the project fills in the concrete cycle-end work (documentation refresh, goal-coverage inspection, release prep, etc.) before running the first real cycle
 - `.harness/loom/{hook.sh,sync.ts}`
 - `.harness/cycle/{state.md,events.md,epics/}`
 

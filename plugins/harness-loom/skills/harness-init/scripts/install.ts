@@ -6,8 +6,11 @@
 //                                sync.ts). install/sync own this tree; the
 //                                orchestrator never writes here.
 //            .harness/cycle/  — runtime cycle state (state.md, events.md,
-//                                epics/). orchestrator owns this tree; install
-//                                only seeds it on first install (or --force).
+//                                epics/, finalizer/). orchestrator owns this
+//                                tree; install only seeds it on first install
+//                                (or --force). The epics/ subtree holds pair
+//                                artifacts per EPIC slug; the finalizer/tasks/
+//                                subtree holds the singleton cycle-end artifact.
 //
 //          install never touches `<target>/.claude/`, `<target>/.codex/`, or
 //          `<target>/.gemini/`. Those platform trees are produced by
@@ -53,11 +56,11 @@ const SYNC_SOURCE = join(SCRIPT_DIR, "sync.ts");
 const TEMPLATES_DIR = resolve(SCRIPT_DIR, "..", "references", "runtime");
 const STATE_TEMPLATE = join(TEMPLATES_DIR, "state.template.md");
 const EVENTS_TEMPLATE = join(TEMPLATES_DIR, "events.template.md");
+const REGISTRY_TEMPLATE = join(TEMPLATES_DIR, "registry.md");
 const ORCHESTRATE_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-orchestrate");
 const PLANNING_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-planning");
 const CONTEXT_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-context");
-const DOC_KEEPER_SKILL_TEMPLATE = join(TEMPLATES_DIR, "harness-doc-keeper");
-const DOC_KEEPER_PRODUCER_TEMPLATE = join(TEMPLATES_DIR, "harness-doc-keeper-producer.template.md");
+const FINALIZER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-finalizer.template.md");
 const PLANNER_AGENT_TEMPLATE = join(TEMPLATES_DIR, "harness-planner.template.md");
 
 // Pin lives in sync.ts's PIN table now. install.ts only scaffolds canonical
@@ -115,11 +118,10 @@ const FOUNDATION_SKILL_NAMES = new Set([
   "harness-orchestrate",
   "harness-planning",
   "harness-context",
-  "harness-doc-keeper",
 ]);
 const FOUNDATION_AGENT_FILES = new Set([
   "harness-planner.md",
-  "harness-doc-keeper-producer.md",
+  "harness-finalizer.md",
 ]);
 
 async function collectNonFoundationLoomEntries(loomDir: string): Promise<string[]> {
@@ -213,9 +215,6 @@ async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promis
   if (await exists(CONTEXT_SKILL_TEMPLATE)) {
     await copyTree(CONTEXT_SKILL_TEMPLATE, join(skillsRoot, "harness-context"), copied);
   }
-  if (await exists(DOC_KEEPER_SKILL_TEMPLATE)) {
-    await copyTree(DOC_KEEPER_SKILL_TEMPLATE, join(skillsRoot, "harness-doc-keeper"), copied);
-  }
   // Agent templates are authored platform-neutral (no `model:` line); sync.ts
   // injects the per-platform pin at deploy time. Copy them verbatim.
   if (await exists(PLANNER_AGENT_TEMPLATE)) {
@@ -223,9 +222,17 @@ async function scaffoldLoomCanonical(loomRoot: string, copied: string[]): Promis
     await copyFile(PLANNER_AGENT_TEMPLATE, dst);
     copied.push(dst);
   }
-  if (await exists(DOC_KEEPER_PRODUCER_TEMPLATE)) {
-    const dst = join(agentsRoot, "harness-doc-keeper-producer.md");
-    await copyFile(DOC_KEEPER_PRODUCER_TEMPLATE, dst);
+  if (await exists(FINALIZER_AGENT_TEMPLATE)) {
+    const dst = join(agentsRoot, "harness-finalizer.md");
+    await copyFile(FINALIZER_AGENT_TEMPLATE, dst);
+    copied.push(dst);
+  }
+  // Registry lives at loom root because both the orchestrator (read) and
+  // pair-authoring tooling (write) consume it; placing it under any single
+  // skill's subtree would create a weak ownership boundary.
+  if (await exists(REGISTRY_TEMPLATE)) {
+    const dst = join(loomRoot, "registry.md");
+    await copyFile(REGISTRY_TEMPLATE, dst);
     copied.push(dst);
   }
 }
@@ -266,6 +273,17 @@ async function main() {
   //   default  : refresh `.harness/loom/` (wipe-and-reseed) and preserve
   //              `.harness/cycle/` verbatim if present. The cycle's audit trail
   //              survives plugin upgrades that reuse this script.
+  //
+  // Registry preservation: `.harness/loom/registry.md` holds volatile pair
+  // and finalizer registrations the user (or pair-dev tooling) has accumulated.
+  // Default rerun would otherwise clobber it along with the rest of loom/, so
+  // we back it up before wipe and restore it after the canonical scaffold.
+  // `--force` is an explicit reset, so it discards the backup deliberately.
+  const registryPath = join(loomDir, "registry.md");
+  let registryBackup: string | null = null;
+  if (!force && loomPreExisted && (await exists(registryPath))) {
+    registryBackup = await readFile(registryPath, "utf8");
+  }
   if (force) {
     if (loomPreExisted) await rm(loomDir, { recursive: true, force: true });
     if (cyclePreExisted) await rm(cycleDir, { recursive: true, force: true });
@@ -284,7 +302,14 @@ async function main() {
   const stateMdPath = join(cycleDir, "state.md");
   const eventsMdPath = join(cycleDir, "events.md");
   if (cycleAction !== "preserved") {
+    // Pair artifacts live under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`
+    // (slug-nested). Finalizer artifacts live under
+    // `.harness/cycle/finalizer/tasks/` (flat, singleton). Seed both subtree
+    // roots up front so the orchestrator never has to branch on "does this
+    // cycle dir exist yet" at dispatch time, and so the goal-reset archive
+    // procedure has a symmetric pair/finalizer pair to move.
     await mkdir(join(cycleDir, "epics"), { recursive: true });
+    await mkdir(join(cycleDir, "finalizer", "tasks"), { recursive: true });
     await writeFile(stateMdPath, await initialStateMd());
     await writeFile(eventsMdPath, await initialEventsMd());
   }
@@ -305,6 +330,16 @@ async function main() {
   const scaffolded: string[] = [];
   await scaffoldLoomCanonical(loomDir, scaffolded);
 
+  // Restore the user's registry from the pre-wipe backup so default rerun
+  // does not silently clobber accumulated pair/finalizer registrations.
+  // `--force` already discarded the backup above (registryBackup stays null),
+  // so this branch is a no-op on explicit reset.
+  let registryRestored = false;
+  if (registryBackup !== null) {
+    await writeFile(registryPath, registryBackup);
+    registryRestored = true;
+  }
+
   const verification = await verifyInstall(target, {
     stateMd: stateMdPath,
     eventsMd: eventsMdPath,
@@ -320,6 +355,7 @@ async function main() {
     cycleDir,
     cycleAction,
     wipedPairs,
+    registryRestored,
     stateMd: stateMdPath,
     eventsMd: eventsMdPath,
     hook: hookDest,
@@ -365,6 +401,7 @@ async function verifyInstall(
   await expect(".harness/cycle/state.md", ctx.stateMd, "file");
   await expect(".harness/cycle/events.md", ctx.eventsMd, "file");
   await expect(".harness/cycle/epics/", join(target, ".harness", "cycle", "epics"), "dir");
+  await expect(".harness/cycle/finalizer/tasks/", join(target, ".harness", "cycle", "finalizer", "tasks"), "dir");
 
   // Loom namespace: canonical staging written fresh each run.
   await expect(".harness/loom/hook.sh", ctx.hook, "file");
@@ -372,9 +409,9 @@ async function verifyInstall(
   await expect(".harness/loom/skills/harness-orchestrate/SKILL.md", join(target, ".harness", "loom", "skills", "harness-orchestrate", "SKILL.md"), "file");
   await expect(".harness/loom/skills/harness-planning/SKILL.md", join(target, ".harness", "loom", "skills", "harness-planning", "SKILL.md"), "file");
   await expect(".harness/loom/skills/harness-context/SKILL.md", join(target, ".harness", "loom", "skills", "harness-context", "SKILL.md"), "file");
-  await expect(".harness/loom/skills/harness-doc-keeper/SKILL.md", join(target, ".harness", "loom", "skills", "harness-doc-keeper", "SKILL.md"), "file");
   await expect(".harness/loom/agents/harness-planner.md", join(target, ".harness", "loom", "agents", "harness-planner.md"), "file");
-  await expect(".harness/loom/agents/harness-doc-keeper-producer.md", join(target, ".harness", "loom", "agents", "harness-doc-keeper-producer.md"), "file");
+  await expect(".harness/loom/agents/harness-finalizer.md", join(target, ".harness", "loom", "agents", "harness-finalizer.md"), "file");
+  await expect(".harness/loom/registry.md", join(target, ".harness", "loom", "registry.md"), "file");
 
   // hook executable bit.
   try {

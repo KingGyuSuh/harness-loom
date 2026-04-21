@@ -1,35 +1,38 @@
 # events.md append format
 
-`.harness/cycle/events.md` is an append-only event log. One event equals one line. The orchestrator appends producer/reviewer results and retreat reasons here every turn. `harness-orchestrate/SKILL.md` cites this file as the canonical write format for `events.md`.
+`.harness/cycle/events.md` is an append-only event log. One event equals one line. The orchestrator appends planner results, pair results, finalizer results, and orchestrator notes here every turn. `harness-orchestrate/SKILL.md` cites this file as the canonical write format for `events.md`.
 
 ## Line format
 
-```
-<ISO-timestamp> T<id> <role> <outcome> — <note with task path>
+```text
+<ISO-timestamp> T<id> <role> <outcome> — <note>
 ```
 
-- **timestamp** — ISO-8601 such as `2026-04-18T13:02:11`, down to seconds
-- **T<id>** — task id. Do not reuse the same `T<id>` and erase rework history; the orchestrator allocates new ids.
-- **role** — one of a producer slug, reviewer slug, `orchestrator`, or `planner`
-- **outcome** — one word such as `PASS`, `FAIL`, `retreat`, `install`, or `archive`
-- **note** — includes the task or review file path; for retreat use `<from> → <to>; <reason>`
+- **timestamp** — ISO-8601 down to seconds
+- **T<id>** — task id allocated by the orchestrator. Rework gets a fresh id; do not reuse ids.
+- **role** — one of a pair producer slug, reviewer slug, `planner`, `harness-finalizer`, or `orchestrator`
+- **outcome** — one word such as `PASS`, `FAIL`, `retreat`, `halt`, or `archive`
+- **note** — concise human-readable summary. Include the artifact path when one exists; planner notes summarize emitted EPICs and `next-action` because planner turns have no task or review files.
 
 ## Examples
 
-```
-2026-04-18T13:02:11 T003 skill-writer PASS — draft of skills/auth/SKILL.md; task epics/EP-1/tasks/T003--auth-skill.md
-2026-04-18T13:04:57 T004 skill-reviewer FAIL — missing description-as-trigger; review epics/EP-1/reviews/T003--auth-skill--skill-reviewer.md
-2026-04-18T13:08:02 T005 orchestrator retreat — skill-writer → api-designer; OAuth refresh contract undefined
+```text
+2026-04-18T13:01:02 T001 planner PASS — appended EP-1--auth-flow, EP-2--audit-log; next-action done
+2026-04-18T13:04:57 T002 backend-api-producer PASS — task .harness/cycle/epics/EP-1--auth-flow/tasks/T002--auth-api.md
+2026-04-18T13:07:11 T002 backend-api-reviewer FAIL — review .harness/cycle/epics/EP-1--auth-flow/reviews/T002--auth-api--backend-api-reviewer.md
+2026-04-18T13:22:44 T009 harness-finalizer PASS — task .harness/cycle/finalizer/tasks/T009--cycle-end.md
+2026-04-18T13:22:45 T009 orchestrator retreat — harness-finalizer -> planner; cycle-end check failed against planned outcome
 ```
 
 ## Append cadence
 
-- One orchestrator response usually appends 2-3 lines: producer result, reviewer result, and an orchestrator note if needed.
-- Planner turns append 1-2 lines because there is no reviewer: planner result plus an orchestrator note if needed.
-- On retreat, write a dedicated retreat line such as `orchestrator retreat — <from> → <to>; <reason>`.
+- A **Planner turn** appends 1-2 lines: one planner result line plus an orchestrator note if needed.
+- A **Pair turn** usually appends 2-(M+2) lines: one producer result line, M reviewer result lines, and an orchestrator note if needed.
+- A **Finalizer turn** appends 1-2 lines: one finalizer result line plus an orchestrator note if needed.
+- On retreat, write a dedicated orchestrator retreat line such as `<from> -> <to>; <reason>`.
 
 ## Invariants
 
-- append-only. Never modify or delete old lines; that breaks the audit path.
-- one event per line. Multiline events are forbidden.
-- orchestrator-exclusive write. Subagents do not touch `events.md`.
+- Append-only. Never modify or delete old lines.
+- One event per line. Multiline events are forbidden.
+- `events.md` is orchestrator-owned. Subagents do not write it directly.

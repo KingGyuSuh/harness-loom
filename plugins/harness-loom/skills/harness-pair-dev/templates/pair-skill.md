@@ -1,6 +1,6 @@
 ---
 name: {{PAIR_SLUG}}
-description: "Use when authoring or reviewing {{PAIR_TITLE}} artifacts in this project. Shared rubric for the `{{PAIR_SLUG}}-producer` ↔ `{{PAIR_SLUG}}-reviewer` pair."
+description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` pair in this project. Shared rubric for the producer and its reviewer(s)."
 user-invocable: false
 ---
 

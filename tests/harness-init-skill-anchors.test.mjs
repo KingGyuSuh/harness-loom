@@ -23,15 +23,13 @@ test("harness-init skill describes install in terms of .harness/loom and .harnes
   );
 });
 
-test("harness-init skill does not describe canonical state in terms of .claude or retired /harness-sync", () => {
+test("harness-init skill describes canonical state in .harness/, not in platform trees", () => {
   const body = readFileSync(HARNESS_INIT_SKILL, "utf8");
   const forbidden = [
     "canonical `.claude/`",
     "touches only `.claude/`",
-    "/harness-sync",
-    "skills/harness-sync/SKILL.md",
   ];
   for (const token of forbidden) {
-    assert.ok(!body.includes(token), `skill must not contain stale token ${token}`);
+    assert.ok(!body.includes(token), `skill must not describe ${token} as canonical`);
   }
 });

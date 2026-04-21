@@ -55,7 +55,7 @@ project it initializes, and `gemini` auto-loads that workspace-scope tree.
 
 **Happy to accept:**
 - Bug fixes with a minimal reproducing E2E case.
-- Factory rubric improvements (`plugins/harness-loom/skills/harness-pair-dev/references/example-skills/*.md`).
+- Factory rubric improvements (`plugins/harness-loom/skills/harness-pair-dev/references/authoring/*.md`).
 - Documentation polish, especially in English-facing materials.
 - Platform spec conformance fixes (Codex TOML, Gemini frontmatter).
 - Additional runtime template refinements that don't break existing
@@ -128,7 +128,7 @@ factory's own rubric:
   not factory operations such as `/harness-init`, `/harness-pair-dev`, plugin
   installation, or marketplace/distribution concerns.
 
-See `plugins/harness-loom/skills/harness-pair-dev/references/example-skills/skill-authoring.md`
+See `plugins/harness-loom/skills/harness-pair-dev/references/authoring/skill-authoring.md`
 and `agent-authoring.md` for the full rubric (it's the same rubric applied
 to target-generated pairs).
 

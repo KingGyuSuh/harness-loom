@@ -12,16 +12,16 @@
 # Runtime workspace for self-install: `.harness/loom/` is canonical staging,
 # `.harness/cycle/` mutates per orchestrator turn, and `.harness/_archive/`
 # holds past cycles that the orchestrator moves there on a goal-different
-# reset. Project documentation the doc-keeper produces lands at the target
-# root (`docs/`, `*.md`) — not under `.harness/` — and is committed to the
-# target repo, not ignored there.
+# reset. Out-of-cycle artifacts the cycle-end Finalizer produces land at the
+# target root (`docs/`, `*.md`) — not under `.harness/` — and are committed
+# to the target repo, not ignored there.
 # None of the `.harness/` paths should land in factory commits.
 .harness/
 
 # Pointer docs the factory tracks as source-of-truth (authored by humans). They
-# are listed here so that the doc-keeper output from a self-install run does
-# NOT silently overwrite the committed version; the committed files stay
-# tracked because git keeps previously-tracked paths even when gitignored.
+# are listed here so that a Finalizer write from a self-install run does NOT
+# silently overwrite the committed version; the committed files stay tracked
+# because git keeps previously-tracked paths even when gitignored.
 CLAUDE.md
 AGENTS.md
 

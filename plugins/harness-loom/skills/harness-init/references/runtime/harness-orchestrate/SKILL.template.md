@@ -1,6 +1,6 @@
 ---
 name: harness-orchestrate
-description: "Use when `/harness-orchestrate <file.md>` is invoked, and invoke whenever the Hook re-enters the cycle. Owns `.harness/cycle/state.md` + `.harness/cycle/events.md`, dispatches exactly one producer per response (with 0, 1, or M reviewers in parallel), writes task/review files under `.harness/cycle/epics/`, pre-computes the next dispatch in the `state.md` `## Next` block, and yields with `loop: true`. Sole writer of `.harness/cycle/`."
+description: "Use when `/harness-orchestrate <file.md>` is invoked or when Hook re-enters the cycle. Owns `.harness/cycle/state.md` + `.harness/cycle/events.md`, executes exactly one runtime turn per response, persists pair/finalizer artifacts, synthesizes the next dispatch in `state.md` `## Next`, and yields with `loop: true` only when another turn exists. Sole writer of `.harness/cycle/`."
 user-invocable: true
 ---
 
@@ -8,223 +8,272 @@ user-invocable: true
 
 ## Design Thinking
 
-Orchestration is **authority design plus judgment before execution**. This skill is the **canonical shared law (SSOT)** for the harness cycle rhythm, exclusive `.harness/cycle/` write authority, reviewed-work contract, phase advance, structural-issue handling, and the cycle-end doc-keeper dispatch, and it also carries orchestrator-only procedure: goal classification, `state.md`/`events.md` editing, one-producer-per-response dispatch, envelope assembly, **writing the next `## Next` block into state before yielding**, Hook re-entry, and retreat handling. Judgment about who runs next and what they should do happens **only at the end of the current turn**; the next turn executes the saved `Next` block exactly. The runtime workspace is split into **`.harness/loom/`** (canonical staging — skills, agents, `hook.sh`, `sync.ts`; seeded before the cycle and refreshed by `node .harness/loom/sync.ts`) and **`.harness/cycle/`** (runtime state — `state.md`, `events.md`, `epics/`; written exclusively by this orchestrator). Scheduling is built around a **project-global fixed roster order**: EPICs move through that shared stage sequence, may skip stages, and may block on upstream EPICs at the same stage gate. Subagents do not need the full law. They only need envelope-field reading and output shape, and that reduced background is injected through `harness-context`. Script/prompt boundary: setup, sync, and hook tooling are outside this skill and must not be re-explained here.
+Every response executes exactly one of three runtime turn kinds:
+
+- **Planner** — singleton control turn. Plans or replans EPICs. Leaves no task or review files.
+- **Pair** — registry stage from `.harness/loom/registry.md`. Every registered pair runs under the same execution law: one producer plus one or more reviewers.
+- **Finalizer** — singleton cycle-end turn. One agent, no reviewer, verdict from its own `Status` plus `Self-verification`.
+
+The orchestrator does not do domain work itself. It reads the saved `Next`, dispatches exactly one turn, persists that turn's artifacts, computes the next `Next`, and yields. Hook is only the re-entry trigger. The orchestrator's job is to keep the cycle deterministic, auditable, and moving.
+
+### Quick Map
+
+Read the runtime in this order:
+
+1. On direct `/harness-orchestrate <file.md>` entry, run Goal-anchored entry first; on Hook re-entry, resume from saved state.
+2. Consume the saved `Next` and dispatch exactly one turn: Planner, Pair, or Finalizer.
+3. Persist that turn's artifacts and verdict.
+4. Synthesize the next `Next`, or halt with `loop: false`.
+
+For a compact DFA diagram and transition table, see `references/state-machine.md`. For the exact dispatch-envelope payload, see `references/dispatch-envelope.md`.
 
 ## Methodology
 
-### 1. Semantic Contract
+### 1. Runtime contract
 
-#### `state.md` / `events.md` shape
+The workspace has two halves:
 
-The canonical schema for both files is split into references. Before editing either file, the orchestrator cites those references to lock the shape for the current turn.
+- `.harness/loom/` — harness definitions: skills, agents, `registry.md`, `hook.sh`, `sync.ts`
+- `.harness/cycle/` — runtime state: `state.md`, `events.md`, `epics/`, and `finalizer/`
 
-- `references/state-md-schema.md` — the four-line header (`Goal` / `Phase` / `loop` / `planner-continuation`), the `## Next` block (`To` / `EPIC` / `Task path` / `Intent` / `Prior tasks` / `Prior reviews`), the `## EPIC summaries` structure (one `### EP-N--slug` heading plus `outcome` / `roster` / `current` / `note`), and the mutation rule (append-only, with terminal `current` states `done|superseded`)
-- `references/events-md-format.md` — the one-line format `<ISO-ts> T<id> <role> <outcome> — <note>` plus append cadence and the invariant that only the orchestrator writes the log
+Read the canonical runtime references at the start of every turn before editing state:
 
-The Semantic Contract, Turn Algorithm, Interfaces, and Exceptional Paths in this skill all assume those references as the canonical shape source.
+- `references/state-md-schema.md` — header, `## Next`, and `## EPIC summaries`
+- `references/events-md-format.md` — append-only events line format
 
 #### Authority Rules
 
-- Every file under `.harness/cycle/` is written **only by the orchestrator**. That includes `state.md`, `events.md`, task files, and review files. `.harness/loom/` is canonical staging seeded before the cycle; the orchestrator reads from it but does not write into it. `.harness/_archive/` is written only during a goal-different reset (§Goal entry step 3), when the orchestrator moves the current cycle there before reseeding; no other flow touches `_archive/`. **Project documentation** (target root `*.md`, `docs/`) is written exclusively by the cycle-end `harness-doc-keeper-producer` turn per `../harness-doc-keeper/SKILL.md`; orchestrator code does not touch it, and no producer other than doc-keeper is given that write scope in its envelope.
-- Producers and reviewers return only their Output Format blocks. They never write control-plane state directly. `Suggested next-work`, `Advisory-next`, and `Escalation` are advisory inputs; the orchestrator synthesizes the real `Next` block from them.
-- Subagents run with `fork_context=false`. Conversation transcript, tool trace, and producer inner reasoning are never passed to reviewers. Reviewers judge **only one task file recorded on disk**.
-- The orchestrator assembles the envelope. Subagents do not read `state.md` and infer routing themselves; they trust only Goal, Focus EPIC, Task path, Scope, Current phase, and Prior tasks/reviews supplied in the envelope.
-- The planner is a meta-role with no paired reviewer. It leaves no task/review files and returns state-ready EPIC summaries only. The actual `state.md` write is still append-only and still orchestrator-owned.
-- For a **reviewer-less producer turn**, the producer's own `Status: PASS|FAIL` line plus its `Self-verification` evidence is the verdict source. A producer FAIL is treated exactly as a reviewer FAIL would be (Phase advance rule 1, Rework). A `## Structural Issue` block from the producer is the only retreat trigger (Phase advance rule 2). No reviewer is dispatched and no review file is written.
+- Only the orchestrator writes under `.harness/cycle/`. `.harness/loom/` is read-only for the orchestrator. `.harness/_archive/` is touched only by goal reset under §Entry, reset, and halt paths.
+- Out-of-cycle write scope (target root `*.md`, `docs/`, release artifacts, audit output, etc.) is reserved for the finalizer turn and declared in that agent's own `Scope`.
+- Subagents may return supporting body or evidence before their concluding Output Format block. The orchestrator parses the turn result from that concluding block plus any top-level `## Structural Issue` block.
+- `Suggested next-work`, `Advisory-next`, and `Escalation` are advisory only. The orchestrator synthesizes the real `Next`.
+- Subagents run with `fork_context=false`. Reviewers judge the disk artifact plus concrete disk evidence; they never see producer transcript, tool trace, or another reviewer's verdict.
 
-#### Reviewed-Work Contract
+#### Pair turn contract
 
-One pair turn leaves the following files on disk; the orchestrator provides the paths in the envelope:
+One Pair turn always follows the same artifact law, regardless of which registered pair slug is running.
 
-- **Task** (exactly 1) — `.harness/cycle/epics/EP-N--{slug}/tasks/T{id}--{task-slug}.md`. This is the producer artifact. It carries the main body, evidence, self-verification, and suggested-next-work.
-- **Review** (0, 1, or M files) — `.harness/cycle/epics/EP-N--{slug}/reviews/T{id}--{task-slug}--{reviewer-name}.md`. The `{reviewer-name}` suffix keeps 1:M reviews collision-free. Each review contains PASS/FAIL plus criteria-cited evidence limited to that reviewer's axis. Reviewer-less producer-only groups (registered as `(no reviewer)`; see Roster lookup below) leave **0 review files** for the turn.
+- **Task** (exactly 1) — `.harness/cycle/epics/EP-N--{slug}/tasks/T{id}--{task-slug}.md`
+- **Review** (1 or M files) — `.harness/cycle/epics/EP-N--{slug}/reviews/T{id}--{task-slug}--{reviewer-name}.md`
 
-Reviewer-less means **"not subject to review"**, not **"passed without review"**. Reserve it for deterministic / auxiliary work (sync, format, mirror) whose correctness is already pinned by the producer's own self-verification. Generative / judgmental / creative work must stay paired so the reviewed-work contract remains the default trust source.
+Producer artifacts may include domain body and evidence, but must end with the producer Output Format block. Reviewer artifacts may include supporting rationale, but must end with the reviewer Output Format block. A `## Structural Issue` block belongs in the review artifact when the reviewer judges the issue as structural.
 
-Rework never overwrites the same task id. The orchestrator allocates a fresh `T<id>`, leaving the previous task and all related reviews intact. Structural retreat follows the same rule. The planner is the only exception: it leaves no task/review files, so its trail is the `events.md` entry plus the `state.md` EPIC summary diff.
+Rework never overwrites the same task id. The orchestrator allocates a fresh `T<id>` so the previous task and reviews remain on disk. Structural retreat follows the same rule.
 
-#### Global roster lookup — stage order plus pair vs reviewer-less
+#### Finalizer turn contract
 
-This skill's own `## Registered pairs` section (see below) is an **ordered list**. Its line order is the project's global roster order. That order is curated at pair-authoring time: pair registration may insert a new line before or after an existing anchor instead of treating add chronology as meaningful. When `Next.To` resolves to a producer slug, the orchestrator finds the matching line in that section and treats that line number as the producer's global stage index. Three line shapes exist:
+The finalizer is a singleton cycle-end turn, not a registered pair.
 
-- 1:1 — `- <pair>: producer \`<p>\` ↔ reviewer \`<r>\`, skill \`<s>\``
-- 1:M — `- <pair>: producer \`<p>\` ↔ reviewers [\`<r1>\`, \`<r2>\`], skill \`<s>\``
-- 1:0 (reviewer-less) — `- <pair>: producer \`<p>\` (no reviewer), skill \`<s>\``
+- **Task** (exactly 1) — `.harness/cycle/finalizer/tasks/T{id}--cycle-end.md`
+- **Review** — none
 
-The **load-bearing tokens** are the `↔` arrow (present iff a reviewer roster exists) and the literal `(no reviewer)` marker (present iff reviewer-less). The orchestrator treats a roster line as reviewer-less when it lacks `↔` and contains the substring `(no reviewer)`; otherwise it dispatches the reviewer set parsed from the `↔ ...` segment. No other line shape is registered, so this two-token check is total. Because the list is ordered, the same lookup also answers "what global roster position is this producer?"
+The finalizer artifact may include supporting body and evidence, but must end with the finalizer's concluding producer-shaped block. Verdict source is the finalizer's own `Status: PASS|FAIL` line plus its `Self-verification` block; a top-level `## Structural Issue` block signals RETREAT. FAIL or RETREAT routes to planner recall, not in-place rework.
 
-### 2. Turn Algorithm
+The finalizer is dispatched only when every live EPIC is terminal and `planner-continuation: none`.
+
+#### Registry contract
+
+`.harness/loom/registry.md` is the sole source of truth for the pair roster. It contains only Pair stages, never the planner or finalizer. Two line shapes exist:
+
+- 1:1 — `` - <pair>: producer `<p>` ↔ reviewer `<r>`, skill `<s>` ``
+- 1:M — `` - <pair>: producer `<p>` ↔ reviewers [`<r1>`, `<r2>`], skill `<s>` ``
+
+The `↔` arrow is load-bearing. When `Next.To` resolves to a pair producer slug, the orchestrator finds the matching registry line and uses that line's position as the producer's global stage index.
+
+The planner and finalizer are singleton turns:
+
+- `Next.To = planner` dispatches `.harness/loom/agents/harness-planner.md`
+- `Next.To = harness-finalizer` dispatches `.harness/loom/agents/harness-finalizer.md`
+
+### 2. One-turn algorithm
+
+On direct `/harness-orchestrate <file.md>` invocation, apply §Goal-anchored entry before consuming `Next`. On Hook re-entry, skip that gate and continue from the saved control plane.
 
 #### Turn rhythm (one response = consume `Next`, produce the next `Next`)
 
-The execution order of one orchestrator response is fixed:
+1. Read `references/state-md-schema.md` and `references/events-md-format.md` first so the read/write shape is locked.
+2. Write `loop: false` into `state.md` first to lock out re-entry. Codex and Gemini hooks may fire on subagent completion, so this lock is the first write of every turn whether or not `Next` exists.
+3. Read `state.md` and inspect `## Next`. If empty or absent, branch to Cold start / Halt under §Entry, reset, and halt paths.
+4. Classify `Next.To`:
+   - `planner` → Planner turn
+   - `harness-finalizer` → Finalizer turn
+   - anything else → Pair turn via registry lookup in `## Registered pairs` (missing slug is an error)
+5. Assemble the dispatch envelope and run the turn with `fork_context=false`.
+6. Persist artifacts by turn kind:
+   - **Planner** — no task/review files. Absorb the planner output into `## EPIC summaries` and append one planner result line into `events.md`. If `Additional pairs required` is non-empty, append a separate orchestrator note so the request survives into future planner recalls through `Recent events`.
+   - **Pair** — write the producer artifact into `Next.Task path`, then dispatch the paired reviewer(s) in parallel within the same response. Write each reviewer artifact into its review path.
+   - **Finalizer** — write the finalizer artifact into `Next.Task path`. No reviewer dispatch, no review file.
+7. Extract the verdict:
+   - **Planner** — no aggregation; the only control input is `next-action`
+   - **Pair** — `all PASS -> PASS`, `any FAIL -> FAIL`, `any Structural Issue -> RETREAT` (most-upstream issue wins; ties break by first-received)
+   - **Finalizer** — `Status: PASS -> PASS`, `Status: FAIL -> FAIL`, `## Structural Issue -> RETREAT`
+8. Synthesize the next `## Next` block using the branch rules below.
+9. Update `state.md` and append `events.md` lines. Raise `loop: true` only if a valid next dispatch exists. Otherwise clear `Next`, keep `loop: false`, and stop.
 
-1. Read `references/state-md-schema.md` and `references/events-md-format.md` first, so the read/write shape for this turn is locked.
-2. At turn start, **always write `loop: false` into `state.md` first** to lock out re-entry. Codex/Gemini hooks may also fire on subagent completion, so this lock is the first write of every orchestrator turn whether or not `Next` exists.
-3. Read `state.md` and inspect the `## Next` block. If it is empty or absent, branch to Cold start / Halt under Exceptional Paths.
-4. Assemble the `Next` block into an envelope and dispatch `Next.To` with `fork_context=false`. Before envelope assembly, perform the Roster lookup (Section 1) on `Next.To` so the turn knows whether it is a paired producer, a reviewer-less producer, or the planner.
-   - **4-a. Producer turn** — if `Next.To != planner`, write the returned artifact into `Next.Task path`.
-   - **4-b. Planner turn** — if `Next.To == planner`, do not create task/review files. Append the planner's `EPICs (this turn)` block into `state.md` `## EPIC summaries`, and write one planner result line into `events.md`. If `Additional pairs required` is non-empty, append it as a separate orchestrator note in `events.md` so it can flow back into future planner recalls through `Recent events`.
-5. Handle the reviewer branch.
-   - **5-a. Planner turn** — skip reviewer dispatch and jump to step 8. The planner has no reviewer.
-   - **5-b. Paired producer turn (1:1 or 1:M)** — dispatch the paired reviewer(s) **in parallel within the same response**. For 1:M, send all M reviewer calls together. They are independent and receive no producer transcript, so parallelism is safe.
-   - **5-c. Reviewer-less producer turn (1:0)** — skip reviewer dispatch entirely. The producer's own `Status: PASS|FAIL` plus `Self-verification` evidence and any `## Structural Issue` block stand in for the reviewer envelope. Do **not** synthesize a placeholder reviewer call.
-6. On paired producer turns, write each reviewer return into `.harness/cycle/epics/EP-N--{slug}/reviews/T<id>--<task-slug>--<reviewer-name>.md`. On reviewer-less producer turns, write **no review file**; the producer task file is the only artifact for the turn.
-7. Aggregate the verdicts.
-   - **7-a. Paired (1:1 / 1:M)** — `all PASS -> PASS`, `any FAIL -> FAIL` with merged rework reasons, and `any structural -> Retreat` with the most-upstream structural report winning. Ties break by first-received.
-   - **7-b. Reviewer-less (1:0)** — read the producer's own Output Format. `Status: PASS` -> PASS; `Status: FAIL` -> FAIL with the producer's stated reasons as rework reasons; a `## Structural Issue` block -> Retreat. The reviewed-work contract is preserved because reviewer-less is "not subject to review" (see Reviewed-Work Contract), not "passed without review".
-8. **Synthesize the next `Next` block**.
-   - **8-a. Planner turn** — initialize `current` for each newly appended EPIC to the first producer in its roster slice. Then resolve the planner's continuation signal and seed the next dispatch:
-     - **Read `next-action` into state.** If the planner's `next-action` line begins with `continue`, write `planner-continuation: pending` into the `state.md` header (see `references/state-md-schema.md`). If it reads `done` (or any non-`continue` value), write `planner-continuation: none`. This flag is **defer-to-end**: the orchestrator does not recall the planner immediately. Execution proceeds against the EPICs already on state, and the planner is recalled later — at Phase advance rule 4, when every EPIC reaches terminal — so the next planner turn has actual execution evidence in `events.md` to plan against.
-     - **Ready-set logic.** Compute the **ready set**: live EPICs whose current producer is runnable because every upstream EPIC has already advanced beyond that same global roster position (or is terminal). Seed the next dispatch from the ready EPIC with the smallest global roster position; ties break by smaller EPIC number. If all EPICs are terminal, fall through to Phase advance rule 4 (which consumes the `planner-continuation` flag). If the planner emitted **no executable EPICs** and only `Additional pairs required`, halt: clear `Next`, keep `loop: false`, clear any pending continuation flag, and tell the user to extend the harness with the required producers (paired or reviewer-less) and re-run `/harness-orchestrate <goal.md>`. This is a **blocked halt** (user intervention required), not a normal cycle-end halt — step 10 (cycle-end doc-keeper dispatch) does **not** run here. Doc-keeper fires only when the cycle actually terminates through Phase advance rule 4 with `planner-continuation: none`. If live EPICs exist but the ready set is empty, synthesize a planner recall instead of dispatching a blocked stage: `Next.To = planner`, `Next.EPIC = (none)`, `Next.Intent = (retreat reason: no ready EPIC at the current dependency gates). Repair the upstream graph or roster slices so at least one live EPIC becomes ready.`, `Next.Prior tasks = []`, and `Next.Prior reviews = []`.
-     - **Zero-emit safety.** This check fires **only on a defer-to-end continuation recall** — identified by `planner-continuation: pending` being on the state.md header at turn start (equivalently, the incoming `Next.Intent` carried the `(planner continuation: ...)` prefix). Do **not** use `Phase: planner` alone as the signal, because cold start, goal-reset, structural retreat to planner, and ready-set-empty recall all also arrive with `Phase: planner` and must not trip this safety. On a qualifying defer-to-end recall that emitted zero new executable EPICs, treat it as pathological continuation: force `planner-continuation: none` regardless of the `next-action` line, append one orchestrator note to `events.md` recording that the zero-emit safety fired, and continue with the usual terminal-state handling in Phase advance rule 4. This prevents a planner that cannot produce new work from stalling halt forever.
-   - **8-b. Producer turn (paired or reviewer-less)** — apply the Phase advance rules below using the aggregated verdict from step 7-a / 7-b.
-9. Update the `Next` block, the `Phase` header, and the current EPIC `current` field in `state.md`, then append this turn's events to `events.md`. Paired turn: one producer entry plus M reviewer entries plus any orchestrator note. Reviewer-less turn: one producer entry (carrying the producer's own PASS/FAIL) plus any orchestrator note; no reviewer line is appended.
-10. **Halt prep — cycle-end doc-keeper dispatch**. If every EPIC is terminal (`done` / `superseded`) **and the `planner-continuation` header is `none` or absent** and the just-finished turn was not the doc-keeper, do **not** halt yet. Synthesize a reviewer-less `Next` targeting the `harness-doc-keeper-producer` under a synthetic `_doc-keep` EPIC slot (follow the normal `.harness/cycle/epics/<EP>/tasks/T<id>--<slug>.md` path shape), yield, and let Hook re-entry run it as a standard reviewer-less producer turn (steps 5-c, 7-b). Cap doc-keeper rework at one attempt so documentation drift never blocks cycle halt; after PASS, or after the cap is reached, halt for real. A structural-issue block from the doc-keeper triggers retreat per Phase advance rule 2. If `planner-continuation` is `pending`, do not run step 10 on this turn — Phase advance rule 4 has already synthesized a planner-recall `Next`; the doc-keeper waits until continuation resolves to `none`.
-11. Only if a valid next dispatch exists (including the doc-keeper slot from step 10), raise `loop: true` and yield. Otherwise clear `Next`, keep `loop: false`, and stop.
+#### Planner branch
 
-One response dispatches exactly one producer (its reviewer set may be 0, 1, or M in parallel). Planner exceptions exist only in steps 4-b, 5-a, and 8-a. Reviewer-less exceptions exist only in steps 5-c, 6, 7-b, and 9. `loop` always goes false at turn start and only goes true again at turn end after a valid new `Next` has been committed.
+After a planner turn:
 
-#### Phase advance — synthesizing the next `Next`
+1. Absorb each emitted EPIC into `## EPIC summaries` with five stored fields: `outcome`, `upstream`, `roster`, `current`, and `note`.
+2. Initialize `current` for each newly appended EPIC to the first producer in its `roster`.
+3. Fold `why` into `note` together with any progress or blocker summary the orchestrator needs to preserve for humans.
+4. Read `next-action` into `planner-continuation`:
+   - prefix `continue` -> `pending`
+   - `done` or any non-`continue` value -> `none`
+5. Compute the ready set. A live EPIC is ready at stage `S` only when every EPIC named in its `upstream` field has already advanced beyond that same global roster position, or is terminal. Choose the ready EPIC with the smallest global roster position; ties break by smaller EPIC number.
+6. Zero-emit handling comes before any new dispatch:
+   - only `Additional pairs required` and no executable EPICs -> halt directly: clear `Next`, keep `loop: false`, clear any pending continuation flag, and tell the user to extend the harness and re-run. This blocked halt does not run the finalizer.
+   - finalizer FAIL/RETREAT recall with zero executable EPICs -> halt directly: clear `Next`, keep `loop: false`, and tell the user to fix the finalizer body or the plan. This cuts any infinite Finalizer -> Planner -> Finalizer loop the planner cannot repair.
+   - defer-to-end continuation recall with zero new executable EPICs -> force `planner-continuation: none`, append one orchestrator note to `events.md`, and continue with terminal handling below.
+7. If live EPICs remain and the ready set is non-empty, synthesize the next Pair dispatch from the selected EPIC.
+8. If live EPICs remain and the ready set is empty, recall the planner instead of dispatching a blocked stage:
+   - `Next.To = planner`
+   - `Next.EPIC = (none)`
+   - `Next.Task path = (none)`
+   - `Next.Intent = (gate condition: ready set empty; repair upstream or roster slices against current state)`
+9. If every live EPIC is terminal, apply Terminal resolution below.
 
-This section applies only to **producer turns** (paired 1:1, paired 1:M, and reviewer-less 1:0). Planner turns are handled by Turn Algorithm step 8-a. The verdict source is the reviewer set for paired turns and the producer's own `Status` for reviewer-less turns (see Turn Algorithm step 7). All judgment happens **once at the end of the current turn**, and the result is written into `state.md` `## Next`.
+#### Phase advance — Pair rules
 
-`Next` fields (`To / EPIC / Task path / Intent / Prior tasks / Prior reviews`) follow the schema in `references/state-md-schema.md`. The four outcomes are:
+The verdict source is the aggregated reviewer set.
 
-1. **Rework** — verdict is FAIL: keep the same producer and EPIC; carry the FAIL reasons as `Intent` (for 1:M merge reviewer reasons with axis tags; for reviewer-less use the producer's own `Status` reasons); attach the just-written task file plus any failing reviews as `Prior` context so the rework turn has its full baseline.
-2. **Retreat (structural)** — a `## Structural Issue` block was raised (by a reviewer on paired turns, or inside the producer artifact on reviewer-less turns): set `To` to the most-upstream `Suspected upstream stage` (use `planner` when the issue spans EPIC scope), rewind the EPIC's `current` to that stage, carry the issue reason as `Intent`, and attach the latest artifact from the retreat target as `Prior` context.
-3. **Forward advance (PASS)** — move the just-passed EPIC's `current` to the next producer in its roster slice (or `done` if the slice is exhausted). Then compute the **ready set** across live EPICs: a live EPIC is ready only when every upstream EPIC has already advanced beyond the candidate's current global roster position, or is terminal. Select the ready EPIC whose `current` sits at the smallest global roster position; ties break by smaller EPIC number. If live EPICs remain but the ready set is empty, recall the planner instead of dispatching a blocked stage — the planner's envelope should state the gate condition so it can repair upstream graph or roster slices.
-4. **Halt (all terminated)** — every EPIC's `current` is `done` or `superseded`. Before clearing `Next`, consult the `planner-continuation` header:
-   - **If `pending`** — the planner requested continuation after execution. Synthesize a planner recall instead of halting: `Next.To = planner`, `Next.EPIC = (none)`, `Next.Intent = (planner continuation: planning deferred until all EPICs reached terminal — re-plan against the execution evidence in events.md)`, empty `Prior`. Keep the `pending` flag on state as-is; Turn Algorithm step 8-a will overwrite it (to `none` on `next-action: done`, or keep it `pending` on another `continue`). The doc-keeper dispatch is deferred until continuation actually clears.
-   - **If `none` or absent** — run Turn Algorithm step 10 (cycle-end doc-keeper dispatch) if it has not yet fired; halt is allowed only after that turn completes (PASS, rework cap reached, or structural retreat resolved).
+1. **Rework (FAIL)** — keep the same EPIC and producer. Carry merged FAIL reasons as `Intent`, attach the just-written task file plus any failing reviews as `Prior`, and allocate a fresh pair task path in the same EPIC task directory.
+2. **Retreat (structural)** — read `Suspected upstream stage`:
+   - if it resolves to `planner`, synthesize a planner recall with `Task path: (none)` and attach the relevant task/review artifacts as `Prior`
+   - otherwise rewind the EPIC's `current` to that producer, carry the structural reason as `Intent`, attach the retreat-target artifacts as `Prior`, and allocate a fresh pair task path for the rewound producer
+3. **Forward advance (PASS)** — move the current EPIC to the next producer in its roster slice, or `done` if the slice is exhausted. Recompute the ready set across every live EPIC. If the ready set is non-empty, dispatch the ready EPIC with the smallest global roster position. If live EPICs remain but the ready set is empty, recall the planner with `Task path: (none)` and an `Intent` that names the gate condition. If no live EPICs remain, apply Terminal resolution below.
 
-The `Phase` header is always an echo of `Next.To`. Rework keeps the same producer. Retreat rewinds `current` upstream. Forward advance moves `current` to the next producer in the EPIC's roster slice or to `done`. Global stage comparison always resolves against the ordered `## Registered pairs` list rather than against one EPIC's local slice length.
+`Phase` always echoes `Next.To`. Global stage comparison always resolves against the ordered registry, never against a per-EPIC local slot number.
 
-### 3. Interfaces
+#### Terminal resolution
+
+Apply this rule whenever a Planner or Pair turn leaves every live EPIC terminal (`done` or `superseded`):
+
+- `planner-continuation: pending` — planner continuation recall: `Next.To = planner`, `Next.EPIC = (none)`, `Next.Task path = (none)`, `Next.Intent = (planner continuation: planning deferred until all live EPICs reached terminal — re-plan against execution evidence in events.md)`
+- `planner-continuation: none` or absent — finalizer entry: `Next.To = harness-finalizer`, `Next.EPIC = (none)`, `Next.Task path = .harness/cycle/finalizer/tasks/T{id}--cycle-end.md`, `Next.Intent = (cycle-end finalizer)`
+
+#### Phase advance — Finalizer rules
+
+1. **PASS** — cycle complete. Clear `Next`, keep `loop: false`, stop. Hook does not re-enter.
+2. **FAIL or RETREAT** — planner recall:
+   - `Next.To = planner`
+   - `Next.EPIC = (none)`
+   - `Next.Task path = (none)`
+   - `Next.Intent = (retreat reason: finalizer reported <FAIL summary or Structural Issue>)`
+   - `Prior tasks = [<latest finalizer task path>]`
+   - `Prior reviews = []`
+
+Do not touch `planner-continuation` in this branch. The recovery loop is bounded by the Finalizer-retreat blocked halt in the Planner branch above.
+
+### 3. Dispatch interfaces
 
 #### Dispatch envelope
 
-Producers and reviewers run with `fork_context=false`, so they do not inherit transcript context. The orchestrator must carry global context into the prompt through the envelope.
+Subagents run with `fork_context=false`, so the envelope is the only runtime payload they should trust for this turn.
 
-Shared blocks:
+Every envelope includes `Goal`, `Focus EPIC`, `Task path`, `Scope`, `Current phase`, `Prior tasks`, and `Prior reviews`. Reviewers may also receive `Axis`. Pair turns include the rubric path. Planner turns add `Existing EPICs`, `Recent events`, and `Registered roster`. Finalizer turns omit reviewer-only and pair-only fields.
 
-- **Goal** — the `Goal (from X):` paragraph copied from `state.md`
-- **Focus EPIC** — the `Next.EPIC` slug plus that EPIC's one-line `outcome`, or `(none)` / existing EPIC list for planner turns
-- **Pair skill** — already injected through `skills:` frontmatter, but still named in one line as `rubric: skills/<slug>/SKILL.md`
-- **Task path** — copied from `Next.Task path`
-- **Scope** — one sentence defining allowed file/path surfaces for this turn, synthesized from the pair skill's scope
-- **Current phase** — copied from `Next.Intent`; this is the field that tells the subagent what to do now
-- **Axis (reviewer only)** — in a 1:M pair, each reviewer envelope names the grading axis owned by that reviewer. In 1:1 it may be omitted or set to `Axis: (entire pair)`. Reviewer-less producer turns omit the reviewer envelope entirely (no reviewer is dispatched), so `Axis` does not apply.
-
-Variable blocks:
-
-- **Prior tasks** — array copied from `Next.Prior tasks`
-- **Prior reviews** — array copied from `Next.Prior reviews`
-
-Planner-only additions:
-
-- **Existing EPICs** — the full `## EPIC summaries` block from `state.md`
-- **Recent events** — the last five lines of `events.md`
-- **Registered roster** — the full `## Registered pairs` block from this SKILL, copied verbatim so the planner can author EPIC roster slices without reading any other SKILL file
-
-Subagents trust only the envelope. They do not read `state.md` and infer routing. Reviewers judge only one task file plus the pair skill; they do not inspect producer transcript or tool trace.
+The exact block descriptions and per-turn envelope shape live in `references/dispatch-envelope.md`.
 
 #### Context propagation
 
-Each pair agent frontmatter `skills:` declares the shared pair skill plus `harness-context`, so both are auto-injected at dispatch. The envelope carries only what those skills do not cover: Goal, Focus EPIC, Task path, Scope, Current phase, and Prior artifacts. The full shared law and routing rules in this skill are not injected into subagents because those are not subagent concerns.
+- Pair agents list the pair skill plus `harness-context`
+- The planner lists `harness-planning` plus `harness-context`
+- The finalizer lists `harness-context` only
+
+No branch should rely on hidden side references or unstated runtime context.
 
 #### Structural Issue handling
 
-When a producer or reviewer detects an upstream contract failure that **cannot be solved inside the current pair**, the review file must report it in the shape below. The same shape is repeated in `harness-context`.
+When a Pair reviewer or the Finalizer detects an upstream contract failure that cannot be resolved inside the current turn, the artifact reports it in this shape:
 
 ```markdown
 ## Structural Issue
 
-- Suspected upstream stage: {producer name}
+- Suspected upstream stage: {producer name | planner}
 - Blocked contract: {what cannot be satisfied}
-- Why this pair cannot resolve it: {reason}
+- Why this role cannot resolve it: {reason}
 - Evidence: {concrete task or review evidence}
-- Suggested repair focus: {what the upstream producer should revisit}
+- Suggested repair focus: {what the upstream stage should revisit}
 ```
 
-Use this when: (a) the current artifact depends on an upstream artifact that is invalid, (b) the pair contract itself is wrong, or (c) an agent-skill mismatch makes downstream work impossible.
-Do not use this when: ordinary reviewer FAIL feedback can still be resolved by re-dispatching the same producer.
+Use when: (a) an upstream artifact is invalid, (b) the pair contract itself is wrong, (c) an agent-skill mismatch makes downstream work impossible, or (d) a finalizer's cycle-end check fails against the planned outcome. `Suspected upstream stage: planner` is correct when the fault is in the plan.
 
-### 4. Exceptional Paths
+Do **not** use when ordinary same-role rework is enough.
+
+### 4. Entry, reset, and halt paths
 
 #### Cold start / Halt
 
-- **Cold start** — if `state.md` has no `Next` block and no EPIC summaries yet, treat the turn as a cold start. `loop: false` has already been written at the top of the turn. As the first action, synthesize the initial `Next`: `To: planner`, `EPIC: (none)`, `Intent: read the full goal.md and decompose it into EPICs`, then execute it in the same turn. Only raise `loop: true` at the end if a valid next dispatch exists.
-- **Manual halt / terminal halt** — if the user manually clears the `Next` block, halt immediately. Automatic halt follows Phase advance rule 4. Both keep `loop: false` and the Hook does not re-enter.
+- **Cold start** — `state.md` has no `Next` block and no EPIC summaries. `loop: false` is already written. Synthesize the initial planner dispatch with `To: planner`, `EPIC: (none)`, `Task path: (none)`, `Intent: read the full goal and decompose it into EPICs`, then execute it in the same response.
+- **Manual / terminal halt** — if the user manually clears `Next`, halt immediately. Automatic halt follows Terminal resolution and Finalizer rule 1. All halt paths keep `loop: false`.
 
 #### Goal-anchored entry
 
 When `/harness-orchestrate <filename.md>` is invoked:
 
-1. Read `<filename.md>` and treat the **entire trimmed body** as the Goal string. Do not require load-bearing headers such as `# Goal` or `## Constraints`.
-2. Compare it semantically to the existing `Goal (from X):` in `state.md` and pick the lightest action that keeps the cycle honest: a matching (or empty) prior goal means no-op — continue from the current `Next`; a clearly different intent or domain means **reset** (see step 3); anything in between (scope expanded, detail added, but same intent) means planner recall — replace `Next` with a planner dispatch and let the planner append new EPICs or supersede old ones without mutating existing EPIC fields.
-3. **Reset procedure — performed directly by the orchestrator, all in the current response**:
-   a. Create `.harness/_archive/<ISO-timestamp>/` (timestamp down to seconds; append `--<kebab-slug>` only if two resets collide within the same second).
-   b. Move `.harness/cycle/state.md`, `.harness/cycle/events.md`, and `.harness/cycle/epics/` into that archive directory. `.harness/loom/` stays untouched; project documentation (target root `*.md`, `docs/`) is not part of the cycle trace and must not be archived.
-   c. Write a fresh `.harness/cycle/state.md` per `references/state-md-schema.md` with: the new goal body quoted verbatim under `Goal (from <filename.md>)`, `Phase: planner`, `loop: false`, `planner-continuation: none`, and a Cold-start `## Next` block (`To: planner`, `EPIC: (none)`, `Task path: (assigned on first planner dispatch)`, `Intent: read the full goal and decompose it into EPICs`, empty `Prior tasks` / `Prior reviews`). Leave `## EPIC summaries` empty.
-   d. Write a fresh `.harness/cycle/events.md` whose first line is `<ISO-timestamp> T0 orchestrator archive — reset to new goal (from <filename.md>)`.
-   e. Re-enter §Cold start **in the same response**: dispatch the planner, synthesize the follow-up `Next`, and raise `loop: true` at turn end. Do not stop the response at step 3-d — the fresh `loop: false` on disk is the turn-start lock, not a halt signal, and ending here would leave the new goal stalled until a manual re-invocation.
+1. Read `<filename.md>` and treat the entire trimmed body as the Goal. Do not require load-bearing headers such as `# Goal`.
+2. Compare it to the existing `Goal (from X):` in `state.md` and choose the lightest honest action:
+   - matching or empty -> no-op, continue from current `Next`
+   - clearly different intent or domain -> reset
+   - same intent with expanded scope or new detail -> planner recall
+3. **Reset procedure — all in the current response**:
+   - create `.harness/_archive/<ISO-timestamp>/` (append `--<kebab-slug>` only if two resets collide within the same second)
+   - move `.harness/cycle/state.md`, `.harness/cycle/events.md`, `.harness/cycle/epics/`, and `.harness/cycle/finalizer/` into that archive
+   - leave `.harness/loom/` untouched; finalizer out-of-cycle output at the target root is not part of the cycle trace and must not be archived
+   - write a fresh `.harness/cycle/state.md` per `references/state-md-schema.md` with the new goal body, `Phase: planner`, `loop: false`, `planner-continuation: none`, and a Cold-start `## Next` block whose `Task path` is `(none)`
+   - write a fresh `.harness/cycle/events.md` whose first line is `<ISO-timestamp> T0 orchestrator archive — reset to new goal (from <filename.md>)`
+   - re-enter Cold start in the same response: dispatch the planner, synthesize the follow-up `Next`, and raise `loop: true` at turn end
 4. This classification is the orchestrator's semantic judgment. The Hook re-entry environment has no interactive channel, so do not ask the user for confirmation.
 
 #### Hook re-entry
 
-Hook (`.harness/loom/hook.sh`) checks whether `.harness/cycle/state.md` has `loop: true` and, if so, re-invokes `/harness-orchestrate`. The slash command is hard-coded at install time and is not read from `state.md`. The Hook is a re-entry mechanism, not a cadence driver. Every response ends with `state.md` write-back, especially the next `Next` block, and then yield.
+`.harness/loom/hook.sh` checks whether `state.md` has `loop: true` and, if so, emits the platform-appropriate orchestrator invocation (`/harness-orchestrate` or `$harness-orchestrate`) for the next turn. Hook is a re-entry mechanism, not a cadence driver. Every response ends with `state.md` write-back and then yield.
 
 ## Evaluation Criteria
 
-- The description includes both `/harness-orchestrate <file.md>` and Hook re-entry trigger vocabulary in active form.
-- The body assumes the shapes from `references/state-md-schema.md` and `references/events-md-format.md` without duplicating those schemas inline.
-- The Phase advance rules fill the `Next` block field set (`To` / `EPIC` / `Task path` / `Intent` / `Prior tasks` / `Prior reviews`) deterministically.
-- The three guarantees one-pair-per-response, Phase advance synthesized **once at end of turn**, and next turn executes `Next` **as written** read as one connected flow inside the Turn Algorithm.
-- The ready-set rule is explicit: upstream EPICs gate the same global roster position before a downstream EPIC may run that stage.
-- The global-roster selection rule is explicit: smallest global roster position first among ready EPICs, then smallest EPIC number.
-- Exceptional Paths make Cold start, Hook re-entry, and the three goal-entry branches (no-op / refine / reset) easy to find.
-- Script/prompt boundary is preserved: setup/sync/hook implementation details are not duplicated here.
-- `Authority Rules`, `Reviewed-Work Contract`, and `Structural Issue handling` stay in this body so reviewers can grade them without outside citations.
-- Planner meta-role exceptions, no-task-file output, and append-only EPIC mutation are all explicitly stated.
-- Reviewer-less producer-only roster lookup, the `(no reviewer)` / missing-`↔` token rule, the 0-review-files outcome, and the producer-`Status`-as-verdict path (Turn Algorithm 5-c, 6, 7-b) are all stated in the body and gradeable without outside citations.
-- Cycle-end doc-keeper dispatch is part of the Turn Algorithm (step 10, before Phase advance rule 4 fires), not optional planner work — the `harness-doc-keeper-producer` must run before halt as long as it has not yet completed for this terminal state.
-- Context propagation states that subagents get `harness-context` rather than the full orchestrator law.
-- Workspace split is explicit: `.harness/loom/` is canonical staging seeded before the cycle and refreshed by `node .harness/loom/sync.ts`, and `.harness/cycle/` is runtime state written exclusively by this orchestrator.
+- Description surfaces both `/harness-orchestrate <file.md>` and Hook re-entry trigger vocabulary in active form.
+- The body clearly separates the three runtime turn kinds: singleton Planner, registry Pair, singleton Finalizer.
+- `references/state-md-schema.md` and `references/events-md-format.md` remain the canonical storage specs instead of being duplicated inline.
+- `upstream` is preserved as an explicit stored EPIC field and is used in ready-set computation.
+- `Task path` rules are explicit for all three turn kinds: planner `(none)`, pair canonical pair task path, finalizer canonical finalizer task path.
+- Pair and finalizer artifact contracts explicitly allow supporting body plus a concluding parseable block.
+- The Phase advance rules fill the `Next` block (`To / EPIC / Task path / Intent / Prior tasks / Prior reviews`) deterministically for every outcome.
+- Finalizer entry (`all live EPICs terminal + planner-continuation: none`) and FAIL/RETREAT recovery back to planner are both explicit.
+- Cold start, goal-entry branches, and Hook re-entry are easy to find under Entry, reset, and halt paths.
 
 ## Taboos
 
-- Put pipe tables or cell-oriented formatting into `state.md`. The correct shape is header + `Next` block + headed EPIC list.
-- Collapse all EPIC summaries into one prose blob that hides per-EPIC identity.
-- Use numeric phase slugs. `Phase: skill-writer` is correct; `Phase: 1` is wrong.
-- Dispatch more than one producer in a single response.
+- Put pipe tables or row-oriented formatting into `state.md`.
+- Collapse `## EPIC summaries` into one prose blob that hides per-EPIC identity.
+- Use numeric phase slugs. `Phase: planner` or `Phase: skill-writer` is correct; `Phase: 1` is wrong.
+- Dispatch more than one runtime turn in a single response.
 - Let a subagent write the `Next` block directly.
-- Defer routing judgment to a later turn and leave `Next` empty or ambiguous this turn.
+- Leave `Next` empty or ambiguous when a deterministic next dispatch exists.
 - Reuse a `T<id>` and erase the trace of rework.
-- Re-explain setup/sync/hook tool internals inside this skill body.
+- Re-explain setup, sync, or Hook implementation internals inside this skill body.
 - Ask the user for confirmation while classifying a goal change, or require marker headers in the goal markdown.
-- Record planner output as task files. Planner updates only `state.md` `## EPIC summaries`.
-- Mutate an existing EPIC's `outcome`, `roster`, or `upstream` in place. Mark it `superseded` and append a new EPIC instead.
-- Compare EPIC progress by "local roster slot number" and ignore the project-global roster order.
-- Treat `upstream` as a whole-EPIC completion gate instead of a same-stage global-roster gate.
-- Move directly gradeable contract blocks such as `Authority Rules`, `Reviewed-Work Contract`, `Phase advance`, or `Structural Issue handling` out into references, leaving only a citation. Those must remain in the body for isolated grading.
-- Copy phase advance, state schema, or Hook re-entry law into the subagent-facing `harness-context`. That is orchestrator-only noise.
-- Synthesize a placeholder reviewer dispatch for a reviewer-less producer-only roster line, or write a zero-byte review file to "preserve symmetry". Reviewer-less means **0 review files for the turn**; the producer's own `Status` is the verdict.
-- Treat reviewer-less as "passed without review". It is "not subject to review" — reserved for deterministic / auxiliary work; generative / judgmental work must stay paired.
-- Skip the cycle-end doc-keeper step at halt. That step is what keeps project documentation (target root `*.md`, `docs/`) in sync with the cycle's activity; bypassing it lets terminal cycles drift away from the state the next cycle's planner will read.
-- Write into `.harness/loom/` from the orchestrator. Loom is canonical staging seeded before the cycle; the orchestrator only writes under `.harness/cycle/`.
-
-## Registered pairs
-
-This section is the authoritative roster the orchestrator reads at dispatch time (see Roster lookup, Section 1). Registration tooling inserts, repositions, and removes lines here idempotently. The single pre-seeded entry below is part of the runtime seed so the cycle-end doc-keeper dispatch (Turn Algorithm step 10) has a roster line to look up on the very first cycle.
-
-- harness-doc-keeper: producer `harness-doc-keeper-producer` (no reviewer), skill `harness-doc-keeper`
+- Record planner output as task files.
+- Mutate an existing EPIC's `outcome`, `upstream`, or `roster` in place. Mark it `superseded` and append a new EPIC.
+- Compare EPIC progress by local roster slot number instead of project-global roster order.
+- Treat `upstream` as a whole-EPIC completion gate instead of a same-stage gate.
+- Move directly gradeable contract blocks (`Authority Rules`, Pair turn contract, Finalizer turn contract, Phase advance, Structural Issue handling) out into references and leave only citations.
+- Copy phase advance, state schema, or Hook re-entry law into the subagent-facing `harness-context`.
+- Synthesize a reviewer dispatch for a finalizer turn, or write a zero-byte review file to preserve symmetry.
+- Skip dispatching the finalizer when every live EPIC is terminal and `planner-continuation: none`.
+- Rework a finalizer in place on FAIL. FAIL and RETREAT always route to planner recall.
+- Write into `.harness/loom/` from the orchestrator.
+- Embed the pair roster inside this SKILL body. It lives in `.harness/loom/registry.md`.
+- Turn the finalizer into a list of agents. Multi-step cycle-end work belongs inside the finalizer body as sequential Task steps.
 
 ## References
 
 - `references/state-md-schema.md` — canonical fields for the state header, `Next` block, and EPIC summaries
 - `references/events-md-format.md` — canonical one-line events format and invariants
+- `references/state-machine.md` — quick DFA diagram and transition table for scan-first reading
+- `references/dispatch-envelope.md` — exact envelope payload by turn kind
 - `../harness-planning/SKILL.md` — planner rubric for EPIC decomposition and roster writing
 - `../harness-context/SKILL.md` — reduced subagent-facing context skill for envelope reading, output shape, and taboos
-- `../harness-doc-keeper/SKILL.md` — reviewer-less rubric for the cycle-end doc-keeper dispatch (Turn Algorithm step 10)
+- `.harness/loom/registry.md` — sole source of truth for the pair roster
+- `.harness/loom/agents/harness-finalizer.md` — cycle-end finalizer agent
 - `.harness/loom/hook.sh` — yield re-entry mechanism

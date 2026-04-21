@@ -4,12 +4,10 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./helpers.mjs";
 
-// EP-2 contract: the runtime `harness-orchestrate/SKILL.template.md` body must
-// teach the orchestrator how to recognize a reviewer-less producer-only roster
-// line and how to advance phase from the producer's own Status without
-// dispatching a reviewer or writing a review file. These tests pin the
-// load-bearing tokens so a future refactor of the template body cannot silently
-// drop the contract that EP-1's register-pair.ts shape depends on.
+// Runtime template anchors. These tests pin the load-bearing tokens the
+// `harness-orchestrate/SKILL.template.md` body exposes to runtime readers, so a
+// future refactor cannot silently drop the Pair/Finalizer separation, the
+// defer-to-end continuation flag, or the zero-emit safety.
 
 const ORCHESTRATE_TEMPLATE = join(
   REPO_ROOT,
@@ -27,13 +25,9 @@ const PLANNER_TEMPLATE = join(
   REPO_ROOT,
   "plugins/harness-loom/skills/harness-init/references/runtime/harness-planner.template.md",
 );
-const DOC_KEEPER_SKILL_TEMPLATE = join(
+const FINALIZER_TEMPLATE = join(
   REPO_ROOT,
-  "plugins/harness-loom/skills/harness-init/references/runtime/harness-doc-keeper/SKILL.template.md",
-);
-const DOC_KEEPER_PRODUCER_TEMPLATE = join(
-  REPO_ROOT,
-  "plugins/harness-loom/skills/harness-init/references/runtime/harness-doc-keeper-producer.template.md",
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-finalizer.template.md",
 );
 const STATE_TEMPLATE = join(
   REPO_ROOT,
@@ -51,98 +45,155 @@ test("orchestrate template exists at the canonical factory path", () => {
   );
 });
 
-test("orchestrate template documents the `(no reviewer)` registration line shape", () => {
+test("orchestrate template declares the three runtime turn kinds", () => {
   const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  // Load-bearing literal token register-pair.ts emits for reviewer-less.
-  assert.ok(
-    body.includes("(no reviewer)"),
-    "orchestrate template must mention the `(no reviewer)` literal token",
-  );
-  // The ↔ arrow is the present-iff-paired token. The template must name it
-  // explicitly so the runtime two-token check (no `↔` AND `(no reviewer)`) is
-  // gradeable from the body alone.
-  assert.ok(
-    body.includes("↔"),
-    "orchestrate template must reference the `↔` arrow as the paired-roster marker",
-  );
-});
-
-test("orchestrate template states reviewer-less means `not subject to review`", () => {
-  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  // goals.md:L21 — reviewed-work contract must not be diluted. The exact phrase
-  // distinguishes `reviewer-less = not subject to review` from
-  // `reviewer-less = passed without review`.
-  assert.ok(
-    body.includes("not subject to review"),
-    "orchestrate template must state reviewer-less means `not subject to review`",
-  );
-  assert.ok(
-    body.includes("passed without review"),
-    "orchestrate template must explicitly contrast against `passed without review`",
-  );
-});
-
-test("orchestrate template carries the reviewer-less Turn Algorithm branch", () => {
-  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  // Step 5-c is the orchestrator's load-bearing dispatch-skip step.
-  assert.ok(
-    /5-c\.?\s+Reviewer-less producer turn/i.test(body),
-    "orchestrate template must define Turn Algorithm step 5-c for reviewer-less",
-  );
-  // Step 7-b synthesizes the verdict from the producer's own `Status` line.
-  assert.ok(
-    /7-b\.?\s+Reviewer-less/i.test(body),
-    "orchestrate template must define Turn Algorithm step 7-b for reviewer-less verdict aggregation",
-  );
-});
-
-test("orchestrate template ties reviewer-less verdict to the producer's own Status", () => {
-  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  // Producer self-status is the only verdict source for reviewer-less; the
-  // template must say so directly so the runtime cannot fall through to a
-  // missing-reviewer FAIL.
+  // Each turn kind must be described as a distinct dispatch path. The
+  // canonical four-state DFA diagram (Planner | Pair | Finalizer | Halt)
+  // lives in references/state-machine.md; this body cites that reference
+  // rather than duplicating the enumeration.
+  assert.match(body, /Planner turn/);
+  assert.match(body, /Pair turn/);
+  assert.match(body, /Finalizer turn/);
   assert.match(
     body,
-    /Status:\s*PASS\|FAIL/,
-    "orchestrate template must reference the producer's own `Status: PASS|FAIL` line as the reviewer-less verdict source",
+    /three runtime turn kinds/i,
+    "orchestrate must open with the three-turn-kinds framing",
+  );
+});
+
+test("orchestrate template documents the ↔ arrow as the mandatory Pair roster token", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("↔"),
+    "orchestrate template must reference the `↔` arrow as the Pair roster marker",
+  );
+  assert.match(
+    body,
+    /↔\s*reviewer|↔\s*reviewers/,
+    "orchestrate must show the ↔ arrow connecting producer to reviewer(s) in the Pair line shape",
+  );
+  assert.match(
+    body,
+    /`↔`\s*arrow\s*is\s*load-bearing/i,
+    "orchestrate must flag the ↔ arrow as load-bearing so parsers cannot treat it as decoration",
+  );
+});
+
+test("orchestrate template documents the Finalizer contract — no review files, own Status as verdict", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /## Finalizer turn contract/,
+    "orchestrate must carry a dedicated Finalizer turn contract section",
+  );
+  // The contract must state the finalizer leaves no reviews (rendered either
+  // as "Review — none" in the artifact list or "0 review files" in prose).
+  assert.match(
+    body,
+    /Review[^\n]*(—|--)\s*none|0 review files/i,
+    "Finalizer turn contract must state the finalizer leaves no review file",
+  );
+  assert.match(
+    body,
+    /Status:\s*PASS\s*\|\s*FAIL/,
+    "Finalizer verdict source must be the finalizer's own Status: PASS|FAIL",
   );
   assert.ok(
     body.includes("Self-verification"),
-    "orchestrate template must reference the producer's `Self-verification` evidence as part of the reviewer-less verdict",
+    "Finalizer verdict must cite Self-verification evidence",
   );
-});
-
-test("orchestrate template states reviewer-less leaves zero review files for the turn", () => {
-  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  // The Reviewed-Work Contract must enumerate 0/1/M review files; otherwise the
-  // existing "exactly 1 task + 1 or M reviews" invariant silently breaks.
+  // Finalizer artifacts live in their own subtree, not under epics/.
   assert.match(
     body,
-    /0,?\s*1,?\s*or\s*M/i,
-    "orchestrate template must say the per-turn review file count is 0, 1, or M",
+    /\.harness\/cycle\/finalizer\/tasks\//,
+    "Finalizer task path must live at `.harness/cycle/finalizer/tasks/`",
   );
 });
 
-test("planning template acknowledges reviewer-less rosters at the roster shape rule", () => {
-  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
-  // §4 must teach the planner that one producer slug may resolve to either a
-  // paired or a reviewer-less roster line; otherwise a planner emitting a
-  // reviewer-less producer in a roster could be flagged as a contract bug.
-  assert.ok(
-    body.includes("(no reviewer)"),
-    "planning template must mention the `(no reviewer)` shape so reviewer-less producers are valid roster slugs",
+test("orchestrate template points to the loom-root registry for Pair roster lookup", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  // Registry lives at loom root, shared between orchestrator (read) and
+  // pair-authoring tooling (write). Orchestrate SKILL body must reference
+  // the registry rather than embedding the roster sections.
+  assert.match(
+    body,
+    /`\.harness\/loom\/registry\.md`/,
+    "orchestrate must cite `.harness/loom/registry.md` as the roster source",
+  );
+  assert.doesNotMatch(
+    body,
+    /^## Registered pairs$/m,
+    "orchestrate must not embed a Registered pairs section — the registry owns it",
+  );
+  assert.doesNotMatch(
+    body,
+    /^## Registered finalizers$/m,
+    "orchestrate must not embed a Registered finalizers section — the finalizer is a singleton",
+  );
+  // Finalizer dispatch uses the fixed `harness-finalizer` slug, not a list.
+  assert.match(
+    body,
+    /Next\.To = harness-finalizer/,
+    "orchestrate must synthesize `Next.To = harness-finalizer` directly (singleton dispatch, no list iteration)",
   );
 });
 
-test("planning template defines rosters as a subsequence of a fixed global roster", () => {
-  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
-  assert.ok(
-    body.includes("global roster order"),
-    "planning template must describe the project-global roster order",
+test("orchestrate template defines the Finalizer-retreat blocked halt rule", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  // Finalizer FAIL → planner recall → planner emits 0 EPICs would otherwise
+  // infinite-loop (Finalizer → Planner → Finalizer). The blocked-halt rule
+  // cuts that loop by halting with user intervention.
+  assert.match(
+    body,
+    /Finalizer-retreat blocked halt/,
+    "orchestrate must declare the Finalizer-retreat blocked halt rule by name",
   );
-  assert.ok(
-    body.includes("subsequence"),
-    "planning template must say each EPIC roster is a subsequence of that global roster",
+  assert.match(
+    body,
+    /\(retreat reason: finalizer/,
+    "blocked halt rule must key off the `(retreat reason: finalizer ...)` Intent prefix",
+  );
+  // Finalizer rule 3 must explicitly state that FAIL/RETREAT does NOT touch
+  // planner-continuation; the flag stays planner-owned and recovery is
+  // bounded by the blocked-halt rule above.
+  assert.match(
+    body,
+    /Do not touch `planner-continuation`/,
+    "Finalizer rule 3 must state planner-continuation is untouched on FAIL/RETREAT",
+  );
+});
+
+test("state-md-schema marks planner-continuation as planner-owned", () => {
+  const body = readFileSync(STATE_SCHEMA, "utf8");
+  assert.match(
+    body,
+    /planner-owned/i,
+    "schema must mark planner-continuation as planner-owned",
+  );
+  // The sole-writer rule is what keeps Finalizer FAIL/RETREAT from touching
+  // the flag. If the schema says "Written only from planner next-action",
+  // that's equivalent to "Finalizer does not touch it".
+  assert.match(
+    body,
+    /Written only from planner/i,
+    "schema must state the flag is written only from planner next-action so Finalizer/etc. cannot overload it",
+  );
+});
+
+test("orchestrate template exposes Phase advance — Pair rules and Phase advance — Finalizer rules", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.match(body, /Phase advance — Pair rules/);
+  assert.match(body, /Phase advance — Finalizer rules/);
+  // Finalizer FAIL/RETREAT must route to planner recall (no in-place rework).
+  assert.match(
+    body,
+    /FAIL or RETREAT[\s\S]{0,200}planner recall/i,
+    "Finalizer FAIL/RETREAT must route to planner recall",
+  );
+  assert.match(
+    body,
+    /not (reworked in place|in-place rework)/i,
+    "Finalizer rules must declare no in-place rework",
   );
 });
 
@@ -154,154 +205,85 @@ test("orchestrate template gates dispatch through a ready set at the same global
   );
   assert.ok(
     body.includes("same global roster position"),
-    "orchestrate template must state that upstream gating happens at the same global roster position",
+    "orchestrate template must state upstream gating happens at the same global roster position",
   );
 });
 
-test("doc-keeper skill template drives a docs-curator layout from project + goal, not a code-module navigator", () => {
-  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
-  assert.match(
-    body,
-    /analyze the project and its goal/i,
-    "doc-keeper SKILL.template must open by analyzing project + goal",
-  );
-  assert.match(
-    body,
-    /design the documentation layout that fits this project/i,
-    "doc-keeper SKILL.template must design a project-specific layout",
-  );
-  // Layout building blocks the rubric advertises. A curator-style rubric must
-  // surface these category names so the producer knows what vocabulary it can
-  // draw from.
-  for (const category of [
-    "design-docs",
-    "product-specs",
-    "exec-plans",
-    "generated",
-    "references",
-  ]) {
-    assert.match(
-      body,
-      new RegExp(`docs/${category}/`),
-      `layout building block docs/${category}/ must be named`,
-    );
-  }
-  // Legacy navigator vocabulary must not reappear.
-  for (const token of [
-    "plugins/harness-loom",
-    "skill-authoring.md",
-    "oversized-split.md",
-    "Pass 1",
-    "Pass 2",
-    "Pass 3",
-    "Pass 4",
-    "Pass 5",
-  ]) {
-    assert.ok(
-      !body.includes(token),
-      `doc-keeper SKILL.template must not hardcode ${token}`,
-    );
-  }
-});
-
-test("doc-keeper skill template forbids writing outside the documentation surface", () => {
-  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
-  assert.match(
-    body,
-    /never touch source code|does not implement/i,
-    "doc-keeper SKILL.template must forbid writing to code/tests/build scripts",
-  );
-});
-
-test("doc-keeper skill template keeps the CLAUDE.md / AGENTS.md pointer-section surgical contract", () => {
-  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
-  // The pointer section name may evolve (Modules, Documents, etc.) but the
-  // surgical-merge discipline — replace only the pointer section, preserve
-  // everything else — must persist to prevent silent data loss.
-  assert.match(
-    body,
-    /CLAUDE\.md.*AGENTS\.md|AGENTS\.md.*CLAUDE\.md/,
-    "doc-keeper SKILL.template must name both pointer docs",
-  );
-  assert.match(
-    body,
-    /replace only that section|preserve every other section/i,
-    "doc-keeper SKILL.template must keep the surgical-merge contract",
-  );
-});
-
-test("doc-keeper skill template no longer references the stale OpenAI harness-engineering URL", () => {
-  const body = readFileSync(DOC_KEEPER_SKILL_TEMPLATE, "utf8");
-  assert.doesNotMatch(
-    body,
-    /openai\.com\/index\/harness-engineering/,
-    "the OpenAI harness-engineering link belongs to the pre-rewrite template and must stay removed",
-  );
-});
-
-test("doc-keeper producer template emits a curator-style self-verification contract", () => {
-  const body = readFileSync(DOC_KEEPER_PRODUCER_TEMPLATE, "utf8");
-  // The producer must surface docs-curator signals: layout rationale, impact
-  // map from cycle events to docs, pointer-doc status, and an explicit "left
-  // alone intentionally" accounting so the reviewer-less verdict is graded on
-  // scope, not just on presence of outputs.
-  for (const field of [
-    "Files created",
-    "Files modified",
-    "Files left alone",
-    "Layout rationale",
-    "Impact map",
-    "Pointers updated",
-    "Self-verification",
-  ]) {
-    assert.ok(
-      body.includes(field),
-      `doc-keeper producer must emit \`${field}\` in its Output Format`,
-    );
-  }
-  // Byte-count bookkeeping and module-navigator framing must not come back.
+test("planning template teaches global roster subsequence and next-action grammar", () => {
+  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
   assert.ok(
-    !body.includes("Preserved prefix/suffix bytes"),
-    "doc-keeper producer should avoid byte-count bookkeeping in its output contract",
+    body.includes("global roster order"),
+    "planning template must describe the project-global roster order",
   );
   assert.ok(
-    !body.includes("Modules covered"),
-    "doc-keeper producer must drop the module-navigator `Modules covered` field",
+    body.includes("subsequence"),
+    "planning template must say each EPIC roster is a subsequence of that global roster",
+  );
+  assert.ok(
+    body.includes("next-action: done"),
+    "planning template must document the done signal",
+  );
+  assert.ok(
+    body.includes("next-action: continue"),
+    "planning template must document the continue signal",
+  );
+  assert.match(
+    body,
+    /defer-to-end|after .* terminal/i,
+    "planning template must describe continue as defer-to-end, not immediate recall",
   );
 });
 
-test("runtime templates outside doc-keeper do not reference factory-only plugin surfaces", () => {
-  const templates = [
-    ORCHESTRATE_TEMPLATE,
-    PLANNING_TEMPLATE,
-    CONTEXT_TEMPLATE,
-    PLANNER_TEMPLATE,
-  ];
-  const forbidden = [
-    "plugins/harness-loom",
-    "register-pair.ts",
-    "install.ts",
-    "docs-sync.ts",
-    "/harness-pair-dev",
-    "/harness-init",
-    "/harness-sync",
-    "CLAUDE_SKILL_DIR",
-  ];
-  for (const template of templates) {
-    const body = readFileSync(template, "utf8");
-    for (const token of forbidden) {
-      assert.ok(
-        !body.includes(token),
-        `${template} must not reference factory-only token ${token}`,
-      );
-    }
-  }
+test("planning template distinguishes structural-issue recall from defer-to-end recall", () => {
+  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
+  assert.ok(
+    body.includes("(retreat reason:"),
+    "planning template must name the retreat Intent prefix so the planner knows it is a structural recall",
+  );
+  assert.ok(
+    body.includes("(planner continuation:"),
+    "planning template must name the continuation Intent prefix so the planner knows to re-plan against events.md",
+  );
 });
 
-// Defer-to-end planner continuation contract. These tests pin the load-bearing
-// tokens so a future refactor cannot silently drop the `planner-continuation`
-// flag, the `next-action` grammar, or the Intent prefixes the planner relies on
-// to tell a structural-issue recall from a defer-to-end recall.
+test("planner agent template exposes next-action as load-bearing", () => {
+  const body = readFileSync(PLANNER_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /next-action: <"done"\s*\|\s*"continue/,
+    "planner Output Format must show the load-bearing next-action grammar",
+  );
+  assert.ok(
+    body.includes("defer-to-end"),
+    "planner description must mention defer-to-end so authors do not expect next-turn recall",
+  );
+});
+
+test("finalizer template is a safe-no-op cycle-end agent with Status + Structural Issue", () => {
+  const body = readFileSync(FINALIZER_TEMPLATE, "utf8");
+  assert.ok(existsSync(FINALIZER_TEMPLATE), "harness-finalizer template must exist");
+  assert.match(body, /^name: harness-finalizer$/m);
+  // Skills list carries only harness-context — no separate pair skill.
+  assert.match(body, /^skills:\s*\n\s*-\s*harness-context\s*$/m);
+  // Body must self-identify as a safe no-op so a fresh install's first
+  // cycle terminates cleanly even without project-specific cycle-end work.
+  assert.match(
+    body,
+    /safe no-op/i,
+    "finalizer body must declare itself a safe no-op until the project authors concrete cycle-end work",
+  );
+  assert.match(
+    body,
+    /no cycle-end work registered/,
+    "finalizer body must seed the canonical no-op Summary phrase",
+  );
+  // Output Format must carry Status + Self-verification.
+  assert.match(body, /Status:\s*PASS\s*\/\s*FAIL/);
+  assert.match(body, /Self-verification:/);
+  // Structural Issue block retreats to planner — finalizer's only retreat target.
+  assert.match(body, /## Structural Issue/);
+  assert.match(body, /Suspected upstream stage:\s*planner/i);
+});
 
 test("state schema documents the 4-line header including planner-continuation", () => {
   const body = readFileSync(STATE_SCHEMA, "utf8");
@@ -348,95 +330,60 @@ test("orchestrate template encodes the defer-to-end continuation flow", () => {
   );
   assert.ok(
     body.includes("defer-to-end"),
-    "orchestrate must label the continuation semantics as defer-to-end so the flag is not misread as next-turn recall",
+    "orchestrate must label the continuation semantics as defer-to-end",
   );
-  assert.ok(
-    body.includes("Phase advance rule 4"),
-    "orchestrate must cite Phase advance rule 4 as the consumer of the pending flag",
+  // Terminal resolution is the dedicated subsection that consumes the flag
+  // once every live EPIC is terminal; it is called from both Planner and
+  // Pair branches so the rule lives in one place.
+  assert.match(
+    body,
+    /Terminal resolution/,
+    "orchestrate must name the Terminal resolution subsection that consumes the planner-continuation flag",
   );
 });
 
-test("orchestrate zero-emit safety keys off planner-continuation, not Phase alone", () => {
+test("orchestrate zero-emit handling prevents pathological continuation", () => {
   const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  assert.ok(
-    body.includes("Zero-emit safety"),
-    "orchestrate must retain the zero-emit safety clause that prevents pathological continuation",
-  );
-  // The safety must not key purely off `Phase: planner`, because cold start,
-  // goal-reset, structural-retreat-to-planner, and ready-set-empty recall all
-  // arrive with Phase: planner and must not trip the safety.
+  // The Zero-emit handling subsection groups three cases (blocked halt,
+  // finalizer-retreat halt, continuation zero-emit → force `none`) before
+  // any new dispatch. It replaces the older single "Zero-emit safety" clause.
   assert.match(
     body,
-    /planner-continuation: pending[\s\S]{0,200}turn start/i,
-    "zero-emit safety must be gated on planner-continuation: pending at turn start, not on Phase=planner alone",
+    /Zero-emit handling/i,
+    "orchestrate must retain the Zero-emit handling subsection that prevents pathological continuation",
   );
-});
-
-test("planning template teaches the next-action continue|done grammar", () => {
-  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
-  assert.ok(
-    body.includes("next-action: done"),
-    "planning template must document the done signal",
-  );
-  assert.ok(
-    body.includes("next-action: continue"),
-    "planning template must document the continue signal",
-  );
+  // The continuation-zero-emit case must force `planner-continuation: none`
+  // so a planner that cannot produce new work cannot stall halt forever.
   assert.match(
     body,
-    /defer-to-end|after .* terminal/i,
-    "planning template must describe continue as defer-to-end, not immediate recall",
+    /zero new executable EPICs[\s\S]{0,200}force\s+`?planner-continuation:\s*none`?/i,
+    "Zero-emit handling must force `planner-continuation: none` on defer-to-end recall emitting zero EPICs",
   );
 });
 
-test("planning template distinguishes structural-issue recall from defer-to-end recall", () => {
-  const body = readFileSync(PLANNING_TEMPLATE, "utf8");
-  assert.ok(
-    body.includes("(retreat reason:"),
-    "planning template must name the retreat Intent prefix so the planner knows it is a structural recall",
-  );
-  assert.ok(
-    body.includes("(planner continuation:"),
-    "planning template must name the continuation Intent prefix so the planner knows to re-plan against events.md",
-  );
-});
-
-test("planner agent template exposes next-action as load-bearing", () => {
-  const body = readFileSync(PLANNER_TEMPLATE, "utf8");
-  assert.match(
-    body,
-    /next-action: <"done"\s*\|\s*"continue/,
-    "planner Output Format must show the load-bearing next-action grammar",
-  );
-  assert.ok(
-    body.includes("defer-to-end"),
-    "planner description must mention defer-to-end so authors do not expect next-turn recall",
-  );
-});
-
-test("legacy planner continuation tokens are fully removed", () => {
-  const tokens = [
-    "NEEDS-MORE-TURNS",
-    "no further planning required",
-    "actual Next-action",
-  ];
+test("runtime templates outside the finalizer do not reference factory-only plugin surfaces", () => {
   const templates = [
     ORCHESTRATE_TEMPLATE,
     PLANNING_TEMPLATE,
-    PLANNER_TEMPLATE,
-    STATE_TEMPLATE,
-    STATE_SCHEMA,
     CONTEXT_TEMPLATE,
-    DOC_KEEPER_SKILL_TEMPLATE,
-    DOC_KEEPER_PRODUCER_TEMPLATE,
+    PLANNER_TEMPLATE,
+  ];
+  const forbidden = [
+    "plugins/harness-loom",
+    "register-pair.ts",
+    "install.ts",
+    "/harness-pair-dev",
+    "/harness-init",
+    "CLAUDE_SKILL_DIR",
   ];
   for (const template of templates) {
     const body = readFileSync(template, "utf8");
-    for (const token of tokens) {
+    for (const token of forbidden) {
       assert.ok(
         !body.includes(token),
-        `${template} must not carry legacy token "${token}"`,
+        `${template} must not reference factory-only token ${token}`,
       );
     }
   }
 });
+

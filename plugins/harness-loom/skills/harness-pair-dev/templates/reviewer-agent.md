@@ -1,6 +1,6 @@
 ---
 name: {{PAIR_SLUG}}-reviewer
-description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` reviewer phase. Grades the paired producer's task against the shared skill rubric. Returns Reviewer-shape Output Format with PASS/FAIL verdict and evidence-cited criteria."
+description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` reviewer turn. Read the shared pair skill plus `harness-context`, grade the paired producer task, and end with the Reviewer Output Format block."
 skills:
   - {{SKILL_SLUG}}
   - harness-context
@@ -34,5 +34,5 @@ Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
 Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

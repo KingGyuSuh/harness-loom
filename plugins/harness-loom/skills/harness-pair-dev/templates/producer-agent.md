@@ -1,6 +1,6 @@
 ---
 name: {{PAIR_SLUG}}-producer
-description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` producer phase. Produces the task specified in the pair's shared skill rubric. Returns Producer-shape Output Format for the paired reviewer to judge."
+description: "Use when `/harness-orchestrate` dispatches the `{{PAIR_SLUG}}` producer turn. Read the shared pair skill plus `harness-context`, do the assigned work, and end with the Producer Output Format block."
 skills:
   - {{SKILL_SLUG}}
   - harness-context
@@ -35,7 +35,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "<optional forward hint for the next stage, or 'none'; orchestrator synthesizes the Next block from verdict rules>"
+Suggested next-work: "<optional forward hint for the next stage, or 'none'>"
 Remaining items: [{items not yet done}]
 Escalation: {none | structural-retreat-to-<stage>, reason}
 ```
