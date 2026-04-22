@@ -8,7 +8,7 @@
 import { spawnSync } from "node:child_process";
 import { constants as FS, readFileSync } from "node:fs";
 import { access, cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
@@ -162,14 +162,13 @@ function parseProviders(raw: string): string[] {
 
 function parseArgs(argv: string[]): Args {
   const rest = argv.slice(2);
-  const positional: string[] = [];
   let providers = ["claude", "codex", "gemini"];
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (arg === "--help" || arg === "-h") {
       process.stdout.write(
-        "Usage: node skills/harness-auto-setup/scripts/auto-setup.ts [<target-project-path>] [--provider <claude,codex,gemini>]\n" +
-          "  Target defaults to process.cwd() when omitted.\n" +
+        "Usage: node skills/harness-auto-setup/scripts/auto-setup.ts [--provider <claude,codex,gemini>]\n" +
+          "  Target is always process.cwd(); run from the project root.\n" +
           "  The provider list is only used to print the explicit sync handoff; sync is not run.\n",
       );
       process.exit(0);
@@ -180,13 +179,10 @@ function parseArgs(argv: string[]): Args {
     } else if (arg.startsWith("--")) {
       die(`unknown flag: ${arg}`);
     } else {
-      positional.push(arg);
+      die(`unexpected argument: ${arg}`);
     }
   }
-  if (positional.length > 1) die("at most one <target-project-path> accepted");
-  const targetArg = positional[0] ?? process.cwd();
-  const target = isAbsolute(targetArg) ? targetArg : resolve(process.cwd(), targetArg);
-  return { target, providers };
+  return { target: process.cwd(), providers };
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -1229,7 +1225,7 @@ async function createSnapshot(
 }
 
 function runInstall(target: string): { status: number | null; stdout: string; stderr: string; summary: unknown } {
-  const result = spawnSync(process.execPath, [INSTALL_SCRIPT, target], { encoding: "utf8" });
+  const result = spawnSync(process.execPath, [INSTALL_SCRIPT], { encoding: "utf8", cwd: target });
   let summary: unknown = null;
   if (result.stdout.trim()) {
     try {

@@ -1,7 +1,6 @@
 ---
 name: harness-init
-description: "Use when `/harness-init [<target>]` is invoked to install the target-side runtime foundation. Scaffolds `.harness/loom/` canonical staging plus `.harness/cycle/` runtime state, copies target-local `hook.sh` and `sync.ts`, and stops there. Platform trees are derived later by `node .harness/loom/sync.ts --provider <list>`."
-argument-hint: "[target-path]"
+description: "Use when `/harness-init` is invoked to install the target-side runtime foundation into the current working directory. Scaffolds `.harness/loom/` canonical staging plus `.harness/cycle/` runtime state, copies target-local `hook.sh` and `sync.ts`, and stops there. Platform trees are derived later by `node .harness/loom/sync.ts --provider <list>`."
 user-invocable: true
 ---
 
@@ -21,16 +20,16 @@ That boundary is strict:
 
 ### 1. Arguments
 
-`/harness-init [<target>]`
+`/harness-init`
 
-- `<target>` — target project root path. If omitted, `process.cwd()` is the target.
+The installer always targets the current working directory. Run `/harness-init` from the project root that should receive `.harness/`.
 
 ### 2. Execution
 
 Run the installer script once:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/install.ts $ARGUMENTS
+node ${CLAUDE_SKILL_DIR}/scripts/install.ts
 ```
 
 Then summarize the script result for the user. Trust the script's own output rather than improvising extra shell inspection.

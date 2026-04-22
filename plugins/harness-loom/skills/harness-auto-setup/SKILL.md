@@ -1,7 +1,7 @@
 ---
 name: harness-auto-setup
-description: "Use when `/harness-auto-setup [<target>]` is invoked to safely install, refresh, or converge a target harness by snapshotting live `.harness/` state, preserving pair/finalizer intent as evidence, reseeding the foundation, and handing off explicit platform sync."
-argument-hint: "[target-path] [--provider claude,codex,gemini]"
+description: "Use when `/harness-auto-setup` is invoked to safely install, refresh, or converge the current working directory's harness by snapshotting live `.harness/` state, preserving pair/finalizer intent as evidence, reseeding the foundation, and handing off explicit platform sync."
+argument-hint: "[--provider claude,codex,gemini]"
 user-invocable: true
 ---
 
@@ -24,9 +24,9 @@ Snapshots are machine provenance and convergence input, not restore sources. Old
 
 ### 1. Arguments
 
-`/harness-auto-setup [<target>]`
+`/harness-auto-setup [--provider <list>]`
 
-- `<target>` — target project root path. If omitted, `process.cwd()` is the target.
+The workflow always targets the current working directory. Run `/harness-auto-setup` from the project root. `--provider` only shapes the printed sync handoff; sync itself is never run here.
 
 ### 2. Authority boundaries
 
@@ -154,7 +154,7 @@ Use any subset the user requested or that the workflow recommends, but never exe
 Run the script-owned execution path:
 
 ```bash
-node plugins/harness-loom/skills/harness-auto-setup/scripts/auto-setup.ts [<target>] [--provider claude,codex,gemini]
+node plugins/harness-loom/skills/harness-auto-setup/scripts/auto-setup.ts [--provider claude,codex,gemini]
 ```
 
 The script snapshots existing `.harness/loom/` / `.harness/cycle/`, classifies active-cycle risk, calls the `harness-init` installer for foundation refresh, reconstructs valid registered pairs and customized finalizer intent on current templates, and returns JSON. `--provider` only shapes the printed sync handoff; it never runs sync.
