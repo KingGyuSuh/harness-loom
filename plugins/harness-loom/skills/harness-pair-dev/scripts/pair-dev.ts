@@ -371,10 +371,12 @@ async function assertActiveCycleSafe(target: string, entry: RegistryEntry): Prom
   return result;
 }
 
-function referencedSlugs(entries: RegistryEntry[]): Set<string> {
+function referencedFileSlugs(entries: RegistryEntry[]): Set<string> {
+  // Pair slugs are registry identifiers, not filesystem targets. Sharedness
+  // for file deletion is decided only by producer/reviewer/skill slugs that
+  // map to real paths under .harness/loom/{agents,skills}/.
   const refs = new Set<string>();
   for (const entry of entries) {
-    refs.add(entry.pair);
     refs.add(entry.producer);
     refs.add(entry.skill);
     for (const reviewer of entry.reviewers) refs.add(reviewer);
@@ -416,7 +418,7 @@ function buildRemovalPlan(target: string, entries: RegistryEntry[], existing: Re
   for (const entry of entries) validateRegistryEntry(entry);
 
   const postRemovalEntries = entries.filter((entry) => entry.pair !== existing.pair);
-  const remainingRefs = referencedSlugs(postRemovalEntries);
+  const remainingRefs = referencedFileSlugs(postRemovalEntries);
   const loomRoot = join(target, ".harness", "loom");
   const targets: RemovalTarget[] = [];
 

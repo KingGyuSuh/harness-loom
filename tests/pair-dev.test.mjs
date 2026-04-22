@@ -542,7 +542,53 @@ test("pair-dev --remove preserves shared agent and skill paths referenced by rem
   }
 });
 
-test("pair-dev --add --from accepts only currently registered pair slugs as overlay sources", () => {
+test("pair-dev --remove does not treat a colliding pair identifier as shared-file evidence", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    const victim = {
+      pair: "harness-foo",
+      producer: "harness-foo-producer",
+      reviewers: ["harness-foo-reviewer"],
+      skill: "harness-foo",
+    };
+    const collider = {
+      pair: "harness-foo-producer",
+      producer: "harness-bar-producer",
+      reviewers: ["harness-bar-reviewer"],
+      skill: "harness-bar",
+    };
+    registerPair(target, victim);
+    registerPair(target, collider);
+    writePairFiles(target, victim);
+    writePairFiles(target, collider);
+
+    const result = runPairDev(target, ["--remove", "harness-foo"]);
+    assert.equal(result.status, 0, result.stderr);
+    const summary = JSON.parse(result.stdout);
+
+    assert.doesNotMatch(registryBody(target), /^- harness-foo:/m);
+    assert.match(registryBody(target), /^- harness-foo-producer:/m);
+
+    assert.equal(
+      existsSync(join(target, ".harness/loom/agents/harness-foo-producer.md")),
+      false,
+      "victim producer file must be deleted even when a remaining pair's identifier collides with its slug",
+    );
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-foo-reviewer.md")), false);
+    assert.equal(existsSync(join(target, ".harness/loom/skills/harness-foo")), false);
+
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-bar-producer.md")), true);
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-bar-reviewer.md")), true);
+    assert.equal(existsSync(join(target, ".harness/loom/skills/harness-bar/SKILL.md")), true);
+
+    assert.deepEqual(summary.preservedShared, []);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("pair-dev --add --from accepts only currently registered pair slugs as evidence", () => {
   const target = makeTempDir();
   try {
     installTo(target);
