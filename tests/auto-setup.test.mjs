@@ -76,6 +76,22 @@ function readAgentBodies(target, slugs) {
   return Object.fromEntries(slugs.map((slug) => [slug, readAgent(target, slug)]));
 }
 
+function assertReconstructedProducerAgent(body, { pair, skill, producer }) {
+  assert.match(body, new RegExp(`^name: ${producer}$`, "m"));
+  assert.match(body, new RegExp(`^skills:\\n  - ${skill}\\n  - harness-context$`, "m"));
+  assert.match(body, new RegExp(`registered \`${pair}\` harness pair`));
+  assert.match(body, /^## Output Format$/m);
+  assert.match(body, /End your response with this structured block:/);
+  assert.match(body, /Status: PASS \/ FAIL/);
+  assert.match(body, /Files created: \[\{file path\}\]/);
+  assert.match(body, /Files modified: \[\{file path\}\]/);
+  assert.match(body, /Diff summary: \{sections changed vs baseline, or "N\/A"\}/);
+  assert.match(body, /Self-verification: \{issues found and resolved during this cycle\}/);
+  assert.match(body, /Remaining items: \[\{items not yet done\}\]/);
+  assert.doesNotMatch(body, /Suggested next-work|Advisory-next|Regression gate|Escalation/);
+  assert.doesNotMatch(body, /Verdict: PASS \/ FAIL/);
+}
+
 function assertReconstructedReviewerAgent(body, { pair, skill, reviewer }) {
   assert.match(body, new RegExp(`^name: ${reviewer}$`, "m"));
   assert.match(
@@ -94,9 +110,8 @@ function assertReconstructedReviewerAgent(body, { pair, skill, reviewer }) {
   assert.match(body, /Verdict: PASS \/ FAIL/);
   assert.match(body, /Criteria: \[\{criterion, result, evidence-citation \(file:line\)\}\]/);
   assert.match(body, /FAIL items: \[\{item, level \(technical\/creative\/structural\), reason\}\]/);
-  assert.match(body, /Regression gate: \{clean \/ regression \/ N\/A, details\}/);
   assert.match(body, /Feedback: \{short free-form rationale\}/);
-  assert.match(body, /Advisory-next: "<optional forward hint for the next stage, or 'none'>"/);
+  assert.doesNotMatch(body, /Suggested next-work|Advisory-next|Regression gate|Escalation/);
   assert.doesNotMatch(body, /Status: PASS \/ FAIL/);
 }
 
@@ -257,9 +272,11 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
     assert.match(currentSkill, /custom build scripts/);
     assert.match(currentSkill, /Current project files and tests are cited/);
 
-    const producer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
-    assert.match(producer, /name: harness-demo-producer/);
-    assert.match(producer, /Status: PASS \/ FAIL/);
+    assertReconstructedProducerAgent(readAgent(target, "harness-demo-producer"), {
+      pair: "harness-demo",
+      skill: "harness-demo",
+      producer: "harness-demo-producer",
+    });
     for (const reviewer of ["harness-demo-reviewer", "harness-demo-security-reviewer"]) {
       assertReconstructedReviewerAgent(readAgent(target, reviewer), {
         pair: "harness-demo",
@@ -324,6 +341,15 @@ test("auto-setup reconstructs customized finalizer on current skeleton", () => {
     assert.match(currentFinalizer, /### Preserved Intent Evidence/);
     assert.match(currentFinalizer, /CHANGELOG/);
     assert.match(currentFinalizer, /Files left alone \(intentionally\)/);
+    assert.match(currentFinalizer, /Status: PASS \/ FAIL/);
+    assert.match(currentFinalizer, /Self-verification:/);
+    assert.match(currentFinalizer, /Remaining items: \[\{items not yet done\}\]/);
+    assert.match(currentFinalizer, /## Structural Issue/);
+    assert.match(currentFinalizer, /Suspected upstream stage:\s*planner/i);
+    assert.doesNotMatch(currentFinalizer, /^(Suggested next-work|Advisory-next|Regression gate|Escalation):/m);
+    assert.doesNotMatch(currentFinalizer, /^Verdict: PASS \/ FAIL$/m);
+    assert.doesNotMatch(currentFinalizer, /^Criteria:/m);
+    assert.doesNotMatch(currentFinalizer, /^FAIL items:/m);
     assert.doesNotMatch(currentFinalizer, /Summary: release docs refreshed/);
     assertNoProviderTrees(target);
   } finally {
@@ -394,6 +420,11 @@ test("auto-setup rerun allocates a new snapshot and keeps reconstructed pair ide
     assert.ok(existsSync(second.snapshot.path));
     assert.equal(skillAfterSecond, skillAfterFirst);
     assert.deepEqual(agentBodiesAfterSecond, agentBodiesAfterFirst);
+    assertReconstructedProducerAgent(agentBodiesAfterSecond["harness-demo-producer"], {
+      pair: "harness-demo",
+      skill: "harness-demo",
+      producer: "harness-demo-producer",
+    });
     assertReconstructedReviewerAgent(agentBodiesAfterSecond["harness-demo-reviewer"], {
       pair: "harness-demo",
       skill: "harness-demo",

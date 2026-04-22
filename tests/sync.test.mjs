@@ -247,6 +247,50 @@ test("sync errors on bare invocation — deploy is always an explicit opt-in", (
   }
 });
 
+test("sync --provider codex emits absolute [[skills.config]] paths that actually exist", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    assert.equal(runNode(SYNC_SCRIPT, ["--provider", "codex"], { cwd: target }).status, 0);
+
+    // Every generated codex agent TOML must encode absolute skill paths.
+    // Relative `.codex/skills/...` resolves against `.codex/agents/` and then
+    // silently no-ops when canonicalize fails — hence this guard.
+    const agentsDir = join(target, ".codex/agents");
+    const tomls = readdirSync(agentsDir).filter((n) => n.endsWith(".toml"));
+    assert.ok(tomls.length > 0, "codex agent TOMLs must exist after sync");
+
+    let pathLinesAsserted = 0;
+    for (const name of tomls) {
+      const body = readFileSync(join(agentsDir, name), "utf8");
+      const pathLines = body
+        .split("\n")
+        .filter((l) => /^path\s*=\s*"/.test(l));
+      for (const line of pathLines) {
+        const match = line.match(/^path\s*=\s*"([^"]+)"/);
+        assert.ok(match, `could not parse path line in ${name}: ${line}`);
+        const p = match[1];
+        assert.match(
+          p,
+          /^\/.+\/\.codex\/skills\/[^/]+\/SKILL\.md$/,
+          `${name} path must be absolute .codex/skills/<slug>/SKILL.md, got: ${p}`,
+        );
+        assert.ok(
+          existsSync(p),
+          `${name} references skill path that does not exist on disk: ${p}`,
+        );
+        pathLinesAsserted += 1;
+      }
+    }
+    assert.ok(
+      pathLinesAsserted > 0,
+      "at least one [[skills.config]] path must have been asserted",
+    );
+  } finally {
+    cleanupDir(target);
+  }
+});
+
 test("sync does not deploy to a pre-existing .claude/ without explicit --provider", () => {
   const target = makeTempDir();
   try {

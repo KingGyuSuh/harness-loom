@@ -36,7 +36,7 @@
   positional purpose を主軸にして、既存の登録済み pair を改善します。
 - `/harness-pair-dev --remove <slug>`
   active cycle がその pair を参照している場合は拒否し、`.harness/cycle/` history を残したまま pair-owned loom ファイルだけを安全に削除します。
-- `/harness-orchestrate <goal.md>`
+- `/harness-orchestrate <file.md>`
   対象側ランタイムの orchestrator を起動します。
 
 `/harness-pair-dev` の変更は `.harness/loom/` にだけ書き込まれます。add/improve/remove の後は `node .harness/loom/sync.ts --provider <list>` を再実行してプラットフォームツリーを更新します。

@@ -28,3 +28,7 @@ AGENTS.md
 # Ephemeral goal markdown fed to `/harness-orchestrate <goal.md>` during
 # factory self-testing. Rewritten per cycle; never part of the repo history.
 goals.md
+
+# Local development knowledge generated during self-install cycles. Keep it out
+# of factory commits unless it is intentionally promoted into tracked docs.
+develop-docs/

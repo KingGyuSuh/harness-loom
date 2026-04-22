@@ -57,7 +57,7 @@ import {
   access,
 } from "node:fs/promises";
 import { constants as FS } from "node:fs";
-import { join, dirname, relative } from "node:path";
+import { join, dirname, relative, resolve } from "node:path";
 import process from "node:process";
 
 // All supported platform trees are derived deploy targets. `.harness/loom/`
@@ -194,7 +194,12 @@ function injectModelIntoFrontmatter(fm: Record<string, unknown>, pin: PlatformPi
   return out;
 }
 
-function renderCodexAgentToml(fm: Record<string, unknown>, body: string, pin: PlatformPin): string {
+function renderCodexAgentToml(
+  fm: Record<string, unknown>,
+  body: string,
+  pin: PlatformPin,
+  targetRoot: string,
+): string {
   const name = String(fm.name ?? "");
   const description = String(fm.description ?? "");
   const skills = Array.isArray(fm.skills) ? (fm.skills as string[]) : [];
@@ -209,12 +214,17 @@ function renderCodexAgentToml(fm: Record<string, unknown>, body: string, pin: Pl
   tomlLines.push(body.trimEnd());
   tomlLines.push('"""');
   tomlLines.push("");
-  // Codex loads skills via repeated `[[skills.config]]` tables, one per
-  // skill — not a single `skills = [...]` array. Each entry points at the
-  // mirrored skill body under `.codex/skills/<slug>/SKILL.md`.
+  // Codex loads skills via repeated `[[skills.config]]` tables, one per skill
+  // — not a single `skills = [...]` array. `SkillConfig.path` is typed as
+  // `AbsolutePathBuf`; a relative value is resolved against the agent TOML's
+  // parent directory (`.codex/agents/`) and then silently no-ops when the
+  // canonicalize step fails, so the skill quietly never loads. Emit absolute
+  // paths to bypass that resolution entirely. `.codex/` is gitignored, so the
+  // machine-specific prefix does not leak into factory commits.
   for (const skill of skills) {
+    const absSkillPath = resolve(targetRoot, ".codex", "skills", skill, "SKILL.md");
     tomlLines.push("[[skills.config]]");
-    tomlLines.push(`path = ${JSON.stringify(`.codex/skills/${skill}/SKILL.md`)}`);
+    tomlLines.push(`path = ${JSON.stringify(absSkillPath)}`);
     tomlLines.push("enabled = true");
     tomlLines.push("");
   }
@@ -443,7 +453,7 @@ async function deployCodex(targetRoot: string, agents: AgentFile[], skills: Skil
   await wipeHarnessEntries(agentsDir, ".toml", deleted);
   await wipeHarnessEntries(skillsDir, null, deleted);
   for (const a of agents) {
-    const toml = renderCodexAgentToml(a.frontmatter, a.body, PIN.codex);
+    const toml = renderCodexAgentToml(a.frontmatter, a.body, PIN.codex, targetRoot);
     const dst = join(agentsDir, `${a.name}.toml`);
     await writeFile(dst, toml);
     copied.push(dst);

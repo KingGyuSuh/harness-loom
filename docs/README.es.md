@@ -36,7 +36,7 @@
   Mejora un pair registrado usando el purpose posicional como eje principal.
 - `/harness-pair-dev --remove <slug>`
   Rechaza la eliminación si el ciclo activo referencia ese pair, conserva el historial de `.harness/cycle/` y elimina sólo archivos loom propios del pair.
-- `/harness-orchestrate <goal.md>`
+- `/harness-orchestrate <file.md>`
   Ejecuta el orchestrator de runtime en el proyecto objetivo.
 
 Los cambios de `/harness-pair-dev` escriben sólo en `.harness/loom/`. Después de add/improve/remove, vuelve a ejecutar `node .harness/loom/sync.ts --provider <list>` para refrescar los árboles de plataforma.

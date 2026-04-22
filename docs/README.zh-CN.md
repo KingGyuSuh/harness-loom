@@ -36,7 +36,7 @@
   以 positional purpose 为主轴改进已注册的 pair。
 - `/harness-pair-dev --remove <slug>`
   如果 active cycle 正在引用该 pair 就拒绝删除，保留 `.harness/cycle/` history，只安全移除 pair-owned loom 文件。
-- `/harness-orchestrate <goal.md>`
+- `/harness-orchestrate <file.md>`
   运行目标侧的 runtime orchestrator。
 
 `/harness-pair-dev` 的变更只写入 `.harness/loom/`。add/improve/remove 后，请重新运行 `node .harness/loom/sync.ts --provider <list>` 刷新平台树。

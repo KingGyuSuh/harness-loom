@@ -13,7 +13,7 @@ The default body below is a safe no-op: it returns `Status: PASS` with `Summary:
 
 ## Principles
 
-1. Read before writing. Start from the envelope (`Goal`, `Scope`, `Current phase`, `Prior tasks`) and derive output from project evidence rather than from a fixed template, because the finalizer runs in arbitrary target projects.
+1. Read before writing. Start from the envelope (`Goal`, `User request snapshot`, `Scope`, `Turn intent`, `Prior tasks`) and derive output from project evidence rather than from a fixed template, because the finalizer runs in arbitrary target projects.
 2. Stay inside the declared scope. Do exactly one cycle-end job and keep writes inside the envelope `Scope`; the default no-op body writes nothing.
 3. Evolve, don't overwrite. When cycle-end outputs already exist, preserve hand-authored content outside clearly-managed regions; append or extend rather than replace.
 4. Self-verification is the verdict. Cite concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies — because the orchestrator reads `Status` + `Self-verification` as the entire verdict source. The no-op body cites that no cycle-end work was performed.
@@ -36,11 +36,11 @@ Status: PASS / FAIL
 Summary: {what was performed in one line; default no-op uses "no cycle-end work registered for this project"}
 Files created: [{file path}]
 Files modified: [{file path}]
-Files left alone (intentionally): [{file path — one-line reason}]
 Self-verification: {concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies; default no-op cites "no cycle-end work required; no files touched"}
 Remaining items: [{items not yet done}]
-Escalation: {none | structural-retreat-to-planner, reason}
 ```
+
+Optional line: inside the fenced block, include `Files left alone (intentionally): [{file path — one-line reason}]` before `Self-verification` only when it carries useful cycle-end evidence. Omit it for the default no-op or empty lists.
 
 If a structural issue is detected, include this block immediately before the Output Format block:
 

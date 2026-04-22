@@ -16,6 +16,8 @@ test("install.ts scaffolds .harness/cycle/ + .harness/loom/ and skips .claude/",
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
     assert.equal(summary.verification.ok, true, JSON.stringify(summary.verification));
+    assert.equal(summary.goalMd, undefined);
+    assert.equal(summary.verification.checks[".harness/cycle/goal.md"], undefined);
 
     for (const p of [
       ".harness/cycle/state.md",
@@ -32,6 +34,12 @@ test("install.ts scaffolds .harness/cycle/ + .harness/loom/ and skips .claude/",
       ".harness/loom/agents/harness-finalizer.md",
     ]) {
       assert.ok(existsSync(join(target, p)), `expected ${p} to exist`);
+    }
+    for (const p of [
+      ".harness/cycle/goal.md",
+      ".harness/cycle/user-request-snapshot.md",
+    ]) {
+      assert.ok(!existsSync(join(target, p)), `install must not create ${p}`);
     }
 
     // install must not write any platform tree. Hook wiring belongs to sync.ts

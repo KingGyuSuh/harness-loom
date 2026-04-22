@@ -40,14 +40,14 @@ Then summarize the script result for the user. Trust the script's own output rat
 Install seeds two namespaces:
 
 - `.harness/loom/` — canonical staging for target-side skills, agents, `hook.sh`, and `sync.ts`
-- `.harness/cycle/` — runtime state for `state.md`, `events.md`, and `epics/`
+- `.harness/cycle/` — runtime scaffold for `state.md`, `events.md`, `epics/`, and `finalizer/tasks/`
 
 On a fresh install, the target receives at least:
 
 - `.harness/loom/skills/{harness-orchestrate,harness-planning,harness-context}/`
 - `.harness/loom/agents/{harness-planner,harness-finalizer}.md` — `harness-finalizer.md` is a generic skeleton; the project fills in the concrete cycle-end work (documentation refresh, goal-coverage inspection, release prep, etc.) before running the first real cycle
 - `.harness/loom/{hook.sh,sync.ts}`
-- `.harness/cycle/{state.md,events.md,epics/}`
+- `.harness/cycle/{state.md,events.md,epics/,finalizer/tasks/}`
 
 Install does **not** create `.claude/`, `.codex/`, or `.gemini/`. Those are derived later from `.harness/loom/`.
 
@@ -89,6 +89,7 @@ node .harness/loom/sync.ts --provider claude,codex,gemini
 ## Evaluation Criteria
 
 - Install writes `.harness/loom/` and `.harness/cycle/` in the target project.
+- Install does not create `.harness/cycle/goal.md` or `.harness/cycle/user-request-snapshot.md`; direct runtime goal entry owns cycle-local request snapshots.
 - Install copies target-local `hook.sh` and `sync.ts` into `.harness/loom/`.
 - Install does not create `.claude/`, `.codex/`, or `.gemini/`.
 - Rerun reseeds both `.harness/loom/` and `.harness/cycle/`.

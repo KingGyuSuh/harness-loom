@@ -57,13 +57,15 @@ target project
     ├── cycle/                   # runtime state (orchestrator owns)
     │   ├── state.md
     │   ├── events.md
-    │   └── epics/
+    │   ├── epics/
+    │   └── finalizer/
+    │       └── tasks/
     ├── _snapshots/              # auto-setup provenance, when convergence runs
     │   └── auto-setup/
     └── _archive/                # past cycles, created on goal-different reset
 ```
 
-Project documentation (target-root `*.md` files, `docs/`) is authored **directly in the target**, not inside `.harness/`. You then derive at least one platform tree with `node .harness/loom/sync.ts --provider claude` (and add `codex,gemini` for multi-platform), then add domain-specific pairs with `/harness-pair-dev`. The orchestrator runs as a four-state DFA — `Planner | Pair | Finalizer | Halt`. When every EPIC reaches terminal and the planner is done, it enters the **Finalizer state** and dispatches the singleton `harness-finalizer` agent before halting. The seeded `harness-finalizer` agent is a generic skeleton; you replace its body with the concrete cycle-end work this project needs — documentation refresh (`CLAUDE.md`, `AGENTS.md`, `docs/`), goal-coverage inspection against `events.md`, release prep, audit output, etc. You do not invoke the finalizer directly; the orchestrator dispatches it as the cycle-end turn before halting.
+Project documentation (target-root `*.md` files, `docs/`) is authored **directly in the target**, not inside `.harness/`. You then derive at least one platform tree with `node .harness/loom/sync.ts --provider claude` (and add `codex,gemini` for multi-platform), then add domain-specific pairs with `/harness-pair-dev`. The install scaffold does not create request snapshots. On direct `/harness-orchestrate <file.md>` entry, the orchestrator preserves the full request body in `.harness/cycle/user-request-snapshot.md` and keeps `state.md`'s `Goal` header as a compact summary. The orchestrator runs as a four-state DFA — `Planner | Pair | Finalizer | Halt`. When every EPIC reaches terminal and no planner continuation remains, it enters the **Finalizer state** and dispatches the singleton `harness-finalizer` agent before halting. The seeded `harness-finalizer` agent is a generic skeleton; you replace its body with the concrete cycle-end work this project needs — documentation refresh (`CLAUDE.md`, `AGENTS.md`, `docs/`), request-coverage inspection against `events.md` and the user request snapshot, release prep, audit output, etc. You do not invoke the finalizer directly; the orchestrator dispatches it as the cycle-end turn before halting.
 
 `/harness-auto-setup` is the safer entry point for first setup or refresh. On a fresh target it seeds the foundation and emits repo-grounded pair/finalizer recommendations. On an existing target it snapshots live `.harness/loom/` and `.harness/cycle/` state under `.harness/_snapshots/auto-setup/<timestamp>/`, warns when the cycle looks active or unknown, refreshes the foundation, reconstructs valid registered pairs and customized finalizer intent on current templates, and stops with an explicit sync command. It never writes `.claude/`, `.codex/`, or `.gemini/` itself.
 
@@ -149,7 +151,7 @@ Once the factory is installed in your assistant, the usual target-repo flow is:
 2. Deploy at least one assistant runtime tree with `sync.ts`.
 3. Add the first producer-reviewer pairs for your repo.
 4. Optionally customize the cycle-end finalizer.
-5. Run `/harness-orchestrate <goal.md>`.
+5. Run `/harness-orchestrate <file.md>`.
 
 ### 1. Setup Or Refresh The Target Repository
 
@@ -173,7 +175,7 @@ If you only want a foundation reset with no convergence, run:
 /harness-init
 ```
 
-This writes the canonical staging tree under `.harness/loom/` and the runtime state scaffold under `.harness/cycle/`. It does not create `.claude/`, `.codex/`, or `.gemini/` yet.
+This writes the canonical staging tree under `.harness/loom/` and the runtime state scaffold under `.harness/cycle/`. It seeds `state.md`, `events.md`, `epics/`, and `finalizer/tasks/`; it does not create goal/request snapshot placeholders, `.claude/`, `.codex/`, or `.gemini/`.
 
 If you rerun `/harness-init` later, treat it as a reset of the target-side harness scaffolding: pair-authored `.harness/loom/` content and the current `.harness/cycle/` state are reseeded rather than preserved. Use `/harness-auto-setup` for existing targets when you want snapshot-first refresh and current-contract reconstruction.
 
@@ -221,7 +223,7 @@ After editing the finalizer body, run `sync.ts` again to deploy the updated agen
 
 ### 5. Run The First Cycle
 
-Create a goal file and start the orchestrator:
+Create a request file and start the orchestrator:
 
 ```bash
 cat > goal.md <<'EOF'
@@ -231,7 +233,7 @@ EOF
 /harness-orchestrate goal.md
 ```
 
-Artifacts land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. Runtime state lives in `.harness/cycle/state.md`, and the append-only event log lives in `.harness/cycle/events.md`. When every live EPIC reaches terminal, the orchestrator enters the **Finalizer state**, runs the singleton `harness-finalizer`, and halts.
+Artifacts land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`. Runtime state lives in `.harness/cycle/state.md`, the full original request lives in `.harness/cycle/user-request-snapshot.md`, and the append-only event log lives in `.harness/cycle/events.md`. When every live EPIC reaches terminal and no planner continuation remains, the orchestrator enters the **Finalizer state**, runs the singleton `harness-finalizer`, and halts.
 
 ## What You Usually Customize
 
@@ -239,7 +241,7 @@ Most users only need to customize three things:
 
 - **Pairs** — add, improve, and remove producer-reviewer pairs until they reflect your repo's actual work decomposition and review axes. If one pair has become two different jobs, add or improve the replacements explicitly, then remove the old pair.
 - **Finalizer body** — replace the default no-op only if your project needs cycle-end work at the target root.
-- **Goal files** — each cycle starts from a user-authored goal, usually `goal.md`.
+- **Cycle request files** — each cycle starts from a user-authored request file, often named `goal.md`. The orchestrator preserves the full body in `.harness/cycle/user-request-snapshot.md` and passes that path through dispatch envelopes as `User request snapshot`; `Goal` remains a compact summary.
 
 Most users do **not** need to edit these by hand:
 
@@ -257,23 +259,23 @@ A few terms recur across commands, files, and state. Knowing these is enough to 
 
 - **Harness** — the persistent layer around the assistant: state files, hooks, subagents, contracts. `harness-loom` shapes this layer to fit your repo.
 - **Pair** — one **producer** plus one or more **reviewers**, sharing a single `SKILL.md`. The authoring unit of domain work.
-- **Producer** — the subagent that performs work for a task (writes code, specs, analysis) and proposes the next action.
-- **Reviewer** — a subagent that grades the producer's output on a specific axis (code quality, spec fit, security, etc.). A pair can fan out to many reviewers, each graded independently.
+- **Producer** — the subagent that performs work for a task (writes code, specs, analysis) and returns the task artifact. Its `Status` is self-report only; reviewers decide the Pair verdict.
+- **Reviewer** — a subagent that grades the producer's output on a specific axis (code quality, spec fit, security, etc.). A pair can fan out to many reviewers, each graded independently; their `Verdict` values are the Pair turn's load-bearing verdict source.
 - **EPIC / Task** — an EPIC is a unit of outcome emitted by the planner; a Task is a single producer-reviewer round inside that EPIC. Artifacts land under `.harness/cycle/epics/EP-N--<slug>/{tasks,reviews}/`.
 - **Orchestrator vs Planner** — the **orchestrator** owns `.harness/cycle/state.md` and runs as a four-state DFA (`Planner | Pair | Finalizer | Halt`), dispatching exactly one producer per response (Pair turns run a producer plus 1 or M reviewers in parallel; Finalizer turns run a single cycle-end agent with no reviewer). The **planner** runs inside that loop to decompose the goal into EPICs, choose each EPIC's applicable slice of the fixed global roster, and declare same-stage upstream gates across EPICs.
-- **Finalizer** — the cycle-end hook. The runtime ships one singleton `harness-finalizer` agent that runs when every EPIC is terminal. It has no paired reviewer; verdict is the finalizer's own `Status` plus mechanical `Self-verification` evidence. The default seeded `harness-finalizer` is a generic skeleton; the project replaces its body with the concrete cycle-end work it needs.
+- **Finalizer** — the cycle-end hook. The runtime ships one singleton `harness-finalizer` agent that runs when every EPIC is terminal and no planner continuation remains. It has no paired reviewer; verdict is the finalizer's own `Status` plus mechanical `Self-verification` evidence. The default seeded `harness-finalizer` is a generic skeleton; the project replaces its body with the concrete cycle-end work it needs.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `/harness-init [<target>]` | Scaffold the canonical `.harness/loom/` staging tree plus the `.harness/cycle/` runtime state into a target project. Writes runtime skills, the `harness-planner` agent, the generic `harness-finalizer` cycle-end skeleton, and the `hook.sh` + `sync.ts` self-contained copies under `.harness/loom/`. Rerunning install reseeds both namespaces. Touches no platform tree. |
+| `/harness-init [<target>]` | Scaffold the canonical `.harness/loom/` staging tree plus the `.harness/cycle/` runtime state into a target project. Writes runtime skills, the `harness-planner` agent, the generic `harness-finalizer` cycle-end skeleton, and the `hook.sh` + `sync.ts` self-contained copies under `.harness/loom/`. Seeds `state.md`, `events.md`, `epics/`, and `finalizer/tasks/`, but no goal or request snapshot placeholder. Rerunning install reseeds both namespaces. Touches no platform tree. |
 | `/harness-auto-setup [<target>] [--provider <list>]` | Safely set up or refresh a target harness. Fresh targets receive the foundation plus repo-grounded pair/finalizer recommendations. Existing targets are snapshotted under `.harness/_snapshots/auto-setup/`, active or unknown cycles are warned and preserved in the snapshot before discard/reseed, registered pairs and customized finalizer intent are reconstructed on current templates, and the command stops with an explicit sync handoff. Touches no platform tree. |
 | `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Provider selection is explicit: a bare invocation with no provider flags is an error. |
 | `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...] [--before <slug> \| --after <slug>]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is required. `--from` accepts only a currently registered pair as a template-first overlay source: current harness shape stays fixed while compatible source domain guidance is preserved. It is not a snapshot, filesystem path, or provider-tree import. Default is 1:1; repeat `--reviewer` for 1:N reviewer topology. Authoring writes only into `.harness/loom/`; re-run `node .harness/loom/sync.ts --provider <list>` afterward. |
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | Improve an existing registered pair with positional `<purpose>` as the primary revision axis, then fold in rubric hygiene and current repo evidence. If a pair has become two different jobs, use explicit add/improve/remove steps. Re-run sync afterward to refresh platform trees. |
 | `/harness-pair-dev --remove <slug>` | Safely unregister a pair and delete only pair-owned `.harness/loom/` files. Removal refuses foundation/singleton targets and active-cycle references in `## Next` or live EPIC roster/current fields before mutating, preserves `.harness/cycle/` task/review history, and touches no provider tree; re-run sync afterward. |
-| `/harness-orchestrate <goal.md>` | Target-side runtime entry point. Reads the goal and runs a four-state DFA (`Planner | Pair | Finalizer | Halt`) dispatching exactly one producer per response; hook re-entry advances the cycle. When every EPIC reaches terminal, the orchestrator enters the Finalizer state and dispatches the singleton `harness-finalizer` before halting. |
+| `/harness-orchestrate <file.md>` | Target-side runtime entry point. Reads the request file, preserves its full body in `.harness/cycle/user-request-snapshot.md`, and runs a four-state DFA (`Planner | Pair | Finalizer | Halt`) dispatching exactly one producer per response; hook re-entry advances the cycle from `state.md` and the existing snapshot path. When every EPIC reaches terminal and planner continuation is clear, the orchestrator enters the Finalizer state and dispatches the singleton `harness-finalizer` before halting. |
 
 ## Factory And Runtime
 
@@ -281,7 +283,7 @@ A few terms recur across commands, files, and state. Knowing these is enough to 
 factory (this repo)                            target project
 -----------------------------------------      ----------------------------------
 plugins/harness-loom/skills/harness-init/          installs ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
-plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/}
+plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/,finalizer/tasks/}
 plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .harness/loom/skills/<slug>/SKILL.md
 plugins/harness-loom/skills/harness-auto-setup/    converges ->     .harness/_snapshots/auto-setup/<timestamp>/
                                                                     .harness/loom/ + .harness/cycle/ refreshed
