@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **ステータス:** 0.2.2
+> **ステータス:** 0.3.0
 
 ## 現在の要点
 
@@ -24,18 +24,22 @@
 
 ## 主なコマンド
 
+- `/harness-auto-setup [<target>] [--provider <list>]`
+  対象プロジェクトを初期セットアップするか、既存 harness をスナップショットしてから現在の契約に合わせて更新します。
 - `/harness-init [<target>]`
-  対象プロジェクトに `.harness/loom/` と `.harness/cycle/` ベースのランタイムを導入します。
+  対象プロジェクトに `.harness/loom/` と `.harness/cycle/` ベースの基盤ランタイムを導入または再初期化します。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging を必要なプラットフォームツリーへ配備します。
-- `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug> ...]`
-  現在のコードベースに合わせて新しい producer-reviewer pair を作成します。
-- `/harness-pair-dev --improve <slug> [--hint "<text>"]`
-  既存 pair をリポジトリ根拠に基づいて改善します。
-- `/harness-pair-dev --split <slug>`
-  肥大化した pair を、より狭い 2 つの pair に分割します。
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
+  現在登録されている pair だけを `--from` の overlay source として受け取り、最新 template 上で互換性のある元の知識を保ちながら `.harness/loom/` に作成します。
+- `/harness-pair-dev --improve <slug> "<purpose>"`
+  positional purpose を主軸にして、既存の登録済み pair を改善します。
+- `/harness-pair-dev --remove <slug>`
+  active cycle がその pair を参照している場合は拒否し、`.harness/cycle/` history を残したまま pair-owned loom ファイルだけを安全に削除します。
 - `/harness-orchestrate <goal.md>`
   対象側ランタイムの orchestrator を起動します。
+
+`/harness-pair-dev` の変更は `.harness/loom/` にだけ書き込まれます。add/improve/remove の後は `node .harness/loom/sync.ts --provider <list>` を再実行してプラットフォームツリーを更新します。
 
 ## 参照先
 

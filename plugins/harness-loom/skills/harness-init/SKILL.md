@@ -56,6 +56,7 @@ Install does **not** create `.claude/`, `.codex/`, or `.gemini/`. Those are deri
 - Every rerun reseeds both `.harness/loom/` and `.harness/cycle/`.
 - Pair-authored content under `.harness/loom/` is wipe-on-rerun and must be re-authored afterward.
 - Runtime state under `.harness/cycle/` is also reseeded. Finished-cycle preservation belongs to the orchestrator's goal-different archive path, not to `harness-init`.
+- Existing target refresh with pair/finalizer convergence belongs to `/harness-auto-setup`. `harness-init` does not snapshot live harness state, parse old registry intent, or preserve customized finalizer work.
 
 If the script reports that pair-authored content inside `.harness/loom/` was removed during a rerun, surface that clearly to the user so they can re-author those pairs afterward.
 

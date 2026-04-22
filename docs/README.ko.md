@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.2.2
+> **상태:** 0.3.0
 
 ## 현재 기준 요약
 
@@ -24,18 +24,22 @@
 
 ## 핵심 명령
 
+- `/harness-auto-setup [<target>] [--provider <list>]`
+  타깃 프로젝트를 처음 설정하거나, 기존 하네스를 스냅샷한 뒤 현재 계약에 맞게 갱신합니다.
 - `/harness-init [<target>]`
-  타깃 프로젝트에 `.harness/loom/` 과 `.harness/cycle/` 기반 런타임을 설치합니다.
+  타깃 프로젝트에 `.harness/loom/` 과 `.harness/cycle/` 기반 foundation runtime을 설치하거나 재설정합니다.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging을 원하는 플랫폼 트리로 배포합니다.
-- `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug> ...]`
-  현재 코드베이스에 맞는 새 producer-reviewer pair를 작성합니다.
-- `/harness-pair-dev --improve <slug> [--hint "<text>"]`
-  기존 pair를 리포지토리 근거 기준으로 개선합니다.
-- `/harness-pair-dev --split <slug>`
-  과도하게 넓어진 pair를 두 개의 더 좁은 pair로 분할합니다.
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
+  현재 등록된 pair만 `--from` overlay source로 받아 최신 template 위에 호환되는 원본 지식을 보존해 `.harness/loom/`에 작성합니다.
+- `/harness-pair-dev --improve <slug> "<purpose>"`
+  positional purpose를 기준으로 기존 등록 pair를 개선합니다.
+- `/harness-pair-dev --remove <slug>`
+  active cycle이 해당 pair를 참조하면 거부하고, `.harness/cycle/` history를 보존한 채 pair-owned loom 파일만 안전하게 제거합니다.
 - `/harness-orchestrate <goal.md>`
   타깃 측 런타임 오케스트레이터를 실행합니다.
+
+`/harness-pair-dev` 변경은 `.harness/loom/`에만 기록됩니다. add/improve/remove 뒤에는 `node .harness/loom/sync.ts --provider <list>`를 다시 실행해 플랫폼 트리를 갱신합니다.
 
 ## 어디를 보면 되나
 

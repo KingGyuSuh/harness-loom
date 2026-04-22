@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **状态：** 0.2.2
+> **状态：** 0.3.0
 
 ## 当前要点
 
@@ -24,18 +24,22 @@
 
 ## 关键命令
 
+- `/harness-auto-setup [<target>] [--provider <list>]`
+  对目标项目做首次设置，或先快照已有 harness 再按当前契约刷新。
 - `/harness-init [<target>]`
-  在目标项目中安装基于 `.harness/loom/` 与 `.harness/cycle/` 的运行时。
+  在目标项目中安装或重置基于 `.harness/loom/` 与 `.harness/cycle/` 的基础运行时。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   将 canonical staging 部署到所需的平台树。
-- `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug> ...]`
-  基于当前代码库创建新的 producer-reviewer pair。
-- `/harness-pair-dev --improve <slug> [--hint "<text>"]`
-  按照仓库证据改进已有 pair。
-- `/harness-pair-dev --split <slug>`
-  将过于宽泛的 pair 拆成两个更窄的 pair。
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
+  只接受当前已注册的 pair 作为 `--from` overlay source，在最新 template 上保留兼容的原始知识并写入 `.harness/loom/`。
+- `/harness-pair-dev --improve <slug> "<purpose>"`
+  以 positional purpose 为主轴改进已注册的 pair。
+- `/harness-pair-dev --remove <slug>`
+  如果 active cycle 正在引用该 pair 就拒绝删除，保留 `.harness/cycle/` history，只安全移除 pair-owned loom 文件。
 - `/harness-orchestrate <goal.md>`
   运行目标侧的 runtime orchestrator。
+
+`/harness-pair-dev` 的变更只写入 `.harness/loom/`。add/improve/remove 后，请重新运行 `node .harness/loom/sync.ts --provider <list>` 刷新平台树。
 
 ## 继续阅读
 

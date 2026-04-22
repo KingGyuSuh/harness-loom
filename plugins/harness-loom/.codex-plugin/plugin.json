@@ -1,6 +1,6 @@
 {
   "name": "harness-loom",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Install and grow producer-reviewer harnesses for repository work.",
   "author": {
     "name": "KingGyuSuh",
@@ -22,7 +22,7 @@
   "interface": {
     "displayName": "Harness Loom",
     "shortDescription": "Install and grow producer-reviewer harnesses in repos",
-    "longDescription": "Harness Loom seeds a planning and orchestration harness into a target repository, then helps you add, improve, and split project-specific producer-reviewer pairs.",
+    "longDescription": "Harness Loom seeds or refreshes a planning and orchestration harness in a target repository, then helps you add, improve, and remove project-specific producer-reviewer pairs as the codebase evolves.",
     "developerName": "KingGyuSuh",
     "category": "Coding",
     "capabilities": [
@@ -33,9 +33,9 @@
     "privacyPolicyURL": "https://github.com/KingGyuSuh/harness-loom/blob/main/PRIVACY.md",
     "termsOfServiceURL": "https://github.com/KingGyuSuh/harness-loom/blob/main/TERMS.md",
     "defaultPrompt": [
-      "Install the harness foundation into this repository.",
+      "Set up or refresh the harness in this repository with /harness-auto-setup.",
       "Add a producer-reviewer pair for a new project workflow.",
-      "Improve or split an overloaded harness pair."
+      "Improve or remove harness pairs as the codebase evolves."
     ],
     "brandColor": "#0F766E",
     "composerIcon": "./assets/harness-loom-small.png",

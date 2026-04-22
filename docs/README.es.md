@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.2.2-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Estado:** 0.2.2
+> **Estado:** 0.3.0
 
 ## Resumen actual
 
@@ -24,18 +24,22 @@
 
 ## Comandos principales
 
+- `/harness-auto-setup [<target>] [--provider <list>]`
+  Configura por primera vez el proyecto objetivo o actualiza un harness existente después de tomar un snapshot.
 - `/harness-init [<target>]`
-  Instala el runtime basado en `.harness/loom/` y `.harness/cycle/` dentro del proyecto objetivo.
+  Instala o reinicia el runtime base de `.harness/loom/` y `.harness/cycle/` dentro del proyecto objetivo.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   Despliega el canonical staging hacia los árboles de plataforma necesarios.
-- `/harness-pair-dev --add <slug> "<purpose>" [--reviewer <slug> ...]`
-  Crea un nuevo pair producer-reviewer basado en el código actual.
-- `/harness-pair-dev --improve <slug> [--hint "<text>"]`
-  Mejora un pair existente apoyándose en evidencia real del repositorio.
-- `/harness-pair-dev --split <slug>`
-  Divide un pair demasiado amplio en dos pairs más estrechos.
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
+  Usa sólo un pair actualmente registrado como overlay source de `--from` y crea el nuevo pair en `.harness/loom/` preservando el conocimiento compatible sobre el template actual.
+- `/harness-pair-dev --improve <slug> "<purpose>"`
+  Mejora un pair registrado usando el purpose posicional como eje principal.
+- `/harness-pair-dev --remove <slug>`
+  Rechaza la eliminación si el ciclo activo referencia ese pair, conserva el historial de `.harness/cycle/` y elimina sólo archivos loom propios del pair.
 - `/harness-orchestrate <goal.md>`
   Ejecuta el orchestrator de runtime en el proyecto objetivo.
+
+Los cambios de `/harness-pair-dev` escriben sólo en `.harness/loom/`. Después de add/improve/remove, vuelve a ejecutar `node .harness/loom/sync.ts --provider <list>` para refrescar los árboles de plataforma.
 
 ## Dónde seguir leyendo
 
