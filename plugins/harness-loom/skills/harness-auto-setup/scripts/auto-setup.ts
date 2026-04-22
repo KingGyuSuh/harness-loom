@@ -25,6 +25,13 @@ const REVIEWER_TEMPLATE = resolve(PAIR_DEV_DIR, "templates/reviewer-agent.md");
 const PAIR_SKILL_TEMPLATE = resolve(PAIR_DEV_DIR, "templates/pair-skill.md");
 const ALLOWED_PROVIDERS = new Set(["claude", "codex", "gemini"]);
 const HARNESS_SLUG_RE = /^harness-[a-z0-9]+(-[a-z0-9]+)*$/;
+const FOUNDATION_SLUGS = new Set([
+  "harness-context",
+  "harness-orchestrate",
+  "harness-planning",
+  "harness-planner",
+  "harness-finalizer",
+]);
 
 type CycleClassification = "absent" | "pristine" | "active" | "halted" | "unknown";
 type RegistryStatus = "absent" | "present" | "unparsable";
@@ -766,11 +773,13 @@ function validatePair(pair: RegistryPair, seen: Set<string>): string | null {
     ["skill", pair.skill],
   ] as const) {
     if (!HARNESS_SLUG_RE.test(value)) return `${label} slug is outside current harness namespace: ${value}`;
+    if (FOUNDATION_SLUGS.has(value)) return `${label} slug is reserved for a foundation or singleton role: ${value}`;
   }
   if (pair.reviewers.length === 0) return "pair has no reviewer";
   const reviewerSeen = new Set<string>();
   for (const reviewer of pair.reviewers) {
     if (!HARNESS_SLUG_RE.test(reviewer)) return `reviewer slug is outside current harness namespace: ${reviewer}`;
+    if (FOUNDATION_SLUGS.has(reviewer)) return `reviewer slug is reserved for a foundation or singleton role: ${reviewer}`;
     if (reviewerSeen.has(reviewer)) return `duplicate reviewer slug: ${reviewer}`;
     reviewerSeen.add(reviewer);
   }

@@ -297,6 +297,49 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
   }
 });
 
+test("auto-setup skips registry pairs that reuse foundation slugs before reconstruction writes", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    const originalPlanner = readFileSync(join(target, ".harness/loom/agents/harness-planner.md"), "utf8");
+    const originalContext = readFileSync(join(target, ".harness/loom/skills/harness-context/SKILL.md"), "utf8");
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-bad: producer `harness-planner` ↔ reviewer `harness-bad-reviewer`, skill `harness-context`",
+        "",
+      ].join("\n"),
+    );
+
+    const { summary } = runAutoSetup(target);
+
+    assert.equal(summary.convergence.pairReconstructions.length, 1);
+    assert.equal(summary.convergence.pairReconstructions[0].status, "skipped");
+    assert.match(
+      summary.convergence.pairReconstructions[0].reason,
+      /producer slug is reserved for a foundation or singleton role: harness-planner/,
+    );
+    assert.equal(
+      readFileSync(join(target, ".harness/loom/agents/harness-planner.md"), "utf8"),
+      originalPlanner,
+    );
+    assert.equal(
+      readFileSync(join(target, ".harness/loom/skills/harness-context/SKILL.md"), "utf8"),
+      originalContext,
+    );
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-bad-reviewer.md")), false);
+    const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
+    assert.doesNotMatch(registry, /^- harness-bad:/m);
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
 test("auto-setup reconstructs customized finalizer on current skeleton", () => {
   const target = makeTempDir();
   try {
