@@ -25,8 +25,8 @@ A simple test for whether two items are one outcome or two: would a user say "sh
 Before naming EPICs, classify the current planner turn from the envelope:
 
 - **Initial plan** — first entry from a new or reset goal
-- **Structural recall** — `Current phase` carries `(retreat reason: ...)`; inspect `Prior tasks` / `Prior reviews` to see what failed upstream
-- **Defer-to-end continuation recall** — `Current phase` carries `(planner continuation: ...)`; inspect `Recent events` to see what the earlier batch actually produced
+- **Structural recall** — `Turn intent` carries `(retreat reason: ...)`; inspect `Prior tasks` / `Prior reviews` to see what failed upstream
+- **Defer-to-end continuation recall** — `Turn intent` carries `(planner continuation: ...)`; inspect `Recent events` to see what the earlier batch actually produced
 
 This distinction is load-bearing. Structural recall repairs the plan; continuation recall extends the plan from execution evidence.
 
@@ -34,11 +34,12 @@ This distinction is load-bearing. Structural recall repairs the plan; continuati
 
 Collect only the signals needed to name good EPICs:
 
-- the `Goal` text from the envelope
-- `Existing EPICs`, `Current phase`, `Prior tasks`, `Prior reviews`, and `Recent events` from the envelope when re-planning
+- the compact `Goal` summary from the envelope
+- `User request snapshot` from the envelope; prefer the full snapshot for line-cited requirements and product-quality constraints
+- `Existing EPICs`, `Turn intent`, `Prior tasks`, `Prior reviews`, and `Recent events` from the envelope when re-planning
 - this project's README, root docs, and major directories
 
-Treat the goal as plain markdown text. Do not depend on special headers such as `# Goal`. Prefer the orchestrator-supplied envelope over reading control-plane files directly.
+Treat the request snapshot as plain markdown text. Do not depend on special headers such as `# Goal`. Prefer `User request snapshot` over the short `Goal` summary when it exists, and prefer the orchestrator-supplied envelope over reading control-plane files directly.
 
 ### 3. Emit EPICs directly
 
@@ -59,7 +60,7 @@ Treat `continue` as **learned replanning**, not split-the-batch convenience. Con
 
 Concrete signals that `done` is the right call even when more work exists:
 
-- All EPICs are already decidable from the goal markdown — emit them all this turn.
+- All EPICs are already decidable from the request snapshot — emit them all this turn.
 - You want more thinking time, but no execution outcome would change later EPICs. That is padding, not learned replanning.
 
 When recalled at defer-to-end (see §6), `Recent events` in the envelope is your evidence base — base the next batch of EPICs on what actually shipped, not on what you originally predicted.
@@ -70,7 +71,7 @@ Each EPIC has four planner-owned fields:
 
 - `outcome` — one sentence describing what will be true when the EPIC is done
 - `upstream` — EPIC slugs that must stay ahead of this EPIC at the same stage gate, or `none`
-- `why` — the goal evidence that justified this EPIC. Prefer `goal.md:L12 "quoted phrase"` when line numbering is available; otherwise cite the quoted goal phrase directly.
+- `why` — the request evidence that justified this EPIC. Prefer `.harness/cycle/user-request-snapshot.md:L12 "quoted phrase"` when line numbering is available; otherwise cite the quoted goal phrase directly.
 - `roster` — the stage slice for this EPIC
 
 `current` and `note` are runtime fields owned by the orchestrator. Do not emit them from the planner.
@@ -94,8 +95,8 @@ If an EPIC cannot be expressed with currently registered pairs, do not emit it a
 
 The planner is recalled in two distinct modes — read the envelope signals to tell which mode you are in, then follow the mode-specific expectations:
 
-- **Structural-issue recall.** Triggered when a Pair reviewer or a Finalizer raised a `## Structural Issue` block whose `Suspected upstream stage` resolved to `planner`. The envelope's `Current phase` will carry `(retreat reason: ...)`. Treat the cited upstream contract as the thing to fix — append replacement EPICs that address the reported gap instead of rewriting prior EPICs in place. A **Finalizer-retreat recall** (Intent prefix `(retreat reason: finalizer <slug> ...)`) means the just-finished cycle failed its cycle-end check against the plan; expect to revise the roster or EPIC coverage before Finalizer re-enters. If you cannot find a fix, emit **zero EPICs with `next-action: done`** — the orchestrator's Finalizer-retreat blocked-halt rule will halt the cycle and ask the user to intervene, which is preferable to padding with placeholder EPICs.
-- **Defer-to-end continuation recall.** Triggered when every currently-live EPIC reached terminal while `planner-continuation: pending` was on state. The envelope's `Current phase` will carry `(planner continuation: ...)`. Treat `Recent events` as your evidence base: the five most recent events.md lines summarize what the last batch actually produced. Plan the next batch against that evidence, not against a pre-cycle prediction.
+- **Structural-issue recall.** Triggered when a Pair reviewer or a Finalizer raised a `## Structural Issue` block whose `Suspected upstream stage` resolved to `planner`. The envelope's `Turn intent` will carry `(retreat reason: ...)`. Treat the cited upstream contract as the thing to fix — append replacement EPICs that address the reported gap instead of rewriting prior EPICs in place. A **Finalizer-retreat recall** (`Turn intent` prefix `(retreat reason: finalizer <slug> ...)`) means the just-finished cycle failed its cycle-end check against the plan; expect to revise the roster or EPIC coverage before Finalizer re-enters. If you cannot find a fix, emit **zero EPICs with `next-action: done`** — the orchestrator's Finalizer-retreat blocked-halt rule will halt the cycle and ask the user to intervene, which is preferable to padding with placeholder EPICs.
+- **Defer-to-end continuation recall.** Triggered when every currently-live EPIC reached terminal while `planner-continuation: pending` was on state. The envelope's `Turn intent` will carry `(planner continuation: ...)`. Treat `Recent events` as your evidence base: the five most recent events.md lines summarize what the last batch actually produced. Plan the next batch against that evidence, not against a pre-cycle prediction.
 
 Either mode is **append-only**: continue numbering after the last existing EPIC, never mutate existing `outcome`, `roster`, or `upstream` fields in place. If a recalled turn has nothing new to plan (goal is now fully covered, or the structural gap is already repaired by prior EPICs), emit zero EPICs with `next-action: done`. On defer-to-end continuation recall the zero-emit safety will force `done` anyway; on Finalizer-retreat recall the orchestrator will blocked-halt; on pair-driven structural recall the orchestrator simply resumes the rewound stage. None of these paths require placeholder EPICs.
 
@@ -111,7 +112,7 @@ outcome: Author the skill set for the OAuth login flow.
 upstream: EP-1--domain-agent-design
 roster: skill-dev-producer → test-writer-producer
 current: skill-dev-producer
-note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates. Derived from goal.md:L18 "Login must use a third-party OAuth2 flow."
+note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates. Derived from .harness/cycle/user-request-snapshot.md:L18 "Login must use a third-party OAuth2 flow."
 ```
 
 `current` and `note` are shown here only to illustrate how the orchestrator stores the summary. The planner itself emits `outcome / upstream / why / roster`.
@@ -127,7 +128,8 @@ note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates
 - Re-planning is append-only.
 - `next-action: continue` is used only for learned replanning (later EPIC shape truly depends on earlier execution); padding-style continuation is treated as a grading failure.
 - On a defer-to-end continuation recall, `Recent events` from the envelope is cited as evidence for at least one newly emitted EPIC (or the turn cleanly resolves with zero new EPICs and `next-action: done`).
-- Planner output contains no task file paths and no control-plane fields.
+- On initial planning or same-intent expansion, emitted `why` lines cite `User request snapshot` line numbers when available, or quote the short `Goal` only when no full snapshot is supplied.
+- Planner output contains no task file paths, no `Status`, no `Escalation`, and no control-plane fields other than the load-bearing `next-action`.
 
 ## Taboos
 
@@ -184,19 +186,18 @@ EPICs (this turn):
 EP-1--user-profile-page
 - outcome: Ship the `/profile` page so a logged-in user can view and edit their display name, handle, and bio end-to-end.
 - upstream: none
-- why: goal.md:L12 "Users need a profile page to manage personal info."
+- why: .harness/cycle/user-request-snapshot.md:L12 "Users need a profile page to manage personal info."
 - roster: db-migration-producer → backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
 
 EP-2--profile-avatar-upload
 - outcome: Let users upload an avatar image and render it on the profile page, using the S3 direct-upload pattern.
 - upstream: EP-1--user-profile-page
-- why: goal.md:L18 "Avatar upload must use S3 direct-upload."
+- why: .harness/cycle/user-request-snapshot.md:L18 "Avatar upload must use S3 direct-upload."
 - roster: backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
 
 Remaining: none
 next-action: done
 Additional pairs required: none
-Escalation: none
 ```
 
 Each EPIC is **one shippable outcome traversing many stages**. EP-2 skips `db-migration-producer` (no schema change) — stages may be skipped, their relative order never changes. `upstream: EP-1--user-profile-page` is a **same-stage gate**: EP-2's `backend-api-producer` turn waits for EP-1's `backend-api-producer` turn, not for all of EP-1 to finish. EP-1 and EP-2 are two EPICs because they pass the "ship it alone?" test independently — the profile page is useful without avatar upload.

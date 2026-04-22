@@ -40,7 +40,5 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "<optional forward hint for the next stage, or 'none'>"
 Remaining items: [{items not yet done}]
-Escalation: {none | structural-retreat-to-<stage>, reason}
 ```

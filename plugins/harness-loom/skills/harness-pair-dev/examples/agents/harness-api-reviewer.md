@@ -26,8 +26,8 @@ API Reviewer is the reviewer that grades the REST endpoint specification submitt
 3. Scan sibling endpoint specs for naming, field-casing, and error-format asymmetry.
 4. Verify that error schemas and status mappings are specified with the same density as success schemas.
 5. Record any missing authentication, pagination, or rate-limit policy as Criteria failures.
-6. Use Regression gate to check whether the spec explicitly preserves existing client compatibility.
-7. Write Verdict, FAIL items, and Feedback. `Advisory-next` is optional — emit it only when there is a non-obvious forward hint for the next stage, otherwise use `none`.
+6. Check whether the spec explicitly preserves existing client compatibility.
+7. Write Verdict, FAIL items, and Feedback with any compatibility regression evidence.
 
 ## Output Format
 
@@ -37,7 +37,5 @@ End your response with this structured block:
 Verdict: PASS / FAIL
 Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
-Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

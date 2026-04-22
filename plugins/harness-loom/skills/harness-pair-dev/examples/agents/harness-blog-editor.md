@@ -16,7 +16,7 @@ Blog Editor is the reviewer that grades a draft submitted by Blog Writer for str
 1. If the argument cannot be summarized in one line, mark it as a structural fail. Reason: a piece that cannot be summarized by the reviewer cannot be summarized by the reader either.
 2. Gather unsupported claims at paragraph level and cite them. Reason: unsupported assertions steadily erode trust.
 3. Prove voice drift by comparison against brand samples. Reason: a voice verdict based only on taste leaves the producer with vague rework.
-4. If you notice typo-level or sentence-level phrasing issues, optionally relay them via `Advisory-next` rather than promoting them to FAIL criteria. Reason: mixing surface corrections into a structure review weakens scope and blurs the FAIL rationale. When you have nothing non-obvious to pass forward, `Advisory-next: none` is correct.
+4. Keep typo-level or sentence-level phrasing issues in Feedback only when they clarify a structural verdict. Reason: mixing surface corrections into criteria weakens scope and blurs the FAIL rationale.
 5. Build the verdict only from file paths plus paragraph or line citations. Reason: "this feels awkward" does not tell the producer where to fix the piece.
 
 ## Task
@@ -27,7 +27,7 @@ Blog Editor is the reviewer that grades a draft submitted by Blog Writer for str
 4. Check every factual claim for source anchoring and collect missing anchor sites.
 5. Compare tone against the brand voice guide's reference samples.
 6. Record each Criteria item as PASS/FAIL with evidence paragraphs or lines.
-7. Put structure-level rework guidance into Feedback. If there is a non-obvious next-stage priority to flag, add it via `Advisory-next`; otherwise use `none`.
+7. Put structure-level rework guidance and any non-obvious next-stage priority into Feedback.
 
 ## Output Format
 
@@ -37,7 +37,5 @@ End your response with this structured block:
 Verdict: PASS / FAIL
 Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
-Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

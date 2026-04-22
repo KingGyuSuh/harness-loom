@@ -21,21 +21,18 @@ This document is written for the currently dispatched subagent. Your agent body 
 
 ### 2. Read the envelope
 
-At dispatch time the orchestrator supplies the fields below in the prompt. Use them as the authority for this turn's scope, target artifact, and immediate objective. Do not read `state.md` to infer routing for yourself.
+At dispatch time the orchestrator supplies a role-specific envelope. Use it as the authority for this turn's scope, artifact, and immediate objective. Do not read `state.md` to infer routing for yourself, and do not invent omitted placeholder fields.
 
-- **Goal** — one paragraph with the top-level goal of this cycle.
-- **Focus EPIC** — `EP-N--slug` plus the one-line outcome for that EPIC. If the planner is being called, this is `(none)` or the existing EPIC list.
-- **Task path** — the path this turn's artifact is attached to. Pair and finalizer turns receive a real artifact path; planner turns set this to `(none)`.
-- **Scope** — one sentence defining which files or paths are allowed this turn. Do not modify anything outside it.
-- **Current phase** — the natural-language instruction for what must happen now. This field settles "what do I do in this turn?"
-- **Prior tasks / Prior reviews** — arrays of previous artifact paths. On rework they provide the baseline; on retreat they provide the target to repair; on forward progress they provide upstream evidence relevant to this turn.
-- **Axis** — reviewer-only field. In a 1:M pair it names the grading axis owned by this reviewer. In 1:1 it is omitted or set to `(entire pair)`.
-- **Existing EPICs / Recent events / Registered roster** — planner-only additions. They provide the current EPIC list, recent state changes, and the project's current roster for this turn.
+- **Common fields** — `Goal`, `User request snapshot`, `Turn intent`, and `Scope`. `Goal` is a compact summary; `User request snapshot` is the full request path; `Turn intent` is what this turn must do now.
+- **Pair additions** — `Focus EPIC`, `Task path`, `Prior tasks`, `Prior reviews`, pair `rubric`, and reviewer-only `Axis` when supplied.
+- **Planner additions** — `Existing EPICs`, `Recent events`, `Registered roster`, and prior artifacts only when the recall needs them. Planner envelopes do not need a task-path placeholder.
+- **Finalizer additions** — `Task path`, `Prior tasks`, and `Prior reviews`. Finalizer envelopes do not need an EPIC placeholder, pair rubric, or reviewer axis.
 
 ### 3. If you are a pair producer
 
 - Produce the task artifact by following the pair skill's rubric.
-- Your artifact is the content that will be written to `Task path`. Include the role's required output block plus the evidence and body required by the pair skill, but do not write any control-plane fields. A paired reviewer decides the verdict; your own `Status` is self-report only.
+- Your artifact is the content that will be written to `Task path`. Include the role's reduced producer output block (`Status`, `Summary`, `Files created`, `Files modified`, `Diff summary`, `Self-verification`, `Remaining items`) plus any evidence/body required by the pair skill. A paired reviewer decides the verdict; your own `Status` is self-report only.
+- Read `User request snapshot` before narrowing the work if it contains constraints beyond `Turn intent`.
 - Do not modify files outside `Scope`.
 - Task ids and task-file history are orchestrator-owned. Return the artifact content; the orchestrator records it on disk.
 - If you detect an upstream contract failure you cannot resolve inside this turn, report it with `## Structural Issue` instead of flattening it into a generic FAIL. The paired reviewer will restate and judge it in the review.
@@ -46,18 +43,22 @@ At dispatch time the orchestrator supplies the fields below in the prompt. Use t
 - Apply the pair skill's Evaluation Criteria and return PASS or FAIL.
 - If `Axis` is present, focus on criteria tagged for that axis. Untagged shared criteria still apply.
 - Use the task artifact and concrete disk evidence from the files it changed or cited. Do not use producer transcript, tool trace, or another reviewer's decision as evidence.
+- Use `User request snapshot` and `Prior reviews` as grading context. A producer can fail even when the local task is implemented if it ignores required original-request constraints or unresolved prior-review findings.
+- End with the reduced reviewer output block: `Verdict`, `Criteria`, `FAIL items`, and `Feedback`. Put domain-specific regression notes in the body or `Feedback` when useful; do not add advisory routing fields.
 - Do not pull FAIL items from another axis into your own verdict. Cross-review synthesis belongs to the orchestrator.
 
 ### 5. If you are the planner
 
 - You are a meta-role with no paired reviewer. You do not leave task or review files.
 - Follow `harness-planning` for the planner-specific field set, roster rules, and re-plan behavior.
+- Prefer `User request snapshot` over the short `Goal` summary when extracting line-cited request evidence.
 - The orchestrator owns runtime fields such as `current`, `note`, and `Next`; do not emit them from planner output, and do not include task file paths.
 
 ### 6. If you are a finalizer
 
 - You run only in a cycle-end finalizer turn. There is no paired reviewer, and the concrete rubric for the turn lives inside your agent body.
-- Your `Status: PASS | FAIL` plus `Self-verification` block is the verdict source. Cite concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies — not narrative.
+- Your reduced finalizer output block keeps `Status`, `Summary`, `Files created`, `Files modified`, `Self-verification`, and `Remaining items`; an optional `Files left alone (intentionally)` line is allowed only when useful. `Status: PASS | FAIL` plus `Self-verification` is the verdict source. Cite concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies — not narrative.
+- Read `User request snapshot` when cycle-end work checks request coverage or release readiness.
 - Do not request reviewer dispatch and do not emit reviewer-shape fields. Finalizer turns leave 0 review files.
 - If an upstream contract is invalid (for example, the cycle claims to have shipped a result with no source evidence), emit the `## Structural Issue` block inside your artifact with `Suspected upstream stage: planner`. The orchestrator will recall the planner rather than redispatching the finalizer in place.
 
@@ -87,7 +88,8 @@ Assume only the skills explicitly attached to your role plus the dispatch envelo
 ## Evaluation Criteria
 
 - Your output follows the correct role-specific return shape for pair producer, pair reviewer, planner, or finalizer.
-- You actually use the envelope fields `Goal`, `Current phase`, `Scope`, and `Task path` when your role has one.
+- You actually use the envelope fields `Goal`, `Turn intent`, `Scope`, and `Task path` when your role has one.
+- When supplied, `User request snapshot` is read or explicitly judged irrelevant to the current narrow task.
 - You do not modify anything outside `Scope`.
 - Your output contains no control-plane fields such as `Next`, `current`, or `loop`.
 - Reviewer evidence stays anchored to one task artifact.
@@ -100,6 +102,8 @@ Assume only the skills explicitly attached to your role plus the dispatch envelo
 - Write directly under `.harness/cycle/` or `.harness/loom/`; return content only.
 - Modify files outside the envelope scope.
 - Replace orchestrator routing by emitting `Next`, `current`, or `loop` in your output.
+- Add advisory or escalation routing fields; use `Remaining items`, `Feedback`, or `## Structural Issue` according to role.
+- Treat `Turn intent` as permission to ignore the full user request snapshot.
 - Use producer transcript or tool trace as reviewer evidence.
 - Try to manage task ids or on-disk history yourself.
 - Flatten a structural issue into a generic FAIL and force endless same-pair rework.

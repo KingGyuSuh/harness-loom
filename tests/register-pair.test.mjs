@@ -16,20 +16,23 @@ function installTo(target) {
 }
 
 test("README claim about prefix handling matches register-pair contract", () => {
-  // README must NOT promise auto-prepending of unprefixed slugs — register-pair
-  // strictly rejects unprefixed slugs (see prefixRe in register-pair.ts and
-  // the dedicated rejection test below).
+  // README may describe assistant-level bare-name normalization, but persisted
+  // files and registry entries must still be canonical harness-* slugs.
   const readme = readFileSync(join(REPO_ROOT, "README.md"), "utf8");
   assert.doesNotMatch(
     readme,
-    /unprefixed slugs are auto-prepended/i,
-    "README must not promise auto-prepend; register-pair.ts rejects unprefixed slugs",
+    /register-pair\.ts auto-prepends|helper auto-prepends/i,
+    "README must not promise helper-level auto-prepend; register-pair.ts rejects unprefixed slugs",
   );
-  // Quickstart should surface the actual rule so users do not feed bare slugs.
   assert.match(
     readme,
-    /must start with the `harness-` prefix|register-pair\.ts rejects unprefixed/i,
-    "README must surface the actual register-pair prefix requirement",
+    /Canonical pair slugs use the `harness-` prefix/,
+    "README must surface the canonical slug prefix requirement",
+  );
+  assert.match(
+    readme,
+    /generated files and registry entries are always written as `harness-document`/,
+    "README must say bare user-facing names normalize before persistence",
   );
 });
 

@@ -6,6 +6,133 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Runtime and role output surfaces reduced to load-bearing fields.**
+  Dispatch envelopes now expose `Turn intent` as the subagent-facing
+  copy of `Next.Intent`, pair producer/reviewer output blocks no longer
+  carry generic advisory routing fields, planner output keeps the
+  load-bearing `next-action`, and finalizer verdicts remain anchored on
+  `Status` plus `Self-verification`. Structural routing now uses only
+  the shared `## Structural Issue` block.
+
+### Fixed
+
+- **Codex `[[skills.config]]` path silently failed to load skills.**
+  `sync.ts` emitted a relative `path = ".codex/skills/<slug>/SKILL.md"`
+  for every codex agent TOML. Codex resolves such paths against the
+  agent TOML's parent directory (`.codex/agents/`), producing
+  `.codex/agents/.codex/skills/<slug>/SKILL.md` — a location that does
+  not exist. `SkillConfig.path` is typed `AbsolutePathBuf` and the
+  canonicalize step no-ops on failure, so skills never loaded and no
+  error surfaced. The path is now absolute (`resolve(targetRoot,
+  ".codex", "skills", <slug>, "SKILL.md")`), which matches Codex's
+  documented examples and is also safe across the user-level
+  (`~/.codex/agents/`) and project-level layer merge, where a relative
+  path could silently bind to a different project's skill tree.
+  `.codex/` is gitignored, so the absolute prefix does not leak into
+  factory commits. **Existing target repos must re-run
+  `node .harness/loom/sync.ts --provider codex` to regenerate
+  `.codex/agents/*.toml`.**
+
+## [0.3.0] — 2026-04-22
+
+### Added
+
+- **`/harness-auto-setup` setup-and-refresh workflow.**
+  New factory-side skill that safely installs, refreshes, or converges
+  a target harness. Fresh targets are seeded through the foundation
+  installer and receive repo-grounded pair/finalizer recommendations.
+  Existing targets snapshot `.harness/loom/` and `.harness/cycle/`
+  under `.harness/_snapshots/auto-setup/<timestamp>/`, warn before
+  discarding active or unknown cycle state, reseed the foundation,
+  reconstruct valid registered pairs and customized finalizer intent
+  against current templates, and stop with an explicit
+  `node .harness/loom/sync.ts --provider <list>` handoff. Auto-setup
+  never writes `.claude/`, `.codex/`, or `.gemini/` directly.
+- **`/harness-pair-dev --remove <pair-slug>` guarded removal.**
+  Safely unregisters a pair and deletes only pair-owned `.harness/loom/`
+  files. Removal refuses foundation/singleton targets, missing pairs,
+  paths outside `.harness/loom/{agents,skills}/`, active-cycle
+  references in `## Next`, and live EPIC roster/current fields before
+  mutating anything. Shared agents and skills referenced by other
+  registered pairs are preserved. `.harness/cycle/` task and review
+  history stays intact — historical evidence is runtime state, not
+  pair-authoring state.
+- **`/harness-pair-dev --add --from <existing-pair-slug>` template-first
+  overlay.** `--add` now accepts an optional `--from` anchored to a
+  currently registered pair. The new pair is authored from current
+  templates first, then compatible source-pair domain material
+  (identity, vocabulary, methodology, taboos, reviewer axes, extra
+  domain skills) is overlaid on top. `<purpose>` wins over source
+  intent on conflict, and the new pair skill plus `harness-context`
+  remain mandatory `skills:` entries. Snapshot paths, filesystem paths,
+  and derived platform paths are explicitly rejected.
+- **Deterministic pair-dev helper.**
+  `plugins/harness-loom/skills/harness-pair-dev/scripts/pair-dev.ts`
+  validates `--add`/`--improve`/`--remove` arguments, resolves `--from`
+  evidence from the current registry, and performs guarded removal
+  with active-cycle safety checks. Add/improve return preparation JSON
+  only; authoring bodies remains an LLM turn responsibility.
+- **`references/authoring/from-overlay.md`.**
+  New pair-authoring rubric describing the `--from` template-first
+  overlay contract: mandatory new shape, preserve-by-default rules,
+  skill preservation rule (`<new-pair-skill>` + `harness-context`
+  first), and rename/conflict resolution.
+
+### Changed
+
+- **`/harness-pair-dev` command surface tightened.**
+  `--add` and `--improve` now both require a positional `<purpose>`
+  string. Placement anchors (`--before`/`--after`) are documented on
+  both. `register-pair.ts --unregister` is reserved for the internal
+  `--remove` path; file deletion and active-cycle safety checks live
+  in `/harness-pair-dev --remove`, not in the registry helper.
+- **`/harness-init` scope narrowed to foundation-only.**
+  Install still reseeds `.harness/loom/` and `.harness/cycle/` every
+  rerun, but existing-target refresh with pair/finalizer convergence
+  now belongs to `/harness-auto-setup`. `harness-init` does not
+  snapshot live harness state, parse old registry intent, or preserve
+  customized finalizer work.
+- **READMEs, AGENTS.md, and CLAUDE.md realigned to the 0.3.0 surface.**
+  English README and the four pointer-doc translations surface
+  `/harness-auto-setup` as the preferred setup entry, replace the
+  removed `--split` command with `--remove`, and show `--from` as
+  overlay source rather than evidence-only. The Codex marketplace
+  `longDescription` and `defaultPrompt` entries now advertise
+  auto-setup and remove instead of split.
+
+### Removed
+
+- **`/harness-pair-dev --split` command.**
+  Split is no longer a single pair-dev command. The equivalent
+  workflow is a user-directed multi-step sequence of `--add` +
+  `--improve` + `--remove`. Running `--split` returns an explicit
+  "unsupported in v0.3.0" error pointing at the replacement steps.
+- **`/harness-pair-dev --improve --hint` flag.**
+  Revision intent now travels exclusively through the required
+  positional `<purpose>`. Running `--hint` returns an explicit
+  "unsupported in v0.3.0" error.
+
+### Migration
+
+For projects upgrading from v0.2.x to v0.3.0:
+
+1. Prefer `/harness-auto-setup` for existing-target refresh. It
+   snapshots `.harness/loom/` and `.harness/cycle/` before touching
+   anything and reconstructs valid registered pairs against current
+   templates, so manually tuned pair bodies are preserved as snapshot
+   evidence and folded back in through the overlay rules.
+2. If you previously invoked `/harness-pair-dev --split <slug>`,
+   replace it with an explicit `--add` + `--improve` + `--remove`
+   sequence. The clean-break error message names the replacement.
+3. If you previously invoked
+   `/harness-pair-dev --improve <slug> --hint "<text>"`, move the
+   hint body into the new required positional `<purpose>` argument.
+4. After any pair-dev mutation or auto-setup run, re-run
+   `node .harness/loom/sync.ts --provider <list>` from the target
+   root to refresh the derived platform trees.
+
 ## [0.2.2] — 2026-04-21
 
 ### Changed
@@ -519,7 +646,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.0
 [0.2.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.2
 [0.2.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.1
 [0.2.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.0

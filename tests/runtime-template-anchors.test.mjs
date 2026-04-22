@@ -7,7 +7,8 @@ import { REPO_ROOT } from "./helpers.mjs";
 // Runtime template anchors. These tests pin the load-bearing tokens the
 // `harness-orchestrate/SKILL.template.md` body exposes to runtime readers, so a
 // future refactor cannot silently drop the Pair/Finalizer separation, the
-// defer-to-end continuation flag, or the zero-emit safety.
+// role-specific dispatch envelope, the defer-to-end continuation flag, or the
+// zero-emit safety.
 
 const ORCHESTRATE_TEMPLATE = join(
   REPO_ROOT,
@@ -37,6 +38,22 @@ const STATE_SCHEMA = join(
   REPO_ROOT,
   "plugins/harness-loom/skills/harness-init/references/runtime/harness-orchestrate/references/state-md-schema.md",
 );
+const DISPATCH_ENVELOPE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-orchestrate/references/dispatch-envelope.md",
+);
+const STATE_MACHINE = join(
+  REPO_ROOT,
+  "plugins/harness-loom/skills/harness-init/references/runtime/harness-orchestrate/references/state-machine.md",
+);
+
+function sectionBetween(body, start, end) {
+  const startIndex = body.indexOf(start);
+  assert.notEqual(startIndex, -1, `expected section start ${start}`);
+  const endIndex = body.indexOf(end, startIndex + start.length);
+  assert.notEqual(endIndex, -1, `expected section end ${end}`);
+  return body.slice(startIndex, endIndex);
+}
 
 test("orchestrate template exists at the canonical factory path", () => {
   assert.ok(
@@ -61,7 +78,7 @@ test("orchestrate template declares the three runtime turn kinds", () => {
   );
 });
 
-test("orchestrate template documents the ↔ arrow as the mandatory Pair roster token", () => {
+test("orchestrate template documents the ↔ segment as the mandatory Pair roster binding", () => {
   const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
   assert.ok(
     body.includes("↔"),
@@ -74,8 +91,29 @@ test("orchestrate template documents the ↔ arrow as the mandatory Pair roster 
   );
   assert.match(
     body,
-    /`↔`\s*arrow\s*is\s*load-bearing/i,
-    "orchestrate must flag the ↔ arrow as load-bearing so parsers cannot treat it as decoration",
+    /`↔` segment binds a producer to its reviewer set/,
+    "orchestrate must define the ↔ segment as the producer/reviewer binding",
+  );
+  assert.match(
+    body,
+    /line position is the producer's global stage index/,
+    "orchestrate must preserve the roster line-position global stage anchor",
+  );
+});
+
+test("runtime DFA reference keeps the four-state transition contract", () => {
+  const body = readFileSync(STATE_MACHINE, "utf8");
+  for (const state of ["Planner", "Pair", "Finalizer", "Halt"]) {
+    assert.ok(body.includes(`\`${state}\``), `DFA must name ${state}`);
+  }
+  assert.match(body, /Planner\s+-> Pair\s+\(ready set non-empty\)/);
+  assert.match(body, /Pair\s+-> Planner\s+\(planner recall\)/);
+  assert.match(body, /Finalizer -> Halt\s+\(PASS\)/);
+  assert.match(body, /Finalizer -> Planner\s+\(FAIL \/ RETREAT\)/);
+  assert.match(
+    body,
+    /all live EPICs terminal \+ `planner-continuation: none`/,
+    "DFA must keep the terminal finalizer gate tied to planner-continuation: none",
   );
 });
 
@@ -180,10 +218,35 @@ test("state-md-schema marks planner-continuation as planner-owned", () => {
   );
 });
 
-test("orchestrate template exposes Phase advance — Pair rules and Phase advance — Finalizer rules", () => {
+test("orchestrate template keeps one-turn persistence and verdict anchors", () => {
   const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
-  assert.match(body, /Phase advance — Pair rules/);
-  assert.match(body, /Phase advance — Finalizer rules/);
+  assert.match(
+    body,
+    /Turn rhythm \(one response = consume `Next`, produce the next `Next`\)/,
+    "orchestrate must keep one response scoped to one runtime turn",
+  );
+  assert.match(body, /Persist artifacts by turn kind/);
+  assert.match(body, /Extract the verdict/);
+  assert.match(
+    body,
+    /Raise `loop: true` only if a valid next dispatch exists/,
+    "orchestrate must not re-enter without a committed valid Next",
+  );
+  assert.match(
+    body,
+    /Subagents run with `fork_context=false`/,
+    "orchestrate must keep subagent evidence isolated from producer transcript/tool trace",
+  );
+});
+
+test("orchestrate template exposes Pair and Finalizer verdict branches", () => {
+  const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  assert.match(body, /#### Pair verdict branch/);
+  assert.match(body, /The verdict source is the aggregated reviewer set/);
+  assert.match(body, /Rework \(FAIL\)/);
+  assert.match(body, /Retreat \(structural\)/);
+  assert.match(body, /Forward advance \(PASS\)/);
+  assert.match(body, /#### Finalizer verdict branch/);
   // Finalizer FAIL/RETREAT must route to planner recall (no in-place rework).
   assert.match(
     body,
@@ -195,6 +258,79 @@ test("orchestrate template exposes Phase advance — Pair rules and Phase advanc
     /not (reworked in place|in-place rework)/i,
     "Finalizer rules must declare no in-place rework",
   );
+});
+
+test("dispatch envelope defines role-specific minimum fields without forwarding placeholders", () => {
+  const body = readFileSync(DISPATCH_ENVELOPE, "utf8");
+  const common = sectionBetween(body, "## Common fields", "## Pair envelope");
+  const pair = sectionBetween(body, "## Pair envelope", "## Planner envelope");
+  const planner = sectionBetween(body, "## Planner envelope", "## Finalizer envelope");
+  const finalizer = body.slice(body.indexOf("## Finalizer envelope"));
+
+  for (const token of [
+    "`Goal`",
+    "`User request snapshot`",
+    "`Turn intent`",
+    "`Scope`",
+  ]) {
+    assert.ok(common.includes(token), `common envelope must include ${token}`);
+  }
+  assert.match(
+    common,
+    /`Turn intent` — the subagent-facing copy of `Next\.Intent`/,
+    "dispatch envelope must expose Next.Intent as Turn intent",
+  );
+  assert.match(
+    common,
+    /Omit placeholder fields that do not apply to the role/,
+    "dispatch envelope must omit unrelated-role placeholder fields",
+  );
+
+  for (const token of [
+    "`Focus EPIC`",
+    "`Task path`",
+    "`Prior tasks`",
+    "`Prior reviews`",
+    "`rubric: skills/<slug>/SKILL.md`",
+  ]) {
+    assert.ok(pair.includes(token), `pair envelope must include ${token}`);
+  }
+  assert.match(pair, /reviewer-only `Axis`/);
+
+  for (const token of [
+    "`Existing EPICs`",
+    "`Recent events`",
+    "`Registered roster`",
+  ]) {
+    assert.ok(planner.includes(token), `planner envelope must include ${token}`);
+  }
+  assert.match(
+    planner,
+    /Planner envelopes do not include `Task path: \(none\)` or `Focus EPIC: \(none\)` placeholders/,
+    "planner envelope must explicitly avoid task/EPIC placeholders",
+  );
+
+  for (const token of ["`Task path`", "`Prior tasks`", "`Prior reviews`"]) {
+    assert.ok(finalizer.includes(token), `finalizer envelope must include ${token}`);
+  }
+  assert.match(
+    finalizer,
+    /Finalizer envelopes do not include `Focus EPIC: \(none\)`, a pair rubric line, or reviewer-only `Axis`/,
+    "finalizer envelope must avoid unrelated Pair/EPIC fields",
+  );
+});
+
+test("harness-context stays subagent-facing and omits orchestrator routing law", () => {
+  const body = readFileSync(CONTEXT_TEMPLATE, "utf8");
+  assert.match(body, /orchestrator decides routing, state updates, and re-dispatch/);
+  assert.match(body, /role-specific envelope/);
+  assert.match(body, /Common fields.*`Goal`, `User request snapshot`, `Turn intent`, and `Scope`/s);
+  assert.doesNotMatch(body, /Phase advance/);
+  assert.doesNotMatch(body, /Pair verdict branch/);
+  assert.doesNotMatch(body, /Finalizer verdict branch/);
+  assert.doesNotMatch(body, /Terminal resolution/);
+  assert.doesNotMatch(body, /ready set/);
+  assert.doesNotMatch(body, /planner-continuation:/);
 });
 
 test("orchestrate template gates dispatch through a ready set at the same global roster position", () => {
@@ -318,6 +454,75 @@ test("state.template.md initializes planner-continuation: none", () => {
   );
 });
 
+test("runtime templates propagate the cycle-local user request snapshot", () => {
+  const orchestrate = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
+  const context = readFileSync(CONTEXT_TEMPLATE, "utf8");
+  const planner = readFileSync(PLANNER_TEMPLATE, "utf8");
+  const planning = readFileSync(PLANNING_TEMPLATE, "utf8");
+  const dispatch = readFileSync(DISPATCH_ENVELOPE, "utf8");
+  const schema = readFileSync(STATE_SCHEMA, "utf8");
+  const finalizer = readFileSync(FINALIZER_TEMPLATE, "utf8");
+  const scopedRuntimeContracts = [
+    orchestrate,
+    context,
+    planner,
+    planning,
+    dispatch,
+    schema,
+    finalizer,
+  ];
+
+  for (const body of scopedRuntimeContracts) {
+    assert.match(
+      body,
+      /User request snapshot/,
+      "runtime contracts must name the User request snapshot envelope field",
+    );
+    assert.doesNotMatch(body, /Goal source/);
+    assert.doesNotMatch(body, /Reference materials/);
+    assert.doesNotMatch(body, /\.harness\/cycle\/goal\.md/);
+    assert.doesNotMatch(body, /Current phase/);
+    assert.match(
+      body,
+      /Turn intent/,
+      "runtime contracts must use Turn intent for subagent-facing Next.Intent",
+    );
+  }
+  for (const body of [orchestrate, dispatch, schema]) {
+    assert.match(
+      body,
+      /\.harness\/cycle\/user-request-snapshot\.md/,
+      "orchestrator-owned contracts must point at the cycle-local request snapshot",
+    );
+  }
+  assert.match(
+    orchestrate,
+    /every Planner, Pair, and Finalizer envelope/,
+    "orchestrate must explicitly carry the snapshot through every turn kind",
+  );
+  assert.match(
+    context,
+    /Read `User request snapshot` before narrowing the work if it contains constraints beyond `Turn intent`/,
+  );
+  assert.match(
+    planner,
+    /Read `Goal`, `User request snapshot`[\s\S]{0,120}`Turn intent`/,
+  );
+  assert.match(
+    planning,
+    /Prefer `User request snapshot` over the short `Goal` summary/i,
+  );
+  assert.match(
+    dispatch,
+    /planner, pair producers\/reviewers, and the finalizer read it/i,
+  );
+  assert.match(
+    schema,
+    /harness-init` must not seed a placeholder snapshot/,
+    "schema must keep install-time placeholder snapshots out of the contract",
+  );
+});
+
 test("orchestrate template encodes the defer-to-end continuation flow", () => {
   const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
   assert.ok(
@@ -386,4 +591,3 @@ test("runtime templates outside the finalizer do not reference factory-only plug
     }
   }
 });
-

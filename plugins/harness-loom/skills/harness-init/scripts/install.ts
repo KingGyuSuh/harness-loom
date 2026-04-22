@@ -357,7 +357,7 @@ async function verifyInstall(
     if (!ok) failures.push(`${label} missing or wrong type: ${path}`);
   };
 
-  // Cycle namespace: runtime state seeded (or preserved) by install.
+  // Cycle namespace: runtime scaffold seeded by install.
   await expect(".harness/cycle/state.md", ctx.stateMd, "file");
   await expect(".harness/cycle/events.md", ctx.eventsMd, "file");
   await expect(".harness/cycle/epics/", join(target, ".harness", "cycle", "epics"), "dir");
