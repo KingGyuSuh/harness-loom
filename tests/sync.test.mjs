@@ -332,3 +332,60 @@ test("sync does not deploy to a pre-existing .claude/ without explicit --provide
     cleanupDir(target);
   }
 });
+
+// Regression for issue #3: sync used to `catch { payload = {} }` on malformed
+// user-owned settings files and then overwrite the whole file — destroying
+// recoverable permissions/env/theme state. The write functions now refuse to
+// proceed when the pre-existing file is not a JSON object, leaving the file
+// verbatim so the user can repair it manually.
+for (const [label, providerArg, relPath] of [
+  ["claude settings.json", "claude", ".claude/settings.json"],
+  ["codex hooks.json", "codex", ".codex/hooks.json"],
+  ["gemini settings.json", "gemini", ".gemini/settings.json"],
+]) {
+  test(`sync refuses to overwrite malformed ${label} instead of silently wiping it`, () => {
+    const target = makeTempDir();
+    try {
+      installTo(target);
+      const abs = join(target, relPath);
+      mkdirSync(join(target, relPath.split("/")[0]), { recursive: true });
+      const corrupt = "not-json {{{";
+      writeFileSync(abs, corrupt);
+
+      const r = runNode(SYNC_SCRIPT, ["--provider", providerArg], { cwd: target });
+      assert.notEqual(r.status, 0, "sync must exit non-zero on malformed config");
+      assert.match(
+        r.stderr,
+        /refusing to overwrite malformed .*\bFix or remove the file, then re-run sync\.$/m,
+        "stderr must name the file and instruct the user to repair it",
+      );
+
+      // File contents must be preserved byte-for-byte.
+      assert.equal(readFileSync(abs, "utf8"), corrupt);
+    } finally {
+      cleanupDir(target);
+    }
+  });
+
+  test(`sync refuses to overwrite non-object ${label} (top-level array)`, () => {
+    const target = makeTempDir();
+    try {
+      installTo(target);
+      const abs = join(target, relPath);
+      mkdirSync(join(target, relPath.split("/")[0]), { recursive: true });
+      const arrayJson = "[1, 2, 3]\n";
+      writeFileSync(abs, arrayJson);
+
+      const r = runNode(SYNC_SCRIPT, ["--provider", providerArg], { cwd: target });
+      assert.notEqual(r.status, 0, "sync must exit non-zero on non-object JSON");
+      assert.match(
+        r.stderr,
+        /expected top-level JSON object, got array/,
+        "stderr must name the unexpected shape",
+      );
+      assert.equal(readFileSync(abs, "utf8"), arrayJson);
+    } finally {
+      cleanupDir(target);
+    }
+  });
+}
