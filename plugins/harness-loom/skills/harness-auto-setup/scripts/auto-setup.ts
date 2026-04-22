@@ -128,6 +128,11 @@ interface PairReconstruction {
   evidenceLines: string[];
 }
 
+interface ArtifactUsage {
+  agents: Map<string, string[]>;
+  skills: Map<string, string[]>;
+}
+
 interface FinalizerReconstruction {
   status: "reconstructed" | "default-noop" | "missing" | "skipped";
   reason: string;
@@ -765,8 +770,39 @@ function finalizerRecommendation(finalizer: FinalizerSummary, signals: RepoSigna
   return finalizer.recommendation;
 }
 
-function validatePair(pair: RegistryPair, seen: Set<string>): string | null {
+function addUsage(map: Map<string, string[]>, slug: string, owner: string): void {
+  const current = map.get(slug) ?? [];
+  current.push(owner);
+  map.set(slug, current);
+}
+
+function collectArtifactUsage(pairs: RegistryPair[]): ArtifactUsage {
+  const usage: ArtifactUsage = {
+    agents: new Map(),
+    skills: new Map(),
+  };
+  for (const pair of pairs) {
+    addUsage(usage.skills, pair.skill, pair.pair);
+    addUsage(usage.agents, pair.producer, `${pair.pair}:producer`);
+    for (const reviewer of pair.reviewers) addUsage(usage.agents, reviewer, `${pair.pair}:reviewer`);
+  }
+  return usage;
+}
+
+function uniqueOwners(owners: string[]): string[] {
+  return [...new Set(owners)];
+}
+
+function sharedArtifactReason(kind: "agent" | "skill", slug: string, owners: string[]): string | null {
+  const unique = uniqueOwners(owners);
+  if (unique.length <= 1) return null;
+  const scope = kind === "agent" ? "pair roles" : "pair entries";
+  return `${kind} slug is shared by multiple ${scope} and cannot be safely reconstructed: ${slug} (${unique.join(", ")})`;
+}
+
+function validatePairBasics(pair: RegistryPair, seen: Set<string>): string | null {
   if (seen.has(pair.pair)) return `duplicate pair slug in snapshot registry: ${pair.pair}`;
+  seen.add(pair.pair);
   for (const [label, value] of [
     ["pair", pair.pair],
     ["producer", pair.producer],
@@ -780,8 +816,21 @@ function validatePair(pair: RegistryPair, seen: Set<string>): string | null {
   for (const reviewer of pair.reviewers) {
     if (!HARNESS_SLUG_RE.test(reviewer)) return `reviewer slug is outside current harness namespace: ${reviewer}`;
     if (FOUNDATION_SLUGS.has(reviewer)) return `reviewer slug is reserved for a foundation or singleton role: ${reviewer}`;
+    if (reviewer === pair.producer) return `producer and reviewer share the same agent slug: ${reviewer}`;
     if (reviewerSeen.has(reviewer)) return `duplicate reviewer slug: ${reviewer}`;
     reviewerSeen.add(reviewer);
+  }
+  return null;
+}
+
+function validatePairArtifacts(pair: RegistryPair, usage: ArtifactUsage): string | null {
+  const skillReason = sharedArtifactReason("skill", pair.skill, usage.skills.get(pair.skill) ?? []);
+  if (skillReason) return skillReason;
+  const producerReason = sharedArtifactReason("agent", pair.producer, usage.agents.get(pair.producer) ?? []);
+  if (producerReason) return producerReason;
+  for (const reviewer of pair.reviewers) {
+    const reviewerReason = sharedArtifactReason("agent", reviewer, usage.agents.get(reviewer) ?? []);
+    if (reviewerReason) return reviewerReason;
   }
   return null;
 }
@@ -992,8 +1041,11 @@ async function reconstructPairs(
   if (!snapshotPath || registry.pairCount === 0) return [];
   const out: PairReconstruction[] = [];
   const seen = new Set<string>();
-  for (const pair of registry.pairs) {
-    const invalidReason = validatePair(pair, seen);
+  const basicInvalidReasons = registry.pairs.map((pair) => validatePairBasics(pair, seen));
+  const artifactUsage = collectArtifactUsage(registry.pairs.filter((_, index) => !basicInvalidReasons[index]));
+
+  for (const [index, pair] of registry.pairs.entries()) {
+    const invalidReason = basicInvalidReasons[index] ?? validatePairArtifacts(pair, artifactUsage);
     if (invalidReason) {
       out.push({
         pair: pair.pair,
@@ -1008,7 +1060,6 @@ async function reconstructPairs(
       });
       continue;
     }
-    seen.add(pair.pair);
     const intent = await collectPairIntent(target, snapshotPath, pair);
     const filesWritten: string[] = [];
     const skillDir = join(target, ".harness", "loom", "skills", pair.skill);

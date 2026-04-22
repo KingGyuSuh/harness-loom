@@ -311,11 +311,15 @@ function checkActiveCycleState(raw: string, protectedSlugs: Set<string>): Active
     return { safe: false, reason: "state.md is missing ## Next or ## EPIC summaries" };
   }
 
-  const nextRefs = intersectingReferences(next, protectedSlugs);
+  const nextTo = parseField(next, "To");
+  if (nextTo === null) {
+    return { safe: false, reason: "state.md ## Next is missing To" };
+  }
+  const nextRefs = intersectingReferences(nextTo, protectedSlugs);
   if (nextRefs.length > 0) {
     return {
       safe: false,
-      reason: "active-cycle ## Next references the pair being removed",
+      reason: "active-cycle ## Next To references the pair being removed",
       references: nextRefs,
     };
   }

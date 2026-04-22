@@ -158,9 +158,9 @@ function writeCycleHistoryFixture(target) {
       "Task path: .harness/cycle/epics/EP-2--later/tasks/T001--later.md",
       "Intent: Continue unrelated work.",
       "Prior tasks:",
-      "- .harness/cycle/epics/EP-1--history/tasks/T001--removed-pair.md",
+      "- .harness/cycle/epics/EP-1--history/tasks/T001--harness-remove-producer.md",
       "Prior reviews:",
-      "- .harness/cycle/epics/EP-1--history/reviews/T001--removed-pair--reviewer.md",
+      "- .harness/cycle/epics/EP-1--history/reviews/T001--harness-remove-reviewer.md",
       "",
       "## EPIC summaries",
       "",
@@ -185,17 +185,17 @@ function writeCycleHistoryFixture(target) {
     [
       "# Events",
       "",
-      "- 2026-04-22T00:00:00Z task=T001 role=harness-remove-producer outcome=PASS path=.harness/cycle/epics/EP-1--history/tasks/T001--removed-pair.md",
-      "- 2026-04-22T00:01:00Z task=T001 role=harness-remove-reviewer outcome=PASS path=.harness/cycle/epics/EP-1--history/reviews/T001--removed-pair--reviewer.md",
+      "- 2026-04-22T00:00:00Z task=T001 role=harness-remove-producer outcome=PASS path=.harness/cycle/epics/EP-1--history/tasks/T001--harness-remove-producer.md",
+      "- 2026-04-22T00:01:00Z task=T001 role=harness-remove-reviewer outcome=PASS path=.harness/cycle/epics/EP-1--history/reviews/T001--harness-remove-reviewer.md",
       "",
     ].join("\n"),
   );
   writeFileSync(
-    join(taskDir, "T001--removed-pair.md"),
+    join(taskDir, "T001--harness-remove-producer.md"),
     "Historical task content from harness-remove-producer must survive pair removal.\n",
   );
   writeFileSync(
-    join(reviewDir, "T001--removed-pair--reviewer.md"),
+    join(reviewDir, "T001--harness-remove-reviewer.md"),
     "Historical review content from harness-remove-reviewer must survive pair removal.\n",
   );
   writeFileSync(
@@ -376,7 +376,7 @@ test("pair-dev --remove refuses active-cycle references before mutating loom fil
     const result = runPairDev(target, ["--remove", "harness-active"]);
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /refusing to remove harness-active/);
-    assert.match(result.stderr, /active-cycle ## Next references/);
+    assert.match(result.stderr, /active-cycle ## Next To references/);
     assert.equal(registryBody(target), beforeRegistry);
     assertFilesUnchanged(fileSnapshot);
     assert.equal(readFileSync(statePath, "utf8"), activeState);

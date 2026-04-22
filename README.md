@@ -197,7 +197,7 @@ Re-run this command after any pair edits or finalizer edits. `.harness/loom/` is
 
 ### 3. Add The First Pairs
 
-Create pairs that match how work actually decomposes in your repo. Every pair slug must start with the `harness-` prefix, and every pair must include at least one reviewer.
+Create pairs that match how work actually decomposes in your repo. Canonical pair slugs use the `harness-` prefix, and every pair must include at least one reviewer. Assistants may accept a bare name such as `document`, but generated files and registry entries are always written as `harness-document`.
 
 ```text
 /harness-pair-dev --add harness-game-design "Spec snake.py features and edge cases"

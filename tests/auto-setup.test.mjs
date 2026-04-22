@@ -340,6 +340,52 @@ test("auto-setup skips registry pairs that reuse foundation slugs before reconst
   }
 });
 
+test("auto-setup skips registry pairs with shared or colliding reconstruction artifacts", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-alpha: producer `harness-alpha-producer` ↔ reviewer `harness-shared-reviewer`, skill `harness-shared`",
+        "- harness-beta: producer `harness-beta-producer` ↔ reviewer `harness-shared-reviewer`, skill `harness-shared`",
+        "- harness-collision: producer `harness-collision-agent` ↔ reviewer `harness-collision-agent`, skill `harness-collision`",
+        "",
+      ].join("\n"),
+    );
+
+    const { summary } = runAutoSetup(target);
+    const byPair = Object.fromEntries(
+      summary.convergence.pairReconstructions.map((reconstruction) => [reconstruction.pair, reconstruction]),
+    );
+
+    assert.equal(summary.convergence.pairReconstructions.length, 3);
+    assert.equal(byPair["harness-alpha"].status, "skipped");
+    assert.equal(byPair["harness-beta"].status, "skipped");
+    assert.equal(byPair["harness-collision"].status, "skipped");
+    assert.match(byPair["harness-alpha"].reason, /skill slug is shared by multiple pair entries.*harness-shared/);
+    assert.match(byPair["harness-beta"].reason, /skill slug is shared by multiple pair entries.*harness-shared/);
+    assert.match(
+      byPair["harness-collision"].reason,
+      /producer and reviewer share the same agent slug: harness-collision-agent/,
+    );
+    assert.equal(existsSync(join(target, ".harness/loom/skills/harness-shared/SKILL.md")), false);
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-shared-reviewer.md")), false);
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-collision-agent.md")), false);
+    const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
+    assert.doesNotMatch(registry, /^- harness-alpha:/m);
+    assert.doesNotMatch(registry, /^- harness-beta:/m);
+    assert.doesNotMatch(registry, /^- harness-collision:/m);
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
 test("auto-setup reconstructs customized finalizer on current skeleton", () => {
   const target = makeTempDir();
   try {

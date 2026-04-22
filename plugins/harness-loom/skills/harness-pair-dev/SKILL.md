@@ -23,7 +23,7 @@ Use `scripts/pair-dev.ts` for deterministic command validation, registered-pair 
 
 - Target is always the current working directory.
 - Read the target codebase before authoring. The pair must fit the real repo, not a stock template.
-- Normalize generated slugs into the `harness-` namespace.
+- Normalize user-facing bare names into canonical `harness-*` slugs before invoking `scripts/pair-dev.ts`; the helper accepts canonical slugs only.
 - Keep reviewer coverage explicit. Every pair is 1:1 or 1:M. Reviewer-less work belongs in a finalizer, not in `## Registered pairs`.
 - Treat roster placement as execution order. Appending is correct only when the pair truly belongs at the end of the project-global workflow.
 - Treat legacy `--split` and `--hint` as unsupported v0.3.0 surface. Split is a manual sequence of `--add`, `--improve`, and `--remove`; intent is passed as positional `<purpose>`.
@@ -36,6 +36,8 @@ Use `scripts/pair-dev.ts` for deterministic command validation, registered-pair 
 /harness-pair-dev --improve <pair-slug> "<purpose>" [--before <pair-slug> | --after <pair-slug>]
 /harness-pair-dev --remove <pair-slug>
 ```
+
+All slug-bearing arguments must be canonical before the deterministic helper or registry/files are touched. If the user says `document`, use `harness-document` for the pair slug, `--from`, reviewer slugs, and placement anchors.
 
 ### 3. `--add`
 
