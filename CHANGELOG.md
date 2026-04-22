@@ -15,25 +15,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   load-bearing `next-action`, and finalizer verdicts remain anchored on
   `Status` plus `Self-verification`. Structural routing now uses only
   the shared `## Structural Issue` block.
-
-### Fixed
-
-- **Codex `[[skills.config]]` path silently failed to load skills.**
-  `sync.ts` emitted a relative `path = ".codex/skills/<slug>/SKILL.md"`
-  for every codex agent TOML. Codex resolves such paths against the
-  agent TOML's parent directory (`.codex/agents/`), producing
-  `.codex/agents/.codex/skills/<slug>/SKILL.md` — a location that does
-  not exist. `SkillConfig.path` is typed `AbsolutePathBuf` and the
-  canonicalize step no-ops on failure, so skills never loaded and no
-  error surfaced. The path is now absolute (`resolve(targetRoot,
-  ".codex", "skills", <slug>, "SKILL.md")`), which matches Codex's
-  documented examples and is also safe across the user-level
-  (`~/.codex/agents/`) and project-level layer merge, where a relative
-  path could silently bind to a different project's skill tree.
-  `.codex/` is gitignored, so the absolute prefix does not leak into
-  factory commits. **Existing target repos must re-run
-  `node .harness/loom/sync.ts --provider codex` to regenerate
-  `.codex/agents/*.toml`.**
+- **Codex and Gemini sync now injects required skill loading into agent
+  bodies.** `sync.ts` derives the required skills from canonical
+  `.harness/loom/agents/*.md` `skills:` frontmatter, prepends a
+  `Required Skill Loading` block to Codex `developer_instructions` and
+  Gemini agent bodies, and still mirrors skill directories under
+  `.codex/skills/` and `.gemini/skills/`. Codex no longer emits
+  `[[skills.config]]`; current experiments showed Codex subagents see
+  skill metadata by default but need explicit `$skill-name` mentions for
+  full body loading.
 
 ## [0.3.0] — 2026-04-22
 
