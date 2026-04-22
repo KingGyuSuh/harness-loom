@@ -21,7 +21,7 @@
 //   `.claude/` may belong to the user, not to a prior harness deploy, and
 //   silently overwriting it would clobber unrelated settings.
 //
-// Wipe-and-overwrite contract (goals.md L68):
+// Wipe-and-overwrite contract:
 //   For each selected platform, sync deletes only files/directories under
 //   `agents/` and `skills/` whose name (or basename) starts with `harness-`
 //   before reseeding from `.harness/loom/`. Non-harness assets the user
@@ -31,13 +31,14 @@
 // Platform contract (verified against official specs):
 //   - Codex subagents pin `model = "gpt-5.4"`, `model_reasoning_effort = "xhigh"`.
 //     Agent body goes in `developer_instructions = """..."""` — NOT `prompt`.
-//     Skills are referenced via repeated `[[skills.config]]` tables.
+//     Required skill bodies are loaded through explicit `$skill-name` mentions
+//     prepended to developer_instructions; sync does not emit `[[skills.config]]`.
 //     Source: developers.openai.com/codex/subagents
 //   - Claude agents pin `model: inherit`. Skills are loaded by directory.
 //   - Gemini agents pin `model: gemini-3.1-pro-preview`. Frontmatter is
 //     `.strict()` and rejects unknown keys (including `skills`). Skills are
-//     auto-loaded globally from `.gemini/skills/` and surfaced to every agent
-//     via progressive disclosure — no per-agent reference needed.
+//     mirrored globally under `.gemini/skills/`; required skill names are
+//     prepended to the agent body so the runtime can activate them explicitly.
 //     Source: github.com/google-gemini/gemini-cli (packages/core/src/agents/agentLoader.ts)
 //   - Each platform's hook setting wires to `bash .harness/loom/hook.sh
 //     <platform>` (Stop for claude/codex, AfterAgent for gemini).
@@ -57,7 +58,7 @@ import {
   access,
 } from "node:fs/promises";
 import { constants as FS } from "node:fs";
-import { join, dirname, relative, resolve } from "node:path";
+import { join, dirname, relative } from "node:path";
 import process from "node:process";
 
 // All supported platform trees are derived deploy targets. `.harness/loom/`
@@ -194,15 +195,55 @@ function injectModelIntoFrontmatter(fm: Record<string, unknown>, pin: PlatformPi
   return out;
 }
 
+function uniqueSkills(skills: unknown): string[] {
+  if (!Array.isArray(skills)) return [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const skill of skills) {
+    if (typeof skill !== "string") continue;
+    const slug = skill.trim();
+    if (slug.length === 0 || seen.has(slug)) continue;
+    seen.add(slug);
+    out.push(slug);
+  }
+  return out;
+}
+
+function skillLoadingBlock(skills: string[], platform: "codex" | "gemini"): string {
+  if (skills.length === 0) return "";
+  const names = skills.join(", ");
+  const mentions = skills.map((skill) => `$${skill}`).join(", ");
+  const lines = ["## Required Skill Loading", ""];
+  if (platform === "codex") {
+    lines.push(
+      `Before performing this role, explicitly load and follow these skill bodies: ${mentions}.`,
+      "Codex exposes skill metadata by default; these mentions are required so the full SKILL.md bodies enter context.",
+      "Do not rely on metadata-only skill visibility.",
+    );
+  } else {
+    lines.push(
+      `Before performing this role, activate and follow these skill bodies by name: ${names}.`,
+      `If the platform accepts $skill-name mentions, the equivalent mentions are: ${mentions}.`,
+      "Do not rely on metadata-only skill visibility.",
+    );
+  }
+  return lines.join("\n");
+}
+
+function withSkillLoading(body: string, skills: string[], platform: "codex" | "gemini"): string {
+  const block = skillLoadingBlock(skills, platform);
+  if (!block) return body.trimEnd();
+  return `${block}\n\n${body.trimStart().trimEnd()}`;
+}
+
 function renderCodexAgentToml(
   fm: Record<string, unknown>,
   body: string,
   pin: PlatformPin,
-  targetRoot: string,
 ): string {
   const name = String(fm.name ?? "");
   const description = String(fm.description ?? "");
-  const skills = Array.isArray(fm.skills) ? (fm.skills as string[]) : [];
+  const bodyWithSkillLoading = withSkillLoading(body, uniqueSkills(fm.skills), "codex");
   const tomlLines: string[] = [];
   tomlLines.push(`name = ${JSON.stringify(name)}`);
   tomlLines.push(`description = ${JSON.stringify(description)}`);
@@ -211,23 +252,9 @@ function renderCodexAgentToml(
   if (pin.reasoning) tomlLines.push(`model_reasoning_effort = ${JSON.stringify(pin.reasoning)}`);
   // Codex spec puts the agent prompt in `developer_instructions`, not `prompt`.
   tomlLines.push('developer_instructions = """');
-  tomlLines.push(body.trimEnd());
+  tomlLines.push(bodyWithSkillLoading);
   tomlLines.push('"""');
   tomlLines.push("");
-  // Codex loads skills via repeated `[[skills.config]]` tables, one per skill
-  // — not a single `skills = [...]` array. `SkillConfig.path` is typed as
-  // `AbsolutePathBuf`; a relative value is resolved against the agent TOML's
-  // parent directory (`.codex/agents/`) and then silently no-ops when the
-  // canonicalize step fails, so the skill quietly never loads. Emit absolute
-  // paths to bypass that resolution entirely. `.codex/` is gitignored, so the
-  // machine-specific prefix does not leak into factory commits.
-  for (const skill of skills) {
-    const absSkillPath = resolve(targetRoot, ".codex", "skills", skill, "SKILL.md");
-    tomlLines.push("[[skills.config]]");
-    tomlLines.push(`path = ${JSON.stringify(absSkillPath)}`);
-    tomlLines.push("enabled = true");
-    tomlLines.push("");
-  }
   return tomlLines.join("\n");
 }
 
@@ -453,7 +480,7 @@ async function deployCodex(targetRoot: string, agents: AgentFile[], skills: Skil
   await wipeHarnessEntries(agentsDir, ".toml", deleted);
   await wipeHarnessEntries(skillsDir, null, deleted);
   for (const a of agents) {
-    const toml = renderCodexAgentToml(a.frontmatter, a.body, PIN.codex, targetRoot);
+    const toml = renderCodexAgentToml(a.frontmatter, a.body, PIN.codex);
     const dst = join(agentsDir, `${a.name}.toml`);
     await writeFile(dst, toml);
     copied.push(dst);
@@ -482,11 +509,12 @@ async function deployGemini(targetRoot: string, agents: AgentFile[], skills: Ski
   for (const a of agents) {
     const fm = injectModelIntoFrontmatter(a.frontmatter, PIN.gemini);
     // Gemini's localAgentSchema is .strict() and rejects unknown keys like
-    // `skills` (which is a Claude-canonical field). Skills load globally from
-    // `.gemini/skills/` and surface to every agent via progressive disclosure
-    // — there is no per-agent `skills` reference in Gemini frontmatter.
+    // `skills` (which is a Claude-canonical field). Mirror skills globally
+    // under `.gemini/skills/`, then inject the required skill names into the
+    // body so the agent can explicitly activate them.
+    const bodyWithSkillLoading = withSkillLoading(a.body, uniqueSkills(fm.skills), "gemini");
     delete fm.skills;
-    const out = renderClaudeFrontmatter(fm) + a.body;
+    const out = renderClaudeFrontmatter(fm) + bodyWithSkillLoading + "\n";
     const dst = join(agentsDir, `${a.name}.md`);
     await writeFile(dst, out);
     copied.push(dst);

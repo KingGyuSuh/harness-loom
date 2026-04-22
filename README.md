@@ -75,8 +75,8 @@ Project documentation (target-root `*.md` files, `docs/`) is authored **directly
 - **git** — recommended for reviewing generated harness changes and recovering local experiments through your normal VCS flow.
 - **At least one supported assistant CLI**, authenticated:
   - [Claude Code](https://code.claude.com/docs) — primary target; canonical staging in `.harness/loom/` is derived into `.claude/` via `node .harness/loom/sync.ts --provider claude`.
-  - [Codex CLI](https://developers.openai.com/codex/cli) — derived into `.codex/` via `node .harness/loom/sync.ts --provider codex`.
-  - [Gemini CLI](https://geminicli.com/docs/) — derived into `.gemini/` via `node .harness/loom/sync.ts --provider gemini`.
+  - [Codex CLI](https://developers.openai.com/codex/cli) — derived into `.codex/` via `node .harness/loom/sync.ts --provider codex`; generated agent TOMLs explicitly mention required `$skill-name` bodies.
+  - [Gemini CLI](https://geminicli.com/docs/) — derived into `.gemini/` via `node .harness/loom/sync.ts --provider gemini`; generated agent bodies name the required skills because Gemini frontmatter rejects `skills:`.
 
 ## Install The Factory
 
@@ -271,7 +271,7 @@ A few terms recur across commands, files, and state. Knowing these is enough to 
 |---------|---------|
 | `/harness-init [<target>]` | Scaffold the canonical `.harness/loom/` staging tree plus the `.harness/cycle/` runtime state into a target project. Writes runtime skills, the `harness-planner` agent, the generic `harness-finalizer` cycle-end skeleton, and the `hook.sh` + `sync.ts` self-contained copies under `.harness/loom/`. Seeds `state.md`, `events.md`, `epics/`, and `finalizer/tasks/`, but no goal or request snapshot placeholder. Rerunning install reseeds both namespaces. Touches no platform tree. |
 | `/harness-auto-setup [<target>] [--provider <list>]` | Safely set up or refresh a target harness. Fresh targets receive the foundation plus repo-grounded pair/finalizer recommendations. Existing targets are snapshotted under `.harness/_snapshots/auto-setup/`, active or unknown cycles are warned and preserved in the snapshot before discard/reseed, registered pairs and customized finalizer intent are reconstructed on current templates, and the command stops with an explicit sync handoff. Touches no platform tree. |
-| `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Provider selection is explicit: a bare invocation with no provider flags is an error. |
+| `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Provider selection is explicit: a bare invocation with no provider flags is an error. Claude keeps agent `skills:` frontmatter; Codex and Gemini receive required skill-loading prompts in generated agent bodies. |
 | `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...] [--before <slug> \| --after <slug>]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is required. `--from` accepts only a currently registered pair as a template-first overlay source: current harness shape stays fixed while compatible source domain guidance is preserved. It is not a snapshot, filesystem path, or provider-tree import. Default is 1:1; repeat `--reviewer` for 1:N reviewer topology. Authoring writes only into `.harness/loom/`; re-run `node .harness/loom/sync.ts --provider <list>` afterward. |
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | Improve an existing registered pair with positional `<purpose>` as the primary revision axis, then fold in rubric hygiene and current repo evidence. If a pair has become two different jobs, use explicit add/improve/remove steps. Re-run sync afterward to refresh platform trees. |
 | `/harness-pair-dev --remove <slug>` | Safely unregister a pair and delete only pair-owned `.harness/loom/` files. Removal refuses foundation/singleton targets and active-cycle references in `## Next` or live EPIC roster/current fields before mutating, preserves `.harness/cycle/` task/review history, and touches no provider tree; re-run sync afterward. |
@@ -315,8 +315,8 @@ Platform pins applied by `sync.ts`:
 | Platform | Model | Hook event | Notes |
 |----------|-------|------------|-------|
 | Claude | `inherit` | `Stop` | `.claude/settings.json` triggers `.harness/loom/hook.sh`. |
-| Codex | `gpt-5.4`, `model_reasoning_effort: xhigh` | `Stop` | Subagents do not use mini models. |
-| Gemini | `gemini-3.1-pro-preview` | `AfterAgent` | Skills are mirrored into the platform tree. |
+| Codex | `gpt-5.4`, `model_reasoning_effort: xhigh` | `Stop` | Agent TOMLs prepend required `$skill-name` mentions to `developer_instructions`; skills are mirrored under `.codex/skills/`. |
+| Gemini | `gemini-3.1-pro-preview` | `AfterAgent` | Agent bodies name the required skills; skills are mirrored under `.gemini/skills/`. |
 
 ## When To Use It
 
