@@ -42,6 +42,9 @@ test("sync --provider claude derives .claude/{agents, skills, settings.json} fro
     assert.ok(existsSync(join(target, ".claude/skills/harness-orchestrate/SKILL.md")));
     assert.ok(existsSync(join(target, ".claude/skills/harness-planning/SKILL.md")));
     assert.ok(existsSync(join(target, ".claude/skills/harness-context/SKILL.md")));
+    const planner = readFileSync(join(target, ".claude/agents/harness-planner.md"), "utf8");
+    assert.match(planner, /^skills:\n  - harness-planning\n  - harness-context$/m);
+    assert.doesNotMatch(planner, /Required Skill Loading/);
 
     // settings.json hook wires the loom hook.sh rather than a cycle-owned path.
     const settings = JSON.parse(readFileSync(join(target, ".claude/settings.json"), "utf8"));
@@ -116,6 +119,33 @@ test("sync --provider gemini writes AfterAgent settings.json pointing at .harnes
     assert.equal(item.type, "command");
     assert.equal(item.command, "bash .harness/loom/hook.sh gemini");
     assert.equal(item.timeout, 60000);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("sync --provider gemini strips skills frontmatter but injects required skill loading into agent bodies", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    assert.equal(runNode(SYNC_SCRIPT, ["--provider", "gemini"], { cwd: target }).status, 0);
+
+    const planner = readFileSync(join(target, ".gemini/agents/harness-planner.md"), "utf8");
+    const finalizer = readFileSync(join(target, ".gemini/agents/harness-finalizer.md"), "utf8");
+
+    assert.doesNotMatch(planner, /^skills:/m);
+    assert.match(planner, /^## Required Skill Loading$/m);
+    assert.match(planner, /activate and follow these skill bodies by name: harness-planning, harness-context\./);
+    assert.match(planner, /\$harness-planning, \$harness-context/);
+    assert.match(planner, /^# Planner$/m);
+
+    assert.doesNotMatch(finalizer, /^skills:/m);
+    assert.match(finalizer, /activate and follow these skill bodies by name: harness-context\./);
+    assert.match(finalizer, /\$harness-context/);
+    assert.doesNotMatch(finalizer, /\$harness-planning/);
+
+    assert.ok(existsSync(join(target, ".gemini/skills/harness-planning/SKILL.md")));
+    assert.ok(existsSync(join(target, ".gemini/skills/harness-context/SKILL.md")));
   } finally {
     cleanupDir(target);
   }
@@ -242,6 +272,34 @@ test("sync errors on bare invocation — deploy is always an explicit opt-in", (
     const r = runNode(SYNC_SCRIPT, ["--provider", "claude"], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
     assert.ok(existsSync(join(target, ".claude/agents/harness-planner.md")));
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("sync --provider codex omits skills.config and injects required skill mentions into agent bodies", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    assert.equal(runNode(SYNC_SCRIPT, ["--provider", "codex"], { cwd: target }).status, 0);
+
+    const planner = readFileSync(join(target, ".codex/agents/harness-planner.toml"), "utf8");
+    const finalizer = readFileSync(join(target, ".codex/agents/harness-finalizer.toml"), "utf8");
+
+    assert.doesNotMatch(planner, /\[\[skills\.config\]\]/);
+    assert.doesNotMatch(planner, /^path\s*=\s*"/m);
+    assert.match(planner, /^developer_instructions = """$/m);
+    assert.match(planner, /^## Required Skill Loading$/m);
+    assert.match(planner, /\$harness-planning, \$harness-context/);
+    assert.match(planner, /Codex exposes skill metadata by default/);
+    assert.match(planner, /^# Planner$/m);
+
+    assert.doesNotMatch(finalizer, /\[\[skills\.config\]\]/);
+    assert.match(finalizer, /\$harness-context/);
+    assert.doesNotMatch(finalizer, /\$harness-planning/);
+
+    assert.ok(existsSync(join(target, ".codex/skills/harness-planning/SKILL.md")));
+    assert.ok(existsSync(join(target, ".codex/skills/harness-context/SKILL.md")));
   } finally {
     cleanupDir(target);
   }

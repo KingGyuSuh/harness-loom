@@ -9,7 +9,7 @@ planner-continuation: none
 To: planner
 EPIC: (none)
 Task path: (none)
-Intent: Read the full goal, emit an initial EPIC batch, and provide the applicable global-roster slice for each EPIC.
+Intent: Read the user request snapshot, emit an initial EPIC batch, and provide the applicable global-roster slice for each EPIC.
 Prior tasks:
 Prior reviews:
 
@@ -24,4 +24,4 @@ outcome: <one-sentence completion condition>.
 upstream: <EP-M--slug, ...> | none.
 roster: <producer1> → <producer3> → <producer5>.
 current: <producer-slug | done | superseded>.
-note: <brief progress summary, blocker, or evidence citation such as goal.md:Lxx or a quoted goal phrase>.
+note: <brief progress summary, blocker, or evidence citation such as .harness/cycle/user-request-snapshot.md:Lxx or a quoted goal phrase>.

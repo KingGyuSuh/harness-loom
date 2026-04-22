@@ -1,13 +1,13 @@
 # state.md narrative schema
 
-`.harness/cycle/state.md` is the readable runtime summary that the orchestrator reads and writes every turn. Its structure is a four-line header plus a `## Next` block plus an ordered `## EPIC summaries` list. `harness-orchestrate/SKILL.md` cites this file as the canonical schema when editing state, advancing phases, and deciding Cold start vs Halt.
+`.harness/cycle/state.md` is the readable runtime summary that the orchestrator reads and writes every turn. Its structure is a four-line header plus a `## Next` block plus an ordered `## EPIC summaries` list. The full original request is preserved separately in `.harness/cycle/user-request-snapshot.md`; the `Goal` header is a compact human summary, not the full request. `harness-orchestrate/SKILL.md` cites this file as the canonical schema when editing state, advancing phases, and deciding Cold start vs Halt.
 
 ## Canonical shape
 
 ```text
 # Runtime State
 
-Goal (from <filename.md>): <one-paragraph trimmed body>
+Goal (from <filename.md>): <one-paragraph compact summary; full request lives in .harness/cycle/user-request-snapshot.md>
 Phase: <planner | pair-producer-slug | harness-finalizer>
 loop: <true|false>
 planner-continuation: <pending|none>
@@ -29,7 +29,7 @@ outcome: <one-sentence completion condition>
 upstream: <EP-M--slug, ...> | none
 roster: <producer1> → <producer3> → <producer5>
 current: <producer-slug | done | superseded>
-note: <progress state + evidence + goal.md:Lxx citation>
+note: <progress state + evidence + .harness/cycle/user-request-snapshot.md:Lxx citation>
 
 ### EP-2--<slug>
 outcome: ...
@@ -41,7 +41,7 @@ note: ...
 
 ## Field semantics
 
-- **Goal** header — one paragraph containing the trimmed goal markdown body loaded through `/harness-orchestrate <file.md>`. Do not require load-bearing headers such as `# Goal`.
+- **Goal** header — one paragraph summarizing the request markdown loaded through `/harness-orchestrate <file.md>`. Do not require load-bearing headers such as `# Goal`. The full trimmed body is written to `.harness/cycle/user-request-snapshot.md` and is propagated in dispatch envelopes as `User request snapshot`.
 - **Phase** header — an echo of `Next.To`, used only to keep the current turn readable to humans. Numeric slugs are forbidden.
 - **loop** header — Hook re-entry switch. The orchestrator writes `false` first at the start of every turn, and raises it to `true` only at the end of a turn that has committed a valid next dispatch.
 - **planner-continuation** header — planner-owned defer-to-end flag. Written only from planner `next-action` (`continue` -> `pending`, `done` or absent -> `none`). Consumed when every live EPIC reaches terminal: `pending` recalls the planner, `none` enters the finalizer turn.
@@ -49,7 +49,7 @@ note: ...
   - `To` — the next runtime turn target
   - `EPIC` — `EP-N--slug`, or `(none)` for planner and finalizer turns
   - `Task path` — `(none)` for planner turns; canonical pair task path for Pair turns; canonical finalizer task path for Finalizer turns
-  - `Intent` — one or two natural-language sentences. On retreat, prefix with `(retreat reason: ...)`. On a defer-to-end planner recall, prefix with `(planner continuation: ...)`.
+  - `Intent` — one or two natural-language sentences. Dispatch envelopes expose this value as `Turn intent`. On retreat, prefix with `(retreat reason: ...)`. On a defer-to-end planner recall, prefix with `(planner continuation: ...)`.
   - `Prior tasks` / `Prior reviews` — arrays of previous artifact paths that will be attached into the next envelope
 - **`## EPIC summaries` block** — one EPIC = one `### EP-N--slug` heading plus five fields: `outcome`, `upstream`, `roster`, `current`, and `note`. Pipe tables and prose blobs are forbidden.
   - `outcome` — one-sentence completion condition
@@ -61,6 +61,7 @@ note: ...
 ## Mutation rules
 
 - All writes are orchestrator-exclusive. Subagents do not write the `Next` block or EPIC summary fields directly.
+- `.harness/cycle/user-request-snapshot.md` is orchestrator-owned. `harness-init` must not seed a placeholder snapshot. On direct goal entry, reset, or same-intent expansion, write the full trimmed request body there before dispatching the planner, a pair, or the finalizer.
 - The orchestrator writes `loop: false` first at turn start, and writes `loop: true` only at the end of a turn with a committed valid `Next`.
 - EPIC mutation is append-only. Add new EPICs or mark old ones `superseded`, but never edit existing `outcome`, `upstream`, or `roster` fields in place.
 - EPICs whose `current` is terminal (`done` or `superseded`) are excluded from dispatch.

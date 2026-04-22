@@ -26,8 +26,8 @@ Test Reviewer is the reviewer that grades a bundle of unit tests submitted by Te
 3. Classify each test case as happy, boundary, or error and evaluate category coverage.
 4. Inspect the files for test determinism: fixed seeds, isolated I/O, and avoidance of time/random coupling.
 5. Record each Criteria item as PASS/FAIL with evidence lines.
-6. Evaluate Regression gate for duplication or invalidation of the existing test suite.
-7. Produce the final Verdict and Feedback. `Advisory-next` is optional — emit it only when there is a non-obvious next-stage priority; otherwise use `none`.
+6. Evaluate duplication or invalidation of the existing test suite.
+7. Produce the final Verdict and Feedback with any non-obvious next-stage priority.
 
 ## Output Format
 
@@ -37,7 +37,5 @@ End your response with this structured block:
 Verdict: PASS / FAIL
 Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
-Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```

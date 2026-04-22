@@ -102,9 +102,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Suggested next-work: "<optional forward hint for the next stage, or 'none'>"
 Remaining items: [{items not yet done}]
-Escalation: {none | structural-retreat-to-<stage>, reason}
 ```
 
 **Reviewer variant** — include these fields in this order:
@@ -113,19 +111,19 @@ Escalation: {none | structural-retreat-to-<stage>, reason}
 Verdict: PASS / FAIL
 Criteria: [{criterion, result, evidence-citation (file:line)}]
 FAIL items: [{item, level (technical/creative/structural), reason}]
-Regression gate: {clean / regression / N/A, details}
 Feedback: {short free-form rationale}
-Advisory-next: "<optional forward hint for the next stage, or 'none'>"
 ```
 
 - Verdict must be the exact string `PASS` or `FAIL`. No emojis, emoticons, or neutral categories such as `PARTIAL`.
 - Evidence must cite disk paths plus line ranges. "I feel" or "looks good" is not evidence.
+- A pair producer's `Status` is self-report only. The paired reviewer `Verdict` is the Pair turn's load-bearing verdict source.
 - Producers must not emit reviewer verdict fields, and reviewers must not emit producer diff fields. That is role leakage.
-- `Suggested next-work` (producer) and `Advisory-next` (reviewer) are **optional forward hints** for the next stage — emit them only when you have something non-obvious to pass forward; otherwise the value is `none`. The orchestrator does not consume these fields to decide `Next.To`; that is determined by Phase advance rules from the verdict. Do not try to steer self-recall or rework from these fields — that is a role leak into the meta-role (`harness-planner`) that alone owns its `next-action` continuation signal.
+- Put non-obvious follow-up notes in producer `Remaining items`, reviewer `FAIL items`, or reviewer `Feedback`; do not add advisory routing fields. Domain-specific regression evidence may appear in the review body or `Feedback` when the pair skill asks for it, but it is not a generic runtime field.
+- Do not add `Escalation`-style fields. Structural escalation uses only the shared top-level `## Structural Issue` block from `harness-context`.
 
-**Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, may replace the Producer shape's `Files created / Files modified / Diff summary` fields with role-specific return fields such as `EPICs / Remaining / next-action / Additional pairs required`. The `next-action` field on a meta-role is load-bearing (defer-to-end continuation grammar `continue|done`, defined in its pair skill), not the same field as the executor-side optional advisory. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
+**Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, uses its own role-specific return fields: `EPICs (this turn)`, `Remaining`, `next-action`, and `Additional pairs required`. The `next-action` field on a meta-role is load-bearing (defer-to-end continuation grammar `continue|done`, defined in its pair skill), not an executor-side advisory. Planner agents do not emit `Status` or `Escalation`; they repair the plan by emitting replacement EPICs or by resolving with zero EPICs plus `next-action: done`. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
 
-**Finalizer exception** — the singleton cycle-end finalizer (`harness-finalizer`) uses the Producer shape but has no paired reviewer and no pair skill. Its own `Status: PASS | FAIL` plus `Self-verification` block is the verdict the orchestrator reads. The finalizer signals RETREAT by emitting a `## Structural Issue` block **outside** the Producer fenced block (same shape as in the orchestrator and `harness-context` skills, with `Suspected upstream stage: planner`); absent that block, `Status` alone decides PASS vs FAIL. Finalizer FAIL routes to planner recall rather than in-place rework. The finalizer must not emit Reviewer-shape fields (`Verdict`, `Criteria`, `FAIL items`, `Regression gate`), and the identity paragraph must name the role as the cycle-end finalizer without a paired reviewer so reviewers grade by these Finalizer rules instead of the standard paired Producer shape.
+**Finalizer exception** — the singleton cycle-end finalizer (`harness-finalizer`) uses the finalizer shape defined in its own agent body and has no paired reviewer or pair skill. Its own `Status: PASS | FAIL` plus `Self-verification` block is the verdict the orchestrator reads. The finalizer signals RETREAT by emitting a `## Structural Issue` block **outside** the fenced block (same shape as in the orchestrator and `harness-context` skills, with `Suspected upstream stage: planner`); absent that block, `Status` alone decides PASS vs FAIL. Finalizer FAIL routes to planner recall rather than in-place rework. The finalizer must not emit Reviewer-shape fields (`Verdict`, `Criteria`, `FAIL items`) or `Escalation` fields, and the identity paragraph must name the role as the cycle-end finalizer without a paired reviewer so reviewers grade by these Finalizer rules instead of the standard paired Producer shape.
 
 ## Anti-patterns
 
@@ -149,8 +147,8 @@ When a pair reviewer grades an agent with this rubric, it checks:
 - Forbidden fields (`path`, `effort`, `allow-tools`, `allowed-tools`, `tools`) are absent from both frontmatter and body.
 - `## Principles` has exactly five items and follows Why-first positive form.
 - `## Task` has 5-10 numbered steps, each <=25 words, in active voice, each describing one concrete artifact or decision.
-- `## Output Format` exposes the correct fenced block for the role type: Producer shape for pair producers and finalizers, Reviewer shape for pair reviewers, and the Meta-role exception fields for the planner.
-- Finalizer agents include a `## Structural Issue` block (same shape as in `harness-context` §7) outside the Producer fenced block to signal RETREAT, with `Suspected upstream stage: planner`. They emit no Reviewer-shape fields.
+- `## Output Format` exposes the correct fenced block for the role type: Producer shape for pair producers, Reviewer shape for pair reviewers, Meta-role exception fields for the planner, and Finalizer exception fields for the finalizer.
+- Finalizer agents include a `## Structural Issue` block (same shape as in `harness-context` §7) outside the Finalizer fenced block to signal RETREAT, with `Suspected upstream stage: planner`. They emit no Reviewer-shape fields.
 - There is no procedural drift, skill-body duplication, or embedded pair-reviewer criteria.
 - No emojis are present.
 
@@ -162,4 +160,4 @@ When a pair reviewer grades an agent with this rubric, it checks:
 - Describe orchestrator routing or state-writing procedures in the agent body; routing and state belong only to the orchestrator.
 - Duplicate the pair skill body inside the agent; that creates two sources of truth and guarantees drift.
 - Use emojis as decoration.
-- Treat `Suggested next-work` or `Advisory-next` as routing authority; the orchestrator synthesizes the real next step.
+- Add advisory routing fields such as `Suggested next-work`, `Advisory-next`, `Regression gate`, or `Escalation`; use role body, `Remaining items`, `Feedback`, or `## Structural Issue` instead.

@@ -33,3 +33,15 @@ test("harness-init skill describes canonical state in .harness/, not in platform
     assert.ok(!body.includes(token), `skill must not describe ${token} as canonical`);
   }
 });
+
+test("harness-init skill keeps request snapshots out of install ownership", () => {
+  const body = readFileSync(HARNESS_INIT_SKILL, "utf8");
+  assert.ok(
+    body.includes("Install does not create `.harness/cycle/goal.md` or `.harness/cycle/user-request-snapshot.md`"),
+    "skill must state install does not seed goal or request snapshot placeholders",
+  );
+  assert.ok(
+    body.includes("direct runtime goal entry owns cycle-local request snapshots"),
+    "skill must assign cycle-local request snapshots to runtime goal entry",
+  );
+});
