@@ -138,6 +138,30 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+// Read an existing JSON file that sync is about to merge into and overwrite.
+// On parse failure (or non-object top level) we refuse to proceed instead of
+// silently replacing user-owned settings with `{}`. The caller is expected to
+// have already confirmed the file exists.
+async function readJsonObjectOrThrow(path: string): Promise<Record<string, unknown>> {
+  const raw = await readFile(path, "utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `refusing to overwrite malformed ${path}: ${msg}. Fix or remove the file, then re-run sync.`,
+    );
+  }
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    const shape = Array.isArray(parsed) ? "array" : parsed === null ? "null" : typeof parsed;
+    throw new Error(
+      `refusing to overwrite ${path}: expected top-level JSON object, got ${shape}. Fix or remove the file, then re-run sync.`,
+    );
+  }
+  return parsed as Record<string, unknown>;
+}
+
 // ---------------------------------------------------------------- frontmatter
 
 function parseFrontmatter(raw: string): { fm: Record<string, unknown>; body: string } {
@@ -348,11 +372,7 @@ async function writeClaudeSettings(targetRoot: string): Promise<string> {
   await mkdir(dirname(settingsPath), { recursive: true });
   let existing: Record<string, unknown> = {};
   if (await exists(settingsPath)) {
-    try {
-      existing = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
-    } catch {
-      existing = {};
-    }
+    existing = await readJsonObjectOrThrow(settingsPath);
   }
   const hooks = (existing.hooks as Record<string, unknown>) ?? {};
   hooks.Stop = [
@@ -375,11 +395,7 @@ async function writeCodexHookConfig(targetRoot: string): Promise<string> {
   await mkdir(dirname(hooksPath), { recursive: true });
   let payload: Record<string, unknown> = {};
   if (await exists(hooksPath)) {
-    try {
-      payload = JSON.parse(await readFile(hooksPath, "utf8")) as Record<string, unknown>;
-    } catch {
-      payload = {};
-    }
+    payload = await readJsonObjectOrThrow(hooksPath);
   }
   const hooks = (payload.hooks as Record<string, unknown>) ?? {};
   hooks.Stop = [
@@ -420,11 +436,7 @@ async function writeGeminiHookConfig(targetRoot: string): Promise<string> {
   await mkdir(dirname(settingsPath), { recursive: true });
   let existing: Record<string, unknown> = {};
   if (await exists(settingsPath)) {
-    try {
-      existing = JSON.parse(await readFile(settingsPath, "utf8")) as Record<string, unknown>;
-    } catch {
-      existing = {};
-    }
+    existing = await readJsonObjectOrThrow(settingsPath);
   }
   const hooks = (existing.hooks as Record<string, unknown>) ?? {};
   // Gemini hook schema (docs/hooks/reference.md): 2-layer nested
