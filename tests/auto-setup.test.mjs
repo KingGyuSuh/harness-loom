@@ -11,13 +11,13 @@ import {
 } from "./helpers.mjs";
 
 function runAutoSetup(target, extraArgs = []) {
-  const r = runNode(AUTO_SETUP_SCRIPT, [target, ...extraArgs]);
+  const r = runNode(AUTO_SETUP_SCRIPT, extraArgs, { cwd: target });
   assert.equal(r.status, 0, r.stderr);
   return { result: r, summary: JSON.parse(r.stdout) };
 }
 
 function installTo(target) {
-  const r = runNode(INSTALL_SCRIPT, [target]);
+  const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
   assert.equal(r.status, 0, r.stderr);
 }
 
@@ -140,7 +140,7 @@ test("auto-setup fresh target installs foundation and prints explicit sync hando
 test("auto-setup rejects unknown flags before writing harness state", () => {
   const target = makeTempDir();
   try {
-    const r = runNode(AUTO_SETUP_SCRIPT, [target, "--force"]);
+    const r = runNode(AUTO_SETUP_SCRIPT, ["--force"], { cwd: target });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /unknown flag: --force/);
     assert.ok(!existsSync(join(target, ".harness")), "invalid args must not create .harness/");

@@ -12,7 +12,7 @@ import {
 test("install.ts seeds the harness-finalizer agent under .harness/loom/", () => {
   const target = makeTempDir();
   try {
-    const r = runNode(INSTALL_SCRIPT, [target]);
+    const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
 
     const agent = join(target, ".harness/loom/agents/harness-finalizer.md");
@@ -40,7 +40,7 @@ test("install.ts seeds the harness-finalizer agent under .harness/loom/", () => 
 test("install.ts seeds the registry at loom root with an empty Registered pairs section", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
     // Registry holds the pair roster only; Finalizer is a singleton role
     // dispatched by fixed slug, not a list entry.
@@ -78,7 +78,7 @@ test("install.ts seeds the registry at loom root with an empty Registered pairs 
 test("seeded harness-finalizer is a safe no-op that returns PASS", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     const body = readFileSync(
       join(target, ".harness/loom/agents/harness-finalizer.md"),
       "utf8",
@@ -121,7 +121,7 @@ test("seeded harness-finalizer is a safe no-op that returns PASS", () => {
 test("installed harness-finalizer body exposes the load-bearing contract sections", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     const body = readFileSync(
       join(target, ".harness/loom/agents/harness-finalizer.md"),
       "utf8",

@@ -20,7 +20,7 @@ import {
 } from "./helpers.mjs";
 
 function installTo(target) {
-  const result = runNode(INSTALL_SCRIPT, [target]);
+  const result = runNode(INSTALL_SCRIPT, [], { cwd: target });
   assert.equal(result.status, 0, result.stderr);
 }
 

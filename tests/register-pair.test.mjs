@@ -12,7 +12,7 @@ import {
 } from "./helpers.mjs";
 
 function installTo(target) {
-  assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+  assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
 }
 
 test("README claim about prefix handling matches register-pair contract", () => {

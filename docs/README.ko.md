@@ -24,10 +24,10 @@
 
 ## 핵심 명령
 
-- `/harness-auto-setup [<target>] [--provider <list>]`
-  타깃 프로젝트를 처음 설정하거나, 기존 하네스를 스냅샷한 뒤 현재 계약에 맞게 갱신합니다.
-- `/harness-init [<target>]`
-  타깃 프로젝트에 `.harness/loom/` 과 `.harness/cycle/` 기반 foundation runtime을 설치하거나 재설정합니다.
+- `/harness-auto-setup [--provider <list>]`
+  현재 작업 디렉터리를 처음 설정하거나, 기존 하네스를 스냅샷한 뒤 현재 계약에 맞게 갱신합니다.
+- `/harness-init`
+  현재 작업 디렉터리에 `.harness/loom/` 과 `.harness/cycle/` 기반 foundation runtime을 설치하거나 재설정합니다.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging을 원하는 플랫폼 트리로 배포합니다.
 - `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`

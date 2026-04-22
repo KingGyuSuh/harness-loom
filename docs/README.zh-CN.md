@@ -24,10 +24,10 @@
 
 ## 关键命令
 
-- `/harness-auto-setup [<target>] [--provider <list>]`
-  对目标项目做首次设置，或先快照已有 harness 再按当前契约刷新。
-- `/harness-init [<target>]`
-  在目标项目中安装或重置基于 `.harness/loom/` 与 `.harness/cycle/` 的基础运行时。
+- `/harness-auto-setup [--provider <list>]`
+  对当前工作目录做首次设置，或先快照已有 harness 再按当前契约刷新。
+- `/harness-init`
+  在当前工作目录中安装或重置基于 `.harness/loom/` 与 `.harness/cycle/` 的基础运行时。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   将 canonical staging 部署到所需的平台树。
 - `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`

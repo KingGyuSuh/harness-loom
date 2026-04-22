@@ -17,8 +17,8 @@
 //          `node .harness/loom/sync.ts --provider <list>` on explicit user
 //          opt-in.
 //
-// Usage:   node skills/harness-init/scripts/install.ts [<target-project-path>]
-//          Target defaults to process.cwd() when omitted.
+// Usage:   node skills/harness-init/scripts/install.ts
+//          Target is always process.cwd(). Run from the project root.
 //
 // Related: skills/harness-init/scripts/hook.sh — copied into <target>/.harness/loom/hook.sh
 //          skills/harness-init/scripts/sync.ts — copied into <target>/.harness/loom/sync.ts
@@ -40,7 +40,7 @@
 
 import { mkdir, writeFile, readFile, copyFile, access, chmod, rm, stat, readdir } from "node:fs/promises";
 import { constants as FS } from "node:fs";
-import { join, dirname, resolve, isAbsolute } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
 
@@ -77,23 +77,20 @@ function die(message: string, code = 1): never {
 
 function parseArgs(argv: string[]): Args {
   const rest = argv.slice(2);
-  const positional: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i];
     if (arg === "--help" || arg === "-h") {
       process.stdout.write(
-        "Usage: node skills/harness-init/scripts/install.ts [<target-project-path>]\n" +
-          "  Target defaults to process.cwd() when omitted.\n" +
+        "Usage: node skills/harness-init/scripts/install.ts\n" +
+          "  Target is always process.cwd(); run from the project root.\n" +
           "  Platform deploy is opt-in via `node .harness/loom/sync.ts --provider claude,codex,gemini`.\n",
       );
       process.exit(0);
-    } else if (arg.startsWith("--")) die(`unknown flag: ${arg}`);
-    else positional.push(arg);
+    }
+    if (arg.startsWith("--")) die(`unknown flag: ${arg}`);
+    die(`unexpected argument: ${arg}`);
   }
-  if (positional.length > 1) die("at most one <target-project-path> accepted");
-  const targetArg = positional[0] ?? process.cwd();
-  const target = isAbsolute(targetArg) ? targetArg : resolve(process.cwd(), targetArg);
-  return { target };
+  return { target: process.cwd() };
 }
 
 async function exists(path: string): Promise<boolean> {

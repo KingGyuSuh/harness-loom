@@ -12,7 +12,7 @@ import {
 test("install.ts scaffolds .harness/cycle/ + .harness/loom/ and skips .claude/", () => {
   const target = makeTempDir();
   try {
-    const r = runNode(INSTALL_SCRIPT, [target]);
+    const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
     assert.equal(summary.verification.ok, true, JSON.stringify(summary.verification));
@@ -61,7 +61,7 @@ test("install.ts scaffolds .harness/cycle/ + .harness/loom/ and skips .claude/",
 test("install.ts produces events.md without absolute-path leak", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     const events = readFileSync(join(target, ".harness/cycle/events.md"), "utf8");
     assert.match(events, /T0 orchestrator bootstrap — runtime seeded\s*$/);
     assert.doesNotMatch(events, /\/Users\/|\/home\/|\\Users\\/);
@@ -74,7 +74,7 @@ test("install.ts produces events.md without absolute-path leak", () => {
 test("install.ts produces state.md matching the new schema", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     const state = readFileSync(join(target, ".harness/cycle/state.md"), "utf8");
     assert.match(state, /Goal \(from <none yet>\):/);
     assert.match(state, /Phase: planner/);
@@ -91,7 +91,7 @@ test("install.ts produces state.md matching the new schema", () => {
 test("install.ts rerun wipes both .harness/loom/ and .harness/cycle/ before reseed", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
 
     // Mutate cycle/state.md to a recognizable sentinel and add an EPIC dir so we
     // can confirm the rerun wipes and reseeds the cycle namespace.
@@ -104,7 +104,7 @@ test("install.ts rerun wipes both .harness/loom/ and .harness/cycle/ before rese
     const hookPath = join(target, ".harness/loom/hook.sh");
     writeFileSync(hookPath, "#!/usr/bin/env bash\necho stale\n");
 
-    const r = runNode(INSTALL_SCRIPT, [target]);
+    const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
     assert.equal(summary.cycleAction, "wiped");
@@ -125,10 +125,10 @@ test("install.ts rerun wipes both .harness/loom/ and .harness/cycle/ before rese
 test("install.ts rerun succeeds against an older cycle layout missing finalizer/tasks", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     rmSync(join(target, ".harness/cycle/finalizer"), { recursive: true, force: true });
 
-    const r = runNode(INSTALL_SCRIPT, [target]);
+    const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
     assert.equal(summary.verification.ok, true);
@@ -142,7 +142,7 @@ test("install.ts rerun succeeds against an older cycle layout missing finalizer/
 test("install.ts rejects removed --force flag", () => {
   const target = makeTempDir();
   try {
-    const r = runNode(INSTALL_SCRIPT, [target, "--force"]);
+    const r = runNode(INSTALL_SCRIPT, ["--force"], { cwd: target });
     assert.notEqual(r.status, 0);
     assert.match(r.stderr, /unknown flag: --force/);
   } finally {
@@ -153,7 +153,7 @@ test("install.ts rejects removed --force flag", () => {
 test("install.ts rerun warns about non-foundation loom entries before wiping them", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
 
     // Simulate pair-dev having authored a pair into loom/.
     const pairSkillDir = join(target, ".harness/loom/skills/harness-demo");
@@ -168,7 +168,7 @@ test("install.ts rerun warns about non-foundation loom entries before wiping the
       "## Registered pairs\n\n- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`\n",
     );
 
-    const r = runNode(INSTALL_SCRIPT, [target]);
+    const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
 
@@ -194,7 +194,7 @@ test("install.ts rerun warns about non-foundation loom entries before wiping the
 test("install.ts fresh install reports empty wipedPairs", () => {
   const target = makeTempDir();
   try {
-    const r = runNode(INSTALL_SCRIPT, [target]);
+    const r = runNode(INSTALL_SCRIPT, [], { cwd: target });
     assert.equal(r.status, 0, r.stderr);
     const summary = JSON.parse(r.stdout);
     assert.deepEqual(summary.wipedPairs, []);
@@ -208,7 +208,7 @@ test("install.ts fresh install reports empty wipedPairs", () => {
 test("install.ts seeds a self-contained sync.ts copy under .harness/loom/", () => {
   const target = makeTempDir();
   try {
-    assert.equal(runNode(INSTALL_SCRIPT, [target]).status, 0);
+    assert.equal(runNode(INSTALL_SCRIPT, [], { cwd: target }).status, 0);
     const syncBody = readFileSync(join(target, ".harness/loom/sync.ts"), "utf8");
     // Marker assertions that pin the installed copy as the loom-aware sync.ts
     // with all three platform deploy targets.

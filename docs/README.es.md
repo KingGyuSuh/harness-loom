@@ -24,10 +24,10 @@
 
 ## Comandos principales
 
-- `/harness-auto-setup [<target>] [--provider <list>]`
-  Configura por primera vez el proyecto objetivo o actualiza un harness existente después de tomar un snapshot.
-- `/harness-init [<target>]`
-  Instala o reinicia el runtime base de `.harness/loom/` y `.harness/cycle/` dentro del proyecto objetivo.
+- `/harness-auto-setup [--provider <list>]`
+  Configura por primera vez el directorio de trabajo actual o actualiza un harness existente después de tomar un snapshot.
+- `/harness-init`
+  Instala o reinicia el runtime base de `.harness/loom/` y `.harness/cycle/` dentro del directorio de trabajo actual.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   Despliega el canonical staging hacia los árboles de plataforma necesarios.
 - `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`

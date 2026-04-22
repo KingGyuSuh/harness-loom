@@ -24,10 +24,10 @@
 
 ## 主なコマンド
 
-- `/harness-auto-setup [<target>] [--provider <list>]`
-  対象プロジェクトを初期セットアップするか、既存 harness をスナップショットしてから現在の契約に合わせて更新します。
-- `/harness-init [<target>]`
-  対象プロジェクトに `.harness/loom/` と `.harness/cycle/` ベースの基盤ランタイムを導入または再初期化します。
+- `/harness-auto-setup [--provider <list>]`
+  現在の作業ディレクトリを初期セットアップするか、既存 harness をスナップショットしてから現在の契約に合わせて更新します。
+- `/harness-init`
+  現在の作業ディレクトリに `.harness/loom/` と `.harness/cycle/` ベースの基盤ランタイムを導入または再初期化します。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging を必要なプラットフォームツリーへ配備します。
 - `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
