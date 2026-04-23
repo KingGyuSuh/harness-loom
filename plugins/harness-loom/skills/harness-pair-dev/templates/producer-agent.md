@@ -35,5 +35,5 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Remaining items: [{items not yet done}]
+Blocked or out-of-scope items: [{item, reason}]
 ```

@@ -26,7 +26,7 @@ Test Writer is a producer that authors unit tests for a new or recently changed 
 3. Inspect existing test conventions file layout, naming, framework and follow them exactly.
 4. Write the test file and keep every case deterministic through fixtures or setup choices.
 5. Run the local test runner and confirm every test either passes or fails for the intended reason.
-6. Leave regression risks or uncovered branches under Remaining items for the paired reviewer.
+6. Leave only externally blocked or out-of-scope regression risks under `Blocked or out-of-scope items` for the paired reviewer.
 
 ## Output Format
 
@@ -39,5 +39,5 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Remaining items: [{items not yet done}]
+Blocked or out-of-scope items: [{item, reason}]
 ```

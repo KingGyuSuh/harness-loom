@@ -46,26 +46,9 @@ Before any destructive refresh on a target with existing harness runtime state (
 .harness/_snapshots/auto-setup/<YYYYMMDDTHHMMSSZ>/
 ```
 
-Use the UTC run-start timestamp for the id; if a directory already exists for the same second, append `-NN` with a zero-padded monotonic counter. The snapshot directory contains:
+The snapshot preserves pre-refresh `.harness/loom/` and `.harness/cycle/` when present, plus deterministic `manifest.json` provenance. Read `references/snapshot-provenance.md` before changing snapshot id allocation, copied namespaces, manifest keys, active-cycle fields, or failure behavior.
 
-- `manifest.json` — deterministic JSON summary with stable key order
-- `loom/` — copy of pre-refresh `.harness/loom/` when present
-- `cycle/` — copy of pre-refresh `.harness/cycle/` when present
-
-`manifest.json` must include at least:
-
-- `schemaVersion`
-- `tool`
-- `targetPath`
-- `createdAt`
-- `snapshotPath`
-- `copiedNamespaces`
-- `activeCycle`
-- `registrySummary`
-- `finalizerSummary`
-- `nextAction`
-
-Keep `copiedNamespaces` sorted and use target-relative namespace names such as `.harness/loom` and `.harness/cycle`. `activeCycle` must record the classification plus the parse reason. Do not snapshot derived platform trees by default; they are deployment outputs and are refreshed only by explicit sync.
+Do not snapshot derived platform trees by default; they are deployment outputs and are refreshed only by explicit sync.
 
 If snapshot creation fails, stop before running install or deleting anything.
 
@@ -186,5 +169,6 @@ The script snapshots existing `.harness/loom/` / `.harness/cycle/`, classifies a
 
 - `../harness-init/SKILL.md` — foundation installer boundary
 - `../harness-pair-dev/SKILL.md` — pair authoring and registry mutation boundary
+- `references/snapshot-provenance.md` — snapshot directory, manifest shape, and failure contract
 - `../harness-init/references/runtime/registry.md` — target-side pair roster contract
 - `../harness-init/references/runtime/harness-finalizer.template.md` — singleton finalizer skeleton and Output Format

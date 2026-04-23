@@ -102,7 +102,7 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Remaining items: [{items not yet done}]
+Blocked or out-of-scope items: [{item, reason}]
 ```
 
 **Reviewer variant** — include these fields in this order:
@@ -118,7 +118,7 @@ Feedback: {short free-form rationale}
 - Evidence must cite disk paths plus line ranges. "I feel" or "looks good" is not evidence.
 - A pair producer's `Status` is self-report only. The paired reviewer `Verdict` is the Pair turn's load-bearing verdict source.
 - Producers must not emit reviewer verdict fields, and reviewers must not emit producer diff fields. That is role leakage.
-- Put non-obvious follow-up notes in producer `Remaining items`, reviewer `FAIL items`, or reviewer `Feedback`; do not add advisory routing fields. Domain-specific regression evidence may appear in the review body or `Feedback` when the pair skill asks for it, but it is not a generic runtime field.
+- Put non-obvious follow-up notes in producer `Blocked or out-of-scope items`, reviewer `FAIL items`, or reviewer `Feedback`; do not add advisory routing fields. `Blocked or out-of-scope items` may record only out-of-scope follow-up or externally blocked work; it must not defer in-scope acceptance, verification, or evidence that the current producer turn should complete. If a blocker prevents required in-scope acceptance, verification, or evidence, the producer returns `Status: FAIL` or `## Structural Issue`; it does not PASS by listing the blocker there. Domain-specific regression evidence may appear in the review body or `Feedback` when the pair skill asks for it, but it is not a generic runtime field.
 - Do not add `Escalation`-style fields. Structural escalation uses only the shared top-level `## Structural Issue` block from `harness-context`.
 
 **Meta-role exception** — a meta-role that does not leave task/review files, such as `harness-planner`, uses its own role-specific return fields: `EPICs (this turn)`, `Remaining`, `next-action`, and `Additional pairs required`. The `next-action` field on a meta-role is load-bearing (defer-to-end continuation grammar `continue|done`, defined in its pair skill), not an executor-side advisory. Planner agents do not emit `Status` or `Escalation`; they repair the plan by emitting replacement EPICs or by resolving with zero EPICs plus `next-action: done`. Any agent that uses this exception must say that it is a meta-role without task/review files in either the identity paragraph or the first principle so reviewers do not grade it with the standard Producer shape.
@@ -160,4 +160,4 @@ When a pair reviewer grades an agent with this rubric, it checks:
 - Describe orchestrator routing or state-writing procedures in the agent body; routing and state belong only to the orchestrator.
 - Duplicate the pair skill body inside the agent; that creates two sources of truth and guarantees drift.
 - Use emojis as decoration.
-- Add advisory routing fields such as `Suggested next-work`, `Advisory-next`, `Regression gate`, or `Escalation`; use role body, `Remaining items`, `Feedback`, or `## Structural Issue` instead.
+- Add advisory routing fields such as `Suggested next-work`, `Advisory-next`, `Regression gate`, or `Escalation`; use role body, `Blocked or out-of-scope items`, `Feedback`, or `## Structural Issue` instead.

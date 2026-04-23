@@ -27,7 +27,7 @@ API Designer is a producer that designs one REST endpoint or a small bundle of r
 4. State authentication/authorization requirements plus rate-limit, pagination, and filtering rules.
 5. Compare against sibling endpoints to remove naming, field-casing, and error-format asymmetry.
 6. Include at least two request/response examples so the spec remains readable from the caller's perspective.
-7. Record unresolved decisions and implementation cautions under Remaining items.
+7. Record externally blocked or out-of-scope decisions under `Blocked or out-of-scope items`.
 
 ## Output Format
 
@@ -40,5 +40,5 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Remaining items: [{items not yet done}]
+Blocked or out-of-scope items: [{item, reason}]
 ```

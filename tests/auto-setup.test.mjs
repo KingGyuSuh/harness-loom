@@ -87,7 +87,7 @@ function assertReconstructedProducerAgent(body, { pair, skill, producer }) {
   assert.match(body, /Files modified: \[\{file path\}\]/);
   assert.match(body, /Diff summary: \{sections changed vs baseline, or "N\/A"\}/);
   assert.match(body, /Self-verification: \{issues found and resolved during this cycle\}/);
-  assert.match(body, /Remaining items: \[\{items not yet done\}\]/);
+  assert.match(body, /Blocked or out-of-scope items: \[\{item, reason\}\]/);
   assert.doesNotMatch(body, /Suggested next-work|Advisory-next|Regression gate|Escalation/);
   assert.doesNotMatch(body, /Verdict: PASS \/ FAIL/);
 }
@@ -432,7 +432,7 @@ test("auto-setup reconstructs customized finalizer on current skeleton", () => {
     assert.match(currentFinalizer, /Files left alone \(intentionally\)/);
     assert.match(currentFinalizer, /Status: PASS \/ FAIL/);
     assert.match(currentFinalizer, /Self-verification:/);
-    assert.match(currentFinalizer, /Remaining items: \[\{items not yet done\}\]/);
+    assert.match(currentFinalizer, /Blocked or out-of-scope items: \[\{item, reason\}\]/);
     assert.match(currentFinalizer, /## Structural Issue/);
     assert.match(currentFinalizer, /Suspected upstream stage:\s*planner/i);
     assert.doesNotMatch(currentFinalizer, /^(Suggested next-work|Advisory-next|Regression gate|Escalation):/m);

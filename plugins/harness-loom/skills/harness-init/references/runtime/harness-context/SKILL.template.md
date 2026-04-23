@@ -31,11 +31,14 @@ At dispatch time the orchestrator supplies a role-specific envelope. Use it as t
 ### 3. If you are a pair producer
 
 - Produce the task artifact by following the pair skill's rubric.
-- Your artifact is the content that will be written to `Task path`. Include the role's reduced producer output block (`Status`, `Summary`, `Files created`, `Files modified`, `Diff summary`, `Self-verification`, `Remaining items`) plus any evidence/body required by the pair skill. A paired reviewer decides the verdict; your own `Status` is self-report only.
+- Your artifact is the content that will be written to `Task path`. Include the role's reduced producer output block (`Status`, `Summary`, `Files created`, `Files modified`, `Diff summary`, `Self-verification`, `Blocked or out-of-scope items`) plus any evidence/body required by the pair skill. A paired reviewer decides the verdict; your own `Status` is self-report only.
 - Read `User request snapshot` before narrowing the work if it contains constraints beyond `Turn intent`.
+- Treat `Turn intent` as attempt-to-completion inside `Scope`. `Blocked or out-of-scope items` may record only external blockers or work outside the current scope; it must not defer in-scope acceptance, verification, or evidence to a future turn.
+- If a blocker prevents required in-scope acceptance, verification, or evidence, return `Status: FAIL` or `## Structural Issue`; do not PASS by listing the blocker under `Blocked or out-of-scope items`.
+- When `Prior tasks` or `Prior reviews` are supplied, read them before editing and carry forward dependency decisions, unresolved reviewer findings, and upstream evidence instead of rediscovering the same surface from scratch.
 - Do not modify files outside `Scope`.
 - Task ids and task-file history are orchestrator-owned. Return the artifact content; the orchestrator records it on disk.
-- If you detect an upstream contract failure you cannot resolve inside this turn, report it with `## Structural Issue` instead of flattening it into a generic FAIL. The paired reviewer will restate and judge it in the review.
+- If the EPIC is too broad to complete inside this producer turn, or if you detect another upstream contract failure you cannot resolve inside this turn, report it with `## Structural Issue` instead of flattening it into a generic FAIL. The paired reviewer will restate and judge it in the review.
 
 ### 4. If you are the reviewer
 
@@ -44,6 +47,7 @@ At dispatch time the orchestrator supplies a role-specific envelope. Use it as t
 - If `Axis` is present, focus on criteria tagged for that axis. Untagged shared criteria still apply.
 - Use the task artifact and concrete disk evidence from the files it changed or cited. Do not use producer transcript, tool trace, or another reviewer's decision as evidence.
 - Use `User request snapshot` and `Prior reviews` as grading context. A producer can fail even when the local task is implemented if it ignores required original-request constraints or unresolved prior-review findings.
+- Use `Prior tasks` / `Prior reviews` as dependency evidence. FAIL a producer that ignores supplied upstream EPIC artifacts, reopens settled decisions without evidence, or leaves in-scope acceptance/verification/rendered evidence as planned future work.
 - End with the reduced reviewer output block: `Verdict`, `Criteria`, `FAIL items`, and `Feedback`. Put domain-specific regression notes in the body or `Feedback` when useful; do not add advisory routing fields.
 - Do not pull FAIL items from another axis into your own verdict. Cross-review synthesis belongs to the orchestrator.
 
@@ -57,8 +61,9 @@ At dispatch time the orchestrator supplies a role-specific envelope. Use it as t
 ### 6. If you are a finalizer
 
 - You run only in a cycle-end finalizer turn. There is no paired reviewer, and the concrete rubric for the turn lives inside your agent body.
-- Your reduced finalizer output block keeps `Status`, `Summary`, `Files created`, `Files modified`, `Self-verification`, and `Remaining items`; an optional `Files left alone (intentionally)` line is allowed only when useful. `Status: PASS | FAIL` plus `Self-verification` is the verdict source. Cite concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies — not narrative.
+- Your reduced finalizer output block keeps `Status`, `Summary`, `Files created`, `Files modified`, `Self-verification`, and `Blocked or out-of-scope items`; an optional `Files left alone (intentionally)` line is allowed only when useful. `Status: PASS | FAIL` plus `Self-verification` is the verdict source. Cite concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies — not narrative.
 - Read `User request snapshot` when cycle-end work checks request coverage or release readiness.
+- If a blocker prevents required cycle-end work, request coverage, verification, or evidence, return `Status: FAIL` or `## Structural Issue`; do not PASS by listing the blocker under `Blocked or out-of-scope items`.
 - Do not request reviewer dispatch and do not emit reviewer-shape fields. Finalizer turns leave 0 review files.
 - If an upstream contract is invalid (for example, the cycle claims to have shipped a result with no source evidence), emit the `## Structural Issue` block inside your artifact with `Suspected upstream stage: planner`. The orchestrator will recall the planner rather than redispatching the finalizer in place.
 
@@ -90,6 +95,7 @@ Assume only the skills explicitly attached to your role plus the dispatch envelo
 - Your output follows the correct role-specific return shape for pair producer, pair reviewer, planner, or finalizer.
 - You actually use the envelope fields `Goal`, `Turn intent`, `Scope`, and `Task path` when your role has one.
 - When supplied, `User request snapshot` is read or explicitly judged irrelevant to the current narrow task.
+- When supplied, `Prior tasks` / `Prior reviews` are used as upstream or rework evidence rather than ignored.
 - You do not modify anything outside `Scope`.
 - Your output contains no control-plane fields such as `Next`, `current`, or `loop`.
 - Reviewer evidence stays anchored to one task artifact.
@@ -102,8 +108,10 @@ Assume only the skills explicitly attached to your role plus the dispatch envelo
 - Write directly under `.harness/cycle/` or `.harness/loom/`; return content only.
 - Modify files outside the envelope scope.
 - Replace orchestrator routing by emitting `Next`, `current`, or `loop` in your output.
-- Add advisory or escalation routing fields; use `Remaining items`, `Feedback`, or `## Structural Issue` according to role.
+- Add advisory or escalation routing fields; use `Blocked or out-of-scope items`, `Feedback`, or `## Structural Issue` according to role.
 - Treat `Turn intent` as permission to ignore the full user request snapshot.
+- Treat `Blocked or out-of-scope items` as a way to self-defer in-scope work that the current producer should have completed.
+- Ignore supplied upstream EPIC artifacts and rediscover the same surface from scratch.
 - Use producer transcript or tool trace as reviewer evidence.
 - Try to manage task ids or on-disk history yourself.
 - Flatten a structural issue into a generic FAIL and force endless same-pair rework.

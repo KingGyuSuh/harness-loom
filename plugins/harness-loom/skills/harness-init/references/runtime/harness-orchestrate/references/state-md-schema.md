@@ -50,7 +50,7 @@ note: ...
   - `EPIC` — `EP-N--slug`, or `(none)` for planner and finalizer turns
   - `Task path` — `(none)` for planner turns; canonical pair task path for Pair turns; canonical finalizer task path for Finalizer turns
   - `Intent` — one or two natural-language sentences. Dispatch envelopes expose this value as `Turn intent`. On retreat, prefix with `(retreat reason: ...)`. On a defer-to-end planner recall, prefix with `(planner continuation: ...)`.
-  - `Prior tasks` / `Prior reviews` — arrays of previous artifact paths that will be attached into the next envelope
+  - `Prior tasks` / `Prior reviews` — arrays of previous artifact paths that will be attached into the next envelope for rework, retreat, or upstream dependency evidence
 - **`## EPIC summaries` block** — one EPIC = one `### EP-N--slug` heading plus five fields: `outcome`, `upstream`, `roster`, `current`, and `note`. Pipe tables and prose blobs are forbidden.
   - `outcome` — one-sentence completion condition
   - `upstream` — same-stage gate set for ready-set computation, or `none`

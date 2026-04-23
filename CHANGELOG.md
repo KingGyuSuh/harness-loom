@@ -8,6 +8,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Planner EPIC sizing now targets producer-completable outcome
+  slices.** `harness-planning` now tells the planner to split broad
+  surfaces into dependency-bearing EPICs when one producer would
+  otherwise self-defer in-scope acceptance, verification, or rendered
+  evidence. Pair dispatch envelopes and `harness-context` now treat
+  `Prior tasks` / `Prior reviews` as upstream dependency evidence that
+  producers must inspect, and reviewers may fail work that ignores those
+  artifacts or leaves current-scope completion for a future turn.
 - **Runtime and role output surfaces reduced to load-bearing fields.**
   Dispatch envelopes now expose `Turn intent` as the subagent-facing
   copy of `Next.Intent`, pair producer/reviewer output blocks no longer
@@ -15,6 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   load-bearing `next-action`, and finalizer verdicts remain anchored on
   `Status` plus `Self-verification`. Structural routing now uses only
   the shared `## Structural Issue` block.
+- **Producer and finalizer gap reporting now names only blockers and
+  out-of-scope work.** The former `Remaining items` line is now
+  `Blocked or out-of-scope items`, making clear that producers cannot
+  use the field to defer in-scope acceptance, verification, or evidence.
 - **Codex and Gemini sync now injects required skill loading into agent
   bodies.** `sync.ts` derives the required skills from canonical
   `.harness/loom/agents/*.md` `skills:` frontmatter, prepends a
