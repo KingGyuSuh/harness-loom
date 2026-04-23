@@ -222,7 +222,7 @@ test("pair-dev SKILL anchors the v0.3.0 clean-break command surface", () => {
 
   assert.match(
     commandSurface,
-    /^\/harness-pair-dev --add <pair-slug> "<purpose>" \[--from <existing-pair-slug>\] \[--reviewer <slug> \.\.\.\] \[--before <pair-slug> \| --after <pair-slug>\]$/m,
+    /^\/harness-pair-dev --add <pair-slug> "<purpose>" \[--from <source>\] \[--reviewer <slug> \.\.\.\] \[--before <pair-slug> \| --after <pair-slug>\]$/m,
   );
   assert.match(
     commandSurface,
@@ -588,7 +588,7 @@ test("pair-dev --remove does not treat a colliding pair identifier as shared-fil
   }
 });
 
-test("pair-dev --add --from accepts only currently registered pair slugs as evidence", () => {
+test("pair-dev --add --from accepts live slugs plus snapshot/archive locators as evidence", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -613,19 +613,74 @@ test("pair-dev --add --from accepts only currently registered pair slugs as evid
     const summary = JSON.parse(accepted.stdout);
     assert.equal(summary.action, "prepare-add");
     assert.equal(summary.authored, false);
+    assert.equal(summary.from.kind, "live");
     assert.equal(summary.from.pair, "harness-source");
     assert.deepEqual(summary.writes, []);
     assert.deepEqual(summary.providerTreesWritten, []);
     assert.doesNotMatch(registryBody(target), /^- harness-target:/m);
     assertTreesUnchanged(acceptedSnapshot);
 
+    const snapshotRoot = join(target, ".harness/_snapshots/auto-setup/20260423T000000Z/loom");
+    mkdirSync(join(snapshotRoot, "agents"), { recursive: true });
+    mkdirSync(join(snapshotRoot, "skills/harness-source"), { recursive: true });
+    writeFileSync(join(snapshotRoot, "registry.md"), registryBody(target));
+    writeFileSync(
+      join(snapshotRoot, "agents/harness-source-producer.md"),
+      "---\nname: harness-source-producer\n---\n\n# Producer\n",
+    );
+    writeFileSync(
+      join(snapshotRoot, "agents/harness-source-reviewer.md"),
+      "---\nname: harness-source-reviewer\n---\n\n# Reviewer\n",
+    );
+    writeFileSync(
+      join(snapshotRoot, "skills/harness-source/SKILL.md"),
+      "---\nname: harness-source\nuser-invocable: false\n---\n\n# harness-source\n",
+    );
+
+    const snapshotAccepted = runPairDev(target, [
+      "--add", "harness-target", "Use snapshot evidence.",
+      "--from", "snapshot:20260423T000000Z/harness-source",
+    ]);
+    assert.equal(snapshotAccepted.status, 0, snapshotAccepted.stderr);
+    const snapshotSummary = JSON.parse(snapshotAccepted.stdout);
+    assert.equal(snapshotSummary.from.kind, "snapshot");
+    assert.equal(snapshotSummary.from.locator, "snapshot:20260423T000000Z/harness-source");
+    assert.equal(snapshotSummary.from.skillPath, ".harness/_snapshots/auto-setup/20260423T000000Z/loom/skills/harness-source/SKILL.md");
+
+    const archiveRoot = join(target, ".harness/_archive/20260423T000100Z/loom");
+    mkdirSync(join(archiveRoot, "agents"), { recursive: true });
+    mkdirSync(join(archiveRoot, "skills/harness-source"), { recursive: true });
+    writeFileSync(join(archiveRoot, "registry.md"), registryBody(target));
+    writeFileSync(
+      join(archiveRoot, "agents/harness-source-producer.md"),
+      "---\nname: harness-source-producer\n---\n\n# Producer\n",
+    );
+    writeFileSync(
+      join(archiveRoot, "agents/harness-source-reviewer.md"),
+      "---\nname: harness-source-reviewer\n---\n\n# Reviewer\n",
+    );
+    writeFileSync(
+      join(archiveRoot, "skills/harness-source/SKILL.md"),
+      "---\nname: harness-source\nuser-invocable: false\n---\n\n# harness-source\n",
+    );
+
+    const archiveAccepted = runPairDev(target, [
+      "--add", "harness-target", "Use archive evidence.",
+      "--from", "archive:20260423T000100Z/harness-source",
+    ]);
+    assert.equal(archiveAccepted.status, 0, archiveAccepted.stderr);
+    const archiveSummary = JSON.parse(archiveAccepted.stdout);
+    assert.equal(archiveSummary.from.kind, "archive");
+    assert.equal(archiveSummary.from.locator, "archive:20260423T000100Z/harness-source");
+
     const rejected = [
-      [".harness/_archive/snapshots/demo", /not a file, snapshot, or platform path/],
-      [".codex/agents/harness-source.md", /not a file, snapshot, or platform path/],
+      [".harness/_archive/snapshots/demo", /not a file or platform path/],
+      [".codex/agents/harness-source.md", /not a file or platform path/],
       ["harness-planner", /foundation or singleton/],
       ["harness-finalizer", /foundation or singleton/],
       ["harness-orchestrate", /foundation or singleton/],
       ["harness-missing", /not registered/],
+      ["snapshot:missing/harness-source", /missing source registry/],
     ];
     for (const [from, pattern] of rejected) {
       const rejectedSnapshot = snapshotTrees(noWriteSnapshotRoots(target));

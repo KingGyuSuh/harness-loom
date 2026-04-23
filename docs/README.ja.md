@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **ステータス:** 0.3.0
+> **ステータス:** 0.3.1
 
 ## 現在の要点
 
@@ -24,14 +24,14 @@
 
 ## 主なコマンド
 
-- `/harness-auto-setup [--provider <list>]`
-  現在の作業ディレクトリを初期セットアップするか、既存 harness をスナップショットしてから現在の契約に合わせて更新します。
+- `/harness-auto-setup [--setup | --migration] [--provider <list>]`
+  現在の作業ディレクトリの harness を安全にセットアップ、改善、マイグレーションします。`--setup`（既定）は fresh target の bootstrap または既存 harness の intentional improvement 用で、`--migration` は既存 harness を snapshot-first minimal-delta で更新するためのモードです。
 - `/harness-init`
   現在の作業ディレクトリに `.harness/loom/` と `.harness/cycle/` ベースの基盤ランタイムを導入または再初期化します。
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging を必要なプラットフォームツリーへ配備します。
-- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
-  現在登録されている pair だけを `--from` の overlay source として受け取り、最新 template 上で互換性のある元の知識を保ちながら `.harness/loom/` に作成します。
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <source>] [--reviewer <slug> ...]`
+  `--from` は現在登録されている live pair slug または target-local `snapshot:<ts>/<pair>` / `archive:<ts>/<pair>` locator を overlay source として受け取り、最新 template 上で互換性のある元の知識を保ちながら `.harness/loom/` に作成します。
 - `/harness-pair-dev --improve <slug> "<purpose>"`
   positional purpose を主軸にして、既存の登録済み pair を改善します。
 - `/harness-pair-dev --remove <slug>`

@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **Estado:** 0.3.0
+> **Estado:** 0.3.1
 
 ## Resumen actual
 
@@ -24,14 +24,14 @@
 
 ## Comandos principales
 
-- `/harness-auto-setup [--provider <list>]`
-  Configura por primera vez el directorio de trabajo actual o actualiza un harness existente después de tomar un snapshot.
+- `/harness-auto-setup [--setup | --migration] [--provider <list>]`
+  Configura, mejora o migra de forma segura el harness del directorio actual. `--setup` (por defecto) sirve para bootstrap de un fresh target o para intentional improvement de un harness existente; `--migration` sirve para una actualización snapshot-first minimal-delta sobre un harness existente.
 - `/harness-init`
   Instala o reinicia el runtime base de `.harness/loom/` y `.harness/cycle/` dentro del directorio de trabajo actual.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   Despliega el canonical staging hacia los árboles de plataforma necesarios.
-- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
-  Usa sólo un pair actualmente registrado como overlay source de `--from` y crea el nuevo pair en `.harness/loom/` preservando el conocimiento compatible sobre el template actual.
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <source>] [--reviewer <slug> ...]`
+  `--from` acepta un live pair slug actualmente registrado o un locator target-local `snapshot:<ts>/<pair>` / `archive:<ts>/<pair>` como overlay source, y crea el nuevo pair en `.harness/loom/` preservando el conocimiento compatible sobre el template actual.
 - `/harness-pair-dev --improve <slug> "<purpose>"`
   Mejora un pair registrado usando el purpose posicional como eje principal.
 - `/harness-pair-dev --remove <slug>`

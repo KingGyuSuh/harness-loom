@@ -120,17 +120,30 @@ test("auto-setup fresh target installs foundation and prints explicit sync hando
   try {
     writeFileSync(join(target, "README.md"), "# Demo\n");
 
-    const { summary } = runAutoSetup(target, ["--provider", "codex"]);
+    const { summary } = runAutoSetup(target, ["--setup", "--provider", "codex"]);
 
-    assert.equal(summary.mode, "fresh");
+    assert.equal(summary.mode, "setup");
+    assert.equal(summary.targetState, "fresh");
     assert.equal(summary.snapshot.created, false);
     assert.equal(summary.activeCycle.classification, "absent");
     assert.equal(summary.install.summary.verification.ok, true);
     assert.equal(summary.syncCommand, "node .harness/loom/sync.ts --provider codex");
     assert.deepEqual(summary.providerTreesWritten, []);
-    assert.match(summary.convergence.pairRecommendations.join("\n"), /documentation evidence/);
+    assert.equal(summary.convergence.pairReconstructions.length, 1);
+    assert.equal(summary.convergence.pairReconstructions[0].status, "authored");
+    assert.equal(summary.convergence.pairReconstructions[0].pair, "harness-document");
+    assert.equal(summary.convergence.finalizerReconstruction.status, "authored");
     assert.ok(existsSync(join(target, ".harness/loom/sync.ts")));
     assert.ok(existsSync(join(target, ".harness/cycle/state.md")));
+    assert.ok(existsSync(join(target, ".harness/loom/agents/harness-document-producer.md")));
+    assert.match(
+      readFileSync(join(target, ".harness/loom/registry.md"), "utf8"),
+      /^- harness-document:/m,
+    );
+    assert.match(
+      readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8"),
+      /Refresh README, docs, or CHANGELOG/,
+    );
     assertNoProviderTrees(target);
   } finally {
     cleanupDir(target);
@@ -171,9 +184,10 @@ test("auto-setup preserves pre-existing provider trees and only prints sync hand
       [".gemini", snapshotTree(join(target, ".gemini"))],
     ]);
 
-    const { summary } = runAutoSetup(target, ["--provider", "claude,gemini"]);
+    const { summary } = runAutoSetup(target, ["--setup", "--provider", "claude,gemini"]);
 
-    assert.equal(summary.mode, "existing");
+    assert.equal(summary.mode, "setup");
+    assert.equal(summary.targetState, "existing");
     assert.equal(summary.syncCommand, "node .harness/loom/sync.ts --provider claude,gemini");
     assert.equal(
       summary.nextAction,
@@ -247,10 +261,11 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
       ].join("\n"),
     );
 
-    const { summary } = runAutoSetup(target);
+    const { summary } = runAutoSetup(target, ["--setup"]);
     const manifest = readJson(summary.snapshot.manifestPath);
 
-    assert.equal(summary.mode, "existing");
+    assert.equal(summary.mode, "setup");
+    assert.equal(summary.targetState, "existing");
     assert.equal(summary.snapshot.created, true);
     assert.deepEqual(summary.snapshot.copiedNamespaces, [".harness/cycle", ".harness/loom"]);
     assertManifestShape(manifest);
@@ -292,6 +307,804 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
     );
     assert.equal(registry.match(/^- harness-demo:/gm).length, 1);
     assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration preserves custom pair and finalizer bodies while refreshing contract surfaces", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    const oldSkill = [
+      "---",
+      "name: harness-demo",
+      'description: "Use when maintaining custom demo build scripts."',
+      "user-invocable: false",
+      "---",
+      "",
+      "# Old Demo",
+      "",
+      "## Design Thinking",
+      "",
+      "Own custom demo release packaging.",
+      "",
+      "## Methodology",
+      "",
+      "Keep custom build scripts and fixture snapshots aligned.",
+      "",
+      "## Evaluation Criteria",
+      "",
+      "- Old criterion.",
+      "",
+      "## Taboos",
+      "",
+      "- Old taboo.",
+      "",
+    ].join("\n");
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), oldSkill);
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        'description: "Use when maintaining custom demo producer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "  - demo-domain",
+        "---",
+        "",
+        "# Demo Producer",
+        "",
+        "Producer identity that should survive migration.",
+        "",
+        "## Principles",
+        "",
+        "1. Preserve demo packaging context.",
+        "",
+        "## Task",
+        "",
+        "1. Maintain custom build scripts.",
+        "",
+        "## Output Format",
+        "",
+        "Status: PASS / FAIL",
+        "Summary: legacy block",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Reviewer",
+        "",
+        "Reviewer identity that should survive migration.",
+        "",
+        "## Principles",
+        "",
+        "1. Check fixture snapshots carefully.",
+        "",
+        "## Task",
+        "",
+        "1. Audit fixture snapshots.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "# Finalizer",
+        "",
+        "Finalizer intro that should survive migration.",
+        "",
+        "## Principles",
+        "",
+        "1. Keep release notes coherent.",
+        "",
+        "## Task",
+        "",
+        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    const { summary } = runAutoSetup(target, ["--migration"]);
+
+    assert.equal(summary.mode, "migration");
+    assert.equal(summary.targetState, "existing");
+    assert.equal(summary.convergence.pairReconstructions[0].status, "migrated");
+    assert.equal(summary.convergence.pairReconstructions[0].source.kind, "snapshot");
+    assert.match(summary.convergence.pairReconstructions[0].replaced.join("\n"), /frontmatter skills/);
+    const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
+    assert.match(currentSkill, /Own custom demo release packaging/);
+    assert.match(currentSkill, /Keep custom build scripts and fixture snapshots aligned/);
+    assert.doesNotMatch(currentSkill, /### Preserved Snapshot Intent/);
+
+    const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
+    assert.match(currentProducer, /Producer identity that should survive migration/);
+    assert.match(currentProducer, /1\. Maintain custom build scripts\./);
+    assert.match(currentProducer, /^skills:\n  - harness-demo\n  - harness-context\n  - demo-domain$/m);
+    assert.match(currentProducer, /^Status: PASS \/ FAIL$/m);
+
+    const currentReviewer = readFileSync(join(target, ".harness/loom/agents/harness-demo-reviewer.md"), "utf8");
+    assert.match(currentReviewer, /Reviewer identity that should survive migration/);
+    assert.match(currentReviewer, /1\. Audit fixture snapshots\./);
+    assert.match(currentReviewer, /^Verdict: PASS \/ FAIL$/m);
+
+    assert.equal(summary.convergence.finalizerReconstruction.status, "migrated");
+    const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
+    assert.match(currentFinalizer, /Finalizer intro that should survive migration/);
+    assert.match(currentFinalizer, /Refresh docs\/ and CHANGELOG\.md after verified release work/);
+    assert.match(currentFinalizer, /^Status: PASS \/ FAIL$/m);
+    assert.match(currentFinalizer, /## Structural Issue/);
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration handles source agents and finalizer without intro paragraphs", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(
+      join(target, ".harness/loom/skills/harness-demo/SKILL.md"),
+      [
+        "---",
+        "name: harness-demo",
+        'description: "Use when maintaining custom demo build scripts."',
+        "user-invocable: false",
+        "---",
+        "",
+        "# Old Demo",
+        "",
+        "## Design Thinking",
+        "",
+        "Own custom demo release packaging.",
+        "",
+        "## Methodology",
+        "",
+        "Keep custom build scripts and fixture snapshots aligned.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        'description: "Use when maintaining custom demo producer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Producer",
+        "## Principles",
+        "",
+        "1. Preserve demo packaging context.",
+        "",
+        "## Task",
+        "",
+        "1. Maintain custom build scripts.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Reviewer",
+        "",
+        "Reviewer identity that should survive migration.",
+        "",
+        "## Principles",
+        "",
+        "1. Check fixture snapshots carefully.",
+        "",
+        "## Task",
+        "",
+        "1. Audit fixture snapshots.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "# Finalizer",
+        "## Principles",
+        "",
+        "1. Keep release notes coherent.",
+        "",
+        "## Task",
+        "",
+        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    runAutoSetup(target, ["--migration"]);
+
+    const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
+    assert.equal((currentProducer.match(/^## Principles$/gm) ?? []).length, 1);
+    assert.equal((currentProducer.match(/^## Task$/gm) ?? []).length, 1);
+
+    const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
+    assert.equal((currentFinalizer.match(/^## Principles$/gm) ?? []).length, 1);
+    assert.equal((currentFinalizer.match(/^## Task$/gm) ?? []).length, 1);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration preserves escaped quotes in frontmatter descriptions", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(
+      join(target, ".harness/loom/skills/harness-demo/SKILL.md"),
+      [
+        "---",
+        "name: harness-demo",
+        'description: "Use when handling \\"demo\\" work." # preserve this note',
+        "user-invocable: false",
+        "---",
+        "",
+        "# Demo Skill",
+        "",
+        "## Design Thinking",
+        "",
+        "Own custom demo release packaging.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        'description: "Use when handling \\"demo\\" producer work." # preserve this note',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Producer",
+        "",
+        "Producer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Preserve demo packaging context.",
+        "",
+        "## Task",
+        "",
+        "1. Maintain custom build scripts.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Reviewer",
+        "",
+        "Reviewer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Check fixture snapshots carefully.",
+        "",
+        "## Task",
+        "",
+        "1. Audit fixture snapshots.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        'description: "Use when closing \\"demo\\" cycles." # preserve this note',
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "# Finalizer",
+        "",
+        "Finalizer intro.",
+        "",
+        "## Principles",
+        "",
+        "1. Keep release notes coherent.",
+        "",
+        "## Task",
+        "",
+        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    runAutoSetup(target, ["--migration"]);
+
+    const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
+    assert.match(currentSkill, /^description: "Use when handling \\"demo\\" work\."$/m);
+
+    const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
+    assert.match(currentProducer, /^description: "Use when handling \\"demo\\" producer work\."$/m);
+
+    const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
+    assert.match(currentFinalizer, /^description: "Use when closing \\"demo\\" cycles\."$/m);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration preserves multiline block-scalar descriptions", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(
+      join(target, ".harness/loom/skills/harness-demo/SKILL.md"),
+      [
+        "---",
+        "name: harness-demo",
+        "description: >",
+        "  Use when handling demo work",
+        "  across multiple migrations.",
+        "user-invocable: false",
+        "---",
+        "",
+        "# Demo Skill",
+        "",
+        "## Design Thinking",
+        "",
+        "Own custom demo release packaging.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        "description: |",
+        "  Use when handling demo producer work.",
+        "  Preserve current contracts.",
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Producer",
+        "",
+        "Producer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Preserve demo packaging context.",
+        "",
+        "## Task",
+        "",
+        "1. Maintain custom build scripts.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Reviewer",
+        "",
+        "Reviewer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Check fixture snapshots carefully.",
+        "",
+        "## Task",
+        "",
+        "1. Audit fixture snapshots.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        "description: >",
+        "  Use when closing demo cycles",
+        "  after verified release work.",
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "# Finalizer",
+        "",
+        "Finalizer intro.",
+        "",
+        "## Principles",
+        "",
+        "1. Keep release notes coherent.",
+        "",
+        "## Task",
+        "",
+        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    runAutoSetup(target, ["--migration"]);
+
+    const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
+    assert.match(
+      currentSkill,
+      /^description: "Use when handling demo work across multiple migrations\."$/m,
+    );
+
+    const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
+    assert.ok(
+      currentProducer.includes('description: "Use when handling demo producer work.\\nPreserve current contracts."'),
+    );
+
+    const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
+    assert.match(
+      currentFinalizer,
+      /^description: "Use when closing demo cycles after verified release work\."$/m,
+    );
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration preserves block-scalar descriptions with indentation indicators", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(
+      join(target, ".harness/loom/skills/harness-demo/SKILL.md"),
+      [
+        "---",
+        "name: harness-demo",
+        "description: >2",
+        "  Use when handling demo work",
+        "  across indentation-aware migrations.",
+        "user-invocable: false",
+        "---",
+        "",
+        "# Demo Skill",
+        "",
+        "## Design Thinking",
+        "",
+        "Own custom demo release packaging.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        'description: "Use when handling demo producer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Producer",
+        "",
+        "Producer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Preserve demo packaging context.",
+        "",
+        "## Task",
+        "",
+        "1. Maintain custom build scripts.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Reviewer",
+        "",
+        "Reviewer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Check fixture snapshots carefully.",
+        "",
+        "## Task",
+        "",
+        "1. Audit fixture snapshots.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        "description: |1-",
+        " Use when closing demo cycles.",
+        " Keep release notes coherent.",
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "# Finalizer",
+        "",
+        "Finalizer intro.",
+        "",
+        "## Principles",
+        "",
+        "1. Keep release notes coherent.",
+        "",
+        "## Task",
+        "",
+        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    runAutoSetup(target, ["--migration"]);
+
+    const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
+    assert.match(
+      currentSkill,
+      /^description: "Use when handling demo work across indentation-aware migrations\."$/m,
+    );
+
+    const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
+    assert.ok(
+      currentFinalizer.includes('description: "Use when closing demo cycles.\\nKeep release notes coherent."'),
+    );
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration preserves inline extra skills in source agent frontmatter", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(
+      join(target, ".harness/loom/skills/harness-demo/SKILL.md"),
+      [
+        "---",
+        "name: harness-demo",
+        'description: "Use when maintaining custom demo build scripts."',
+        "user-invocable: false",
+        "---",
+        "",
+        "# Demo Skill",
+        "",
+        "## Design Thinking",
+        "",
+        "Own custom demo release packaging.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        'description: "Use when handling demo producer work."',
+        "skills: [harness-demo, harness-context, demo-domain] # keep extra skill",
+        "---",
+        "",
+        "# Demo Producer",
+        "",
+        "Producer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Preserve demo packaging context.",
+        "",
+        "## Task",
+        "",
+        "1. Maintain custom build scripts.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "# Demo Reviewer",
+        "",
+        "Reviewer identity.",
+        "",
+        "## Principles",
+        "",
+        "1. Check fixture snapshots carefully.",
+        "",
+        "## Task",
+        "",
+        "1. Audit fixture snapshots.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        'description: "Use when closing demo cycles."',
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "# Finalizer",
+        "",
+        "Finalizer intro.",
+        "",
+        "## Principles",
+        "",
+        "1. Keep release notes coherent.",
+        "",
+        "## Task",
+        "",
+        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    runAutoSetup(target, ["--migration"]);
+
+    const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
+    assert.match(
+      currentProducer,
+      /^skills:\n  - harness-demo\n  - harness-context\n  - demo-domain$/m,
+    );
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup migration rejects a fresh target", () => {
+  const target = makeTempDir();
+  try {
+    writeFileSync(join(target, "README.md"), "# Demo\n");
+
+    const result = runNode(AUTO_SETUP_SCRIPT, ["--migration"], { cwd: target });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /--migration requires existing \.harness\/loom or \.harness\/cycle state/);
+    assert.equal(existsSync(join(target, ".harness")), false);
   } finally {
     cleanupDir(target);
   }

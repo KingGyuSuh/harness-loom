@@ -31,6 +31,22 @@ interface RegistryEntry {
   line: string;
 }
 
+type FromSourceKind = "live" | "snapshot" | "archive";
+
+interface FromSource {
+  kind: FromSourceKind;
+  locator: string;
+  registryPath: string;
+  pair: string;
+  producer: string;
+  reviewers: string[];
+  skill: string;
+  skillPath: string | null;
+  producerPath: string | null;
+  reviewerPaths: Record<string, string | null>;
+  missingArtifacts: string[];
+}
+
 interface Placement {
   mode: "append" | "before" | "after";
   anchor?: string;
@@ -74,7 +90,7 @@ function help(): never {
   process.stdout.write(
     [
       "Usage:",
-      '  node <harness-pair-dev>/scripts/pair-dev.ts --add <pair-slug> "<purpose>" [--from <existing-pair-slug>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>]',
+      '  node <harness-pair-dev>/scripts/pair-dev.ts --add <pair-slug> "<purpose>" [--from <source>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>]',
       '  node <harness-pair-dev>/scripts/pair-dev.ts --improve <pair-slug> "<purpose>" [--before <pair-slug> | --after <pair-slug>]',
       "  node <harness-pair-dev>/scripts/pair-dev.ts --remove <pair-slug>",
       "",
@@ -194,6 +210,10 @@ function normalizeCRLF(raw: string): string {
   return raw.replace(/\r\n/g, "\n");
 }
 
+function rel(target: string, path: string): string {
+  return relative(target, path).split("\\").join("/");
+}
+
 function extractSection(raw: string, heading: string): string | null {
   const headingLine = `## ${heading}`;
   const normalized = normalizeCRLF(raw);
@@ -248,6 +268,12 @@ function findEntry(entries: RegistryEntry[], pair: string): RegistryEntry | null
   return entries.find((entry) => entry.pair === pair) ?? null;
 }
 
+async function readRegistryAt(registryPath: string): Promise<RegistryEntry[]> {
+  if (!(await exists(registryPath))) die(`missing source registry: ${registryPath}`);
+  const raw = await readFile(registryPath, "utf8");
+  return parseRegistry(raw);
+}
+
 function placement(args: Args): Placement {
   if (args.before) return { mode: "before", anchor: args.before };
   if (args.after) return { mode: "after", anchor: args.after };
@@ -260,20 +286,106 @@ function assertAnchor(entries: RegistryEntry[], args: Args): void {
   if (!findEntry(entries, anchor)) die(`placement anchor is not a registered pair: ${anchor}`);
 }
 
-function validateFrom(entries: RegistryEntry[], from: string): RegistryEntry {
+function sourceBaseDir(target: string, kind: Exclude<FromSourceKind, "live">): string {
+  return kind === "snapshot"
+    ? join(target, ".harness", "_snapshots", "auto-setup")
+    : join(target, ".harness", "_archive");
+}
+
+function sourceArtifactPathSummary(
+  target: string,
+  entry: RegistryEntry,
+  loomRoot: string,
+  registryPath: string,
+  kind: FromSourceKind,
+  locator: string,
+  presence: { skill: boolean; producer: boolean; reviewers: Map<string, boolean> },
+): FromSource {
+  const skillPath = join(loomRoot, "skills", entry.skill, "SKILL.md");
+  const producerPath = join(loomRoot, "agents", `${entry.producer}.md`);
+  const reviewerPaths: Record<string, string | null> = {};
+  const missingArtifacts: string[] = [];
+
+  if (!presence.skill) missingArtifacts.push(rel(target, skillPath));
+  if (!presence.producer) missingArtifacts.push(rel(target, producerPath));
+  for (const reviewer of entry.reviewers) {
+    const reviewerPath = join(loomRoot, "agents", `${reviewer}.md`);
+    const present = presence.reviewers.get(reviewer) ?? false;
+    reviewerPaths[reviewer] = present ? rel(target, reviewerPath) : null;
+    if (!present) missingArtifacts.push(rel(target, reviewerPath));
+  }
+
+  return {
+    kind,
+    locator,
+    registryPath: rel(target, registryPath),
+    pair: entry.pair,
+    producer: entry.producer,
+    reviewers: entry.reviewers,
+    skill: entry.skill,
+    skillPath: presence.skill ? rel(target, skillPath) : null,
+    producerPath: presence.producer ? rel(target, producerPath) : null,
+    reviewerPaths,
+    missingArtifacts,
+  };
+}
+
+async function resolveSourceSummary(
+  target: string,
+  entry: RegistryEntry,
+  loomRoot: string,
+  registryPath: string,
+  kind: FromSourceKind,
+  locator: string,
+): Promise<FromSource> {
+  const skillPath = join(loomRoot, "skills", entry.skill, "SKILL.md");
+  const producerPath = join(loomRoot, "agents", `${entry.producer}.md`);
+  const reviewerPresence = new Map<string, boolean>();
+  for (const reviewer of entry.reviewers) {
+    reviewerPresence.set(reviewer, await exists(join(loomRoot, "agents", `${reviewer}.md`)));
+  }
+  return sourceArtifactPathSummary(target, entry, loomRoot, registryPath, kind, locator, {
+    skill: await exists(skillPath),
+    producer: await exists(producerPath),
+    reviewers: reviewerPresence,
+  });
+}
+
+async function validateFrom(target: string, entries: RegistryEntry[], from: string): Promise<FromSource> {
+  const locator = from.match(/^(snapshot|archive):([^/]+)\/(harness-[a-z0-9]+(?:-[a-z0-9]+)*)$/);
+  if (locator) {
+    const kind = locator[1] as Exclude<FromSourceKind, "live">;
+    const stamp = locator[2];
+    const pair = locator[3];
+    if (FOUNDATION_SLUGS.has(pair)) die(`--from ${pair} is a foundation or singleton role, not a registered pair`);
+    const baseDir = sourceBaseDir(target, kind);
+    const loomRoot = safeResolve(baseDir, stamp, "loom");
+    const registryPath = safeResolve(loomRoot, "registry.md");
+    const sourceEntries = await readRegistryAt(registryPath);
+    const entry = findEntry(sourceEntries, pair);
+    if (!entry) die(`--from pair is not registered in ${kind} source: ${pair}`);
+    return resolveSourceSummary(target, entry, loomRoot, registryPath, kind, from);
+  }
   if (
     from.includes("/") ||
     from.includes("\\") ||
     from.startsWith(".") ||
     from.endsWith(".md")
   ) {
-    die("--from accepts a registered pair slug, not a file, snapshot, or platform path");
+    die("--from accepts a registered pair slug or snapshot:/archive: locator, not a file or platform path");
   }
   if (FOUNDATION_SLUGS.has(from)) die(`--from ${from} is a foundation or singleton role, not a registered pair`);
-  if (!SLUG_RE.test(from)) die(`--from must be a registered harness pair slug (got: ${from})`);
+  if (!SLUG_RE.test(from)) die(`--from must be a registered harness pair slug or snapshot:/archive: locator (got: ${from})`);
   const entry = findEntry(entries, from);
   if (!entry) die(`--from pair is not registered: ${from}`);
-  return entry;
+  return resolveSourceSummary(
+    target,
+    entry,
+    join(target, ".harness", "loom"),
+    join(target, ".harness", "loom", "registry.md"),
+    "live",
+    from,
+  );
 }
 
 function extractHarnessSlugs(text: string): Set<string> {
@@ -464,7 +576,7 @@ async function prepareAdd(target: string, args: Args): Promise<unknown> {
   const registry = await readRegistry(target);
   if (findEntry(registry.entries, args.pair)) die(`${args.pair} is already registered; use --improve`);
   assertAnchor(registry.entries, args);
-  const from = args.from ? validateFrom(registry.entries, args.from) : null;
+  const from = args.from ? await validateFrom(target, registry.entries, args.from) : null;
   const reviewers = args.reviewers.length > 0 ? args.reviewers : [`${args.pair}-reviewer`];
   return {
     action: "prepare-add",

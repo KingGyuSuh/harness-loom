@@ -6,8 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-04-24
+
 ### Changed
 
+- **`/harness-auto-setup` now splits setup from migration.** The
+  command accepts `--setup` (default) for author-first bootstrap and
+  intentional improvement, and `--migration` for minimal-delta upgrades
+  of an existing harness. Setup mode now authors repo-grounded starter
+  pairs/finalizer work in one run when signals exist; migration mode
+  preserves pair/finalizer guidance where possible while refreshing
+  contract-owned runtime surfaces such as frontmatter, required
+  `skills:`, Output Format blocks, and the finalizer Structural Issue
+  contract.
+- **`/harness-pair-dev --add --from` now accepts non-live source
+  locators.** In addition to a current live pair slug, `--from` now
+  accepts target-local `snapshot:<ts>/<pair>` and
+  `archive:<ts>/<pair>` locators so migration flows can reuse preserved
+  pair intent without routing arbitrary filesystem paths through the
+  pair-authoring surface.
 - **Planner EPIC sizing now targets producer-completable outcome
   slices.** `harness-planning` now tells the planner to split broad
   surfaces into dependency-bearing EPICs when one producer would
@@ -648,7 +665,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.1
 [0.3.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.0
 [0.2.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.2
 [0.2.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.1

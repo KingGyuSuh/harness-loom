@@ -1,7 +1,7 @@
 ---
 name: harness-auto-setup
-description: "Use when `/harness-auto-setup` is invoked to safely install, refresh, or converge the current working directory's harness by snapshotting live `.harness/` state, preserving pair/finalizer intent as evidence, reseeding the foundation, and handing off explicit platform sync."
-argument-hint: "[--provider claude,codex,gemini]"
+description: "Use when `/harness-auto-setup` is invoked to safely bootstrap, improve, or migrate the current working directory's harness by snapshotting live `.harness/` state, reseeding the foundation, and handing off explicit platform sync."
+argument-hint: "[--setup | --migration] [--provider claude,codex,gemini]"
 user-invocable: true
 ---
 
@@ -24,15 +24,15 @@ Snapshots are machine provenance and convergence input, not restore sources. Old
 
 ### 1. Arguments
 
-`/harness-auto-setup [--provider <list>]`
+`/harness-auto-setup [--setup | --migration] [--provider <list>]`
 
-The workflow always targets the current working directory. Run `/harness-auto-setup` from the project root. `--provider` only shapes the printed sync handoff; sync itself is never run here.
+The workflow always targets the current working directory. Run `/harness-auto-setup` from the project root. `--setup` is the default mode and covers fresh bootstrap plus intentional improvement. `--migration` is for minimal-delta upgrades of an existing harness. `--provider` only shapes the printed sync handoff; sync itself is never run here.
 
 ### 2. Authority boundaries
 
 - `/harness-init` remains the foundation installer. Auto-setup may invoke it, but must not move pair/finalizer authoring into `harness-init`.
 - `/harness-pair-dev` remains the pair-authoring layer. Auto-setup may use existing pair files as evidence, but must author current pair outputs through the current templates, authoring rubric, and registry contract.
-- `/harness-pair-dev --add ... --from <existing-pair-slug>` is only for evidence from a pair already registered in the current target registry. Snapshot paths, agent/skill paths, and derived platform paths remain auto-setup convergence inputs, not pair-dev inputs.
+- `/harness-pair-dev --add ... --from <source>` remains the pair-source resolver. Live registered pair slugs, `snapshot:<ts>/<pair>`, and `archive:<ts>/<pair>` are valid sources; arbitrary filesystem paths and provider-tree paths are not.
 - `.harness/loom/registry.md` remains the pair roster SSOT. The planner and finalizer are never registry entries.
 - `harness-finalizer` remains a singleton cycle-end role. Reviewer-less cycle-end work belongs in `.harness/loom/agents/harness-finalizer.md`, not in `## Registered pairs`.
 - `node .harness/loom/sync.ts --provider <list>` remains an explicit user handoff after convergence. Auto-setup must not derive `.claude/`, `.codex/`, or `.gemini/` automatically.
@@ -73,7 +73,16 @@ For `active` or `unknown`, silent deletion is forbidden. The default policy is:
 
 This policy forbids silent destruction, not destruction itself.
 
-### 5. Existing target flow
+### 5. Mode split
+
+`harness-auto-setup` has two execution modes:
+
+- `--setup` — bootstrap a fresh target or intentionally improve an existing harness. This mode optimizes for "one run leaves a usable harness." It may author starter pairs/finalizer intent from repo signals, and it may rewrite pair/finalizer bodies on current templates when that improves harness usability.
+- `--migration` — upgrade an existing harness with the smallest reasonable blast radius. This mode optimizes for contract refresh and customization preservation. It updates contract-owned surfaces and reports manual-review ambiguity instead of aggressively rewriting user-authored guidance.
+
+Fresh targets may use only `--setup`. `--migration` requires existing `.harness/loom/` or `.harness/cycle/` state.
+
+### 6. Existing target flow
 
 When `.harness/loom/` exists, or `.harness/cycle/` exists without `.harness/loom/`:
 
@@ -82,47 +91,53 @@ When `.harness/loom/` exists, or `.harness/cycle/` exists without `.harness/loom
 3. Inspect pair agent/skill bodies when present and target repo evidence to infer current intent.
 4. Inspect snapshot `harness-finalizer.md` when present and decide whether it is missing, default no-op, or customized.
 5. Run `/harness-init` or its installer implementation to reseed the foundation.
-6. Reconstruct each known pair against the current pair templates and authoring rubric. Preserve topology and order from the old registry when valid.
-7. Preserve customized finalizer intent by rewriting it on the current finalizer skeleton and Output Format contract.
-8. Leave split/reorder decisions as recommendations unless the old registry already proves the intended topology.
-9. End with the exact sync handoff command the user should run from the target root.
+6. In `--setup`, reconstruct each known pair against the current pair templates and authoring rubric, or author fresh starter pairs if no pair roster exists.
+7. In `--migration`, preserve user-authored pair/finalizer bodies where possible while refreshing contract-owned surfaces such as runtime frontmatter, required `skills:`, and Output Format blocks.
+8. Preserve topology and order from the old registry when valid.
+9. Leave split/reorder decisions as recommendations unless the old registry already proves the intended topology.
+10. End with the exact sync handoff command the user should run from the target root.
 
 Old pair and finalizer files are evidence only. Do not blind-copy them over the refreshed foundation.
 
-If `.harness/cycle/` existed without `.harness/loom/`, there is no pair/finalizer source to converge; snapshot the cycle, reseed the foundation, then follow the fresh target repo-inspection rules.
+If `.harness/cycle/` existed without `.harness/loom/`, there is no pair/finalizer source to converge. Snapshot the cycle, reseed the foundation, then:
 
-### 6. Fresh target flow
+- in `--setup`, follow the fresh target repo-inspection rules
+- in `--migration`, preserve the cycle snapshot as evidence and report that no live loom source was available for pair/finalizer migration
+
+### 7. Fresh target flow
 
 When both `.harness/loom/` and `.harness/cycle/` are absent:
 
 1. Run `/harness-init` or its installer implementation to seed the foundation.
 2. Inspect the target repo before proposing project-specific harness work.
-3. Recommend or author an initial pair roster grounded in real repo surfaces.
-4. Recommend or author a concrete finalizer body when the repo has obvious cycle-end duties.
-5. Leave the finalizer as the safe no-op only when no concrete cycle-end duty is justified yet.
+3. In `--setup`, author an initial pair roster grounded in real repo surfaces when evidence exists; recommend only when the repo is effectively empty.
+4. In `--setup`, author a concrete finalizer body when the repo exposes a clear cycle-end duty; otherwise keep the safe no-op.
+5. `--migration` is invalid here because there is no existing harness state to preserve.
 6. End with the exact sync handoff command the user should run from the target root.
 
-Do not create generic stock pairs just to fill the registry. If repo evidence is insufficient, emit recommended `/harness-pair-dev --add` commands and leave the roster empty.
+Do not create evidence-free stock pairs just to fill the registry. If repo evidence is insufficient, emit recommended `/harness-pair-dev --add` commands and leave the roster empty.
 
-### 7. Pair convergence rules
+### 8. Pair convergence rules
 
 - Treat snapshot `registry.md` as a strong topology/order hint, not as immutable truth.
 - Registered producer, reviewer, and skill slugs should be preserved when they remain coherent with the target repo and current namespace rules.
 - Each pair must have at least one reviewer.
-- Missing or unparsable pair files do not block the whole workflow when registry intent plus repo evidence is enough to reconstruct the pair; record the gap in `manifest.json` and the user summary.
+- Missing or unparsable pair files do not block the whole workflow when registry intent plus repo evidence is enough to reconstruct or migrate the pair; record the gap in `manifest.json` and the user summary.
 - If a pair has clearly become two jobs, recommend a split instead of silently changing the roster.
 - If a pair belongs in a different global roster position, recommend a reorder instead of silently moving it unless the user supplied an explicit roster instruction.
-- Use `/harness-pair-dev --add ... --from <existing-pair-slug>` only after the source pair exists in the refreshed current registry. Use snapshot pair files directly as auto-setup evidence; do not pass snapshot or file paths through `--from`.
+- In `--migration`, use `/harness-pair-dev --add ... --from snapshot:<ts>/<pair>` (or `archive:` when appropriate) as the source-resolution path for preserved pair intent. Do not pass arbitrary file paths through `--from`.
+- In `--setup`, treat pair reconstruction as author-first: a usable draft should be written in one run unless repo grounding is genuinely absent.
 - Re-registration must preserve duplicate-free `## Registered pairs` order and use the registry helper rather than hand-editing the section.
 
-### 8. Finalizer convergence rules
+### 9. Finalizer convergence rules
 
 - The finalizer is customized when its body declares concrete cycle-end duties beyond the default no-op summary, writes out-of-cycle artifacts, performs coverage/release/docs/audit work, or changes the default Task section materially.
-- A customized finalizer's intent should be preserved, but its body must be rewritten against the current `harness-finalizer` skeleton, principles, Structural Issue shape, and Output Format.
-- A missing or no-op finalizer should trigger repo-grounded recommendations for concrete cycle-end work. Author it only when the target repo evidence makes the duty clear.
+- In `--setup`, a customized finalizer may be rewritten more aggressively onto the current skeleton when that yields a more usable starter harness.
+- In `--migration`, preserve the customized finalizer's intro, principles, and task where possible while refreshing contract-owned surfaces such as required skills, Output Format, and Structural Issue block.
+- A missing or no-op finalizer should trigger repo-grounded recommendations or authored cycle-end work according to mode.
 - Do not turn finalizer work into a pair, and do not add a finalizer line to `## Registered pairs`.
 
-### 9. Sync handoff
+### 10. Sync handoff
 
 Auto-setup must stop before platform derivation. The final user-facing summary must include a target-local command such as:
 
@@ -132,15 +147,15 @@ node .harness/loom/sync.ts --provider claude,codex,gemini
 
 Use any subset the user requested or that the workflow recommends, but never execute sync automatically.
 
-### 10. Execution
+### 11. Execution
 
 Run the script-owned execution path:
 
 ```bash
-node plugins/harness-loom/skills/harness-auto-setup/scripts/auto-setup.ts [--provider claude,codex,gemini]
+node plugins/harness-loom/skills/harness-auto-setup/scripts/auto-setup.ts [--setup | --migration] [--provider claude,codex,gemini]
 ```
 
-The script snapshots existing `.harness/loom/` / `.harness/cycle/`, classifies active-cycle risk, calls the `harness-init` installer for foundation refresh, reconstructs valid registered pairs and customized finalizer intent on current templates, and returns JSON. `--provider` only shapes the printed sync handoff; it never runs sync.
+The script snapshots existing `.harness/loom/` / `.harness/cycle/`, classifies active-cycle risk, calls the `harness-init` installer for foundation refresh, then either authors/reconstructs usable setup-mode outputs or applies migration-mode protected overlay. `--provider` only shapes the printed sync handoff; it never runs sync.
 
 ## Evaluation Criteria
 
@@ -148,16 +163,17 @@ The script snapshots existing `.harness/loom/` / `.harness/cycle/`, classifies a
 - Active or unparsable `.harness/cycle/` state is warned about and copied before discard/reseed.
 - Snapshot data is machine provenance with deterministic path and manifest shape, not a human-authored setup SSOT.
 - `/harness-init` remains foundation-only.
-- Pair convergence uses old files only as evidence and regenerates current pair outputs against current templates, rubric, and repo evidence.
+- Pair convergence distinguishes setup-mode author-first behavior from migration-mode minimal-delta overlay.
 - `registry.md` remains the sole pair roster source of truth and contains only executable producer-reviewer pairs.
 - Customized finalizer intent is preserved in the singleton finalizer body, not converted into a pair.
-- Fresh targets receive repo-grounded pair/finalizer recommendations or authored outputs, not stock generic harness content.
+- Fresh `--setup` targets receive repo-grounded authored outputs when signals exist, and only fall back to recommendations when repo grounding is too thin.
 - Derived platform trees are not modified; the result ends with an explicit `node .harness/loom/sync.ts --provider <list>` handoff.
 
 ## Taboos
 
 - Create a persistent human-edited `setup.md` or equivalent setup SSOT.
 - Restore stale pair or finalizer files by blind copy after foundation refresh.
+- Use `--migration` on a fresh target with no harness state to preserve.
 - Delete an active or unparsable cycle silently.
 - Treat snapshot content as canonical after convergence.
 - Register the planner or finalizer as a pair.
