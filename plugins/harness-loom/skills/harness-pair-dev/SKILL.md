@@ -1,6 +1,6 @@
 ---
 name: harness-pair-dev
-description: "Use when `/harness-pair-dev --add|--improve|--remove <pair-slug>` is invoked to author, revise, or remove a project-specific producer-reviewer pair inside a target harness. `--add` and `--improve` require `<pair-slug> \"<purpose>\"`; `--add` may use `--from <existing-pair-slug>` as a registered-pair source for template-first overlay. Every pair has at least one reviewer; reviewer-less cycle-end work belongs in a finalizer."
+description: "Use when `/harness-pair-dev` is invoked to author, revise, position, or remove a target project's producer-reviewer pair in `.harness/loom/`."
 argument-hint: "--add <pair-slug> \"<purpose>\" [--from <existing-pair-slug>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>] | --improve <pair-slug> \"<purpose>\" [--before <pair-slug> | --after <pair-slug>] | --remove <pair-slug>"
 user-invocable: true
 ---

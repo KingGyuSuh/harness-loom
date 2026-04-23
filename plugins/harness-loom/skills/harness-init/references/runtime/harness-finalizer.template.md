@@ -23,7 +23,7 @@ The default body below is a safe no-op: it returns `Status: PASS` with `Summary:
 
 The default no-op task is exactly one step:
 
-1. Emit the Output Format block below with `Status: PASS`, `Summary: no cycle-end work registered for this project`, empty `Files created` / `Files modified`, and a `Self-verification` note that no cycle-end work was required. Do not touch any file.
+1. Emit the Output Format block below with `Status: PASS`, `Summary: no cycle-end work registered for this project`, empty `Files created` / `Files modified`, `Self-verification` citing that no cycle-end work was required, and `Blocked or out-of-scope items: []`. Do not touch any file.
 
 If cycle-end work exists, execute it here as a short numbered sequence: read the envelope, load project signal, walk cycle evidence, perform the domain work, decide per-file create/update/leave-alone, emit the Output Format, and surface a Structural Issue on upstream failure.
 
@@ -37,7 +37,7 @@ Summary: {what was performed in one line; default no-op uses "no cycle-end work 
 Files created: [{file path}]
 Files modified: [{file path}]
 Self-verification: {concrete mechanical evidence — file paths, diff summaries, exit codes, coverage tallies; default no-op cites "no cycle-end work required; no files touched"}
-Remaining items: [{items not yet done}]
+Blocked or out-of-scope items: [{item, reason}]
 ```
 
 Optional line: inside the fenced block, include `Files left alone (intentionally): [{file path — one-line reason}]` before `Self-verification` only when it carries useful cycle-end evidence. Omit it for the default no-op or empty lists.

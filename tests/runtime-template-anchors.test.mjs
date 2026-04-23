@@ -296,6 +296,16 @@ test("dispatch envelope defines role-specific minimum fields without forwarding 
     assert.ok(pair.includes(token), `pair envelope must include ${token}`);
   }
   assert.match(pair, /reviewer-only `Axis`/);
+  assert.match(
+    pair,
+    /upstream dependency evidence/,
+    "pair envelope must treat prior artifacts as upstream dependency evidence",
+  );
+  assert.match(
+    pair,
+    /producers must carry forward those decisions/,
+    "pair envelope must tell producers to reuse supplied upstream artifacts",
+  );
 
   for (const token of [
     "`Existing EPICs`",
@@ -333,6 +343,35 @@ test("harness-context stays subagent-facing and omits orchestrator routing law",
   assert.doesNotMatch(body, /planner-continuation:/);
 });
 
+test("pair context forbids producer self-deferral and requires upstream artifact use", () => {
+  const body = readFileSync(CONTEXT_TEMPLATE, "utf8");
+  assert.match(
+    body,
+    /attempt-to-completion/,
+    "producer context must require attempt-to-completion inside scope",
+  );
+  assert.match(
+    body,
+    /`Blocked or out-of-scope items` may record only external blockers or work outside the current scope/,
+    "producer context must forbid self-deferral through blocked/out-of-scope items",
+  );
+  assert.match(
+    body,
+    /return `Status: FAIL` or `## Structural Issue`; do not PASS by listing the blocker/,
+    "producer context must not allow PASS when a blocker prevents required scope work",
+  );
+  assert.match(
+    body,
+    /When `Prior tasks` or `Prior reviews` are supplied, read them before editing/,
+    "producer context must require reading prior dependency artifacts",
+  );
+  assert.match(
+    body,
+    /FAIL a producer that ignores supplied upstream EPIC artifacts/,
+    "reviewer context must fail ignored upstream artifacts",
+  );
+});
+
 test("orchestrate template gates dispatch through a ready set at the same global roster position", () => {
   const body = readFileSync(ORCHESTRATE_TEMPLATE, "utf8");
   assert.ok(
@@ -342,6 +381,11 @@ test("orchestrate template gates dispatch through a ready set at the same global
   assert.ok(
     body.includes("same global roster position"),
     "orchestrate template must state upstream gating happens at the same global roster position",
+  );
+  assert.match(
+    body,
+    /upstream EPIC task\/review artifacts/,
+    "orchestrate template must attach upstream task/review artifacts to ready pair dispatches",
   );
 });
 
@@ -368,6 +412,21 @@ test("planning template teaches global roster subsequence and next-action gramma
     /defer-to-end|after .* terminal/i,
     "planning template must describe continue as defer-to-end, not immediate recall",
   );
+  assert.match(
+    body,
+    /producer-completable/,
+    "planning template must size EPICs for producer-completable outcomes",
+  );
+  assert.match(
+    body,
+    /without planned self-deferral/,
+    "planning template must reject planned producer self-deferral",
+  );
+  assert.match(
+    body,
+    /home-layout-foundation/,
+    "planning examples must show dependent Home slices instead of one broad Home EPIC",
+  );
 });
 
 test("planning template distinguishes structural-issue recall from defer-to-end recall", () => {
@@ -393,6 +452,16 @@ test("planner agent template exposes next-action as load-bearing", () => {
     body.includes("defer-to-end"),
     "planner description must mention defer-to-end so authors do not expect next-turn recall",
   );
+  assert.match(
+    body,
+    /producer-completable outcome EPICs/,
+    "planner agent must name producer-completable EPICs",
+  );
+  assert.match(
+    body,
+    /producer-completion sizing test/,
+    "planner agent must apply the producer-completion sizing test",
+  );
 });
 
 test("finalizer template is a safe-no-op cycle-end agent with Status + Structural Issue", () => {
@@ -416,6 +485,7 @@ test("finalizer template is a safe-no-op cycle-end agent with Status + Structura
   // Output Format must carry Status + Self-verification.
   assert.match(body, /Status:\s*PASS\s*\/\s*FAIL/);
   assert.match(body, /Self-verification:/);
+  assert.match(body, /Blocked or out-of-scope items:\s*\[\]/);
   // Structural Issue block retreats to planner — finalizer's only retreat target.
   assert.match(body, /## Structural Issue/);
   assert.match(body, /Suspected upstream stage:\s*planner/i);

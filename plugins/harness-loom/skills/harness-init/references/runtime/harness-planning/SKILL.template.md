@@ -1,6 +1,6 @@
 ---
 name: harness-planning
-description: "Use when the planner subagent is dispatched or when its output is audited. Defines how to read the goal, decompose it into outcome EPICs, and emit each EPIC's stage flow as a subsequence of the project's fixed global roster."
+description: "Use when the planner subagent is dispatched or when its output is audited. Defines how to read the goal, decompose it into producer-completable outcome EPICs, and emit each EPIC's stage flow as a subsequence of the project's fixed global roster."
 user-invocable: false
 ---
 
@@ -10,13 +10,13 @@ One planner turn emits a small batch of EPICs together with the stage slice each
 
 ## Design Thinking
 
-The planner decides outcomes, not implementation trivia. Each EPIC should describe one meaningful result, then name the stages needed to reach it. The planner does not redesign the runtime on every turn: the runtime already has a fixed stage order, and the planner's job is simply to choose which stages each EPIC uses, which stages can be skipped, and which upstream EPICs must stay ahead at the same stage gate.
+The planner decides outcome slices, not implementation trivia. Each EPIC should describe one meaningful result that every producer in its roster can attempt to complete in a single Pair turn. If a planned EPIC predictably requires the same producer to leave in-scope acceptance, verification, or rendered evidence for a later turn, the EPIC is too large and must be split before dispatch.
 
 This means the planner is not selecting between arbitrary DAG nodes. It is mapping domain outcomes onto a fixed project pipeline.
 
-A single outcome normally traverses **several** stages. If shipping one feature requires a schema change, an API, a UI, an end-to-end test, a doc, and a commit, that is **one EPIC with a six-stage roster**, not six EPICs each assigned to one producer. Slicing an outcome along producer-specialty lines turns the EPIC list into a team roster and hides the outcome behind the pipeline. The planner's instinct should be to **lengthen the roster within one EPIC before adding a new EPIC**.
+A good EPIC is neither a whole-surface bucket nor a tiny checklist item. "Build Home" is usually too broad; "rename one button" is too small. "Establish the Home layout foundation", "build the Home header/navigation on that foundation", and "add the Home discovery rails with empty/loading/error evidence" can be separate dependent EPICs because each leaves a reviewable product layer that downstream producers can inspect and extend.
 
-A simple test for whether two items are one outcome or two: would a user say "ship it" after the first alone? If no, they belong to one outcome. Different **surfaces** of the same shipped feature — backend, frontend, doc, release — are not separate outcomes; different **shipped results** are.
+Do not split along producer specialty. If one product slice requires an API contract, game UI, rendered evidence, docs, and release prep, that is one EPIC with a longer roster. Split only when the product result itself has dependency-bearing layers that are worth reviewing independently and can be carried forward through `upstream` evidence.
 
 ## Methodology
 
@@ -44,6 +44,14 @@ Treat the request snapshot as plain markdown text. Do not depend on special head
 ### 3. Emit EPICs directly
 
 On an initial plan, emit downstream EPICs immediately starting at `EP-1--{kebab-outcome}`. On a re-plan, keep the result append-only by appending replacement EPICs after the existing list instead of rewriting old ones in place.
+
+Before emitting an EPIC, apply the producer-completion sizing test:
+
+- Can the current producer stage complete the EPIC's acceptance, verification, and evidence obligations in one Pair turn without planned self-deferral?
+- Is the result large enough to be reviewed as a product or contract layer, not just a microscopic edit?
+- If a later EPIC depends on this one, will `Prior tasks` / `Prior reviews` give the downstream producer enough concrete evidence to continue without rediscovering the same files from scratch?
+
+If the answer is no because the surface is too broad, split the surface into dependency-bearing EPICs and connect them with `upstream`. If the answer is no because the item is too small, fold it into the nearest meaningful EPIC.
 
 Keep one turn focused. A planner turn should usually emit only a few EPICs. The `next-action` line tells the orchestrator whether another planning turn will be needed **after the current batch of EPICs finishes executing**:
 
@@ -124,6 +132,8 @@ note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates
 - `roster` uses only registered producers.
 - Every EPIC `roster` is a subsequence of the project's fixed global roster.
 - `upstream` is treated as a same-stage gate.
+- Each EPIC is producer-completable: it should not require planned self-deferral by the same producer to finish in-scope acceptance, verification, or evidence.
+- Large surfaces are split into dependency-bearing product layers, and downstream EPICs can consume upstream artifacts through `Prior tasks` / `Prior reviews`.
 - Blocked work goes to `Additional pairs required` instead of being emitted as fake executable EPICs.
 - Re-planning is append-only.
 - `next-action: continue` is used only for learned replanning (later EPIC shape truly depends on earlier execution); padding-style continuation is treated as a grading failure.
@@ -140,64 +150,51 @@ note: upstream EP-1--domain-agent-design must stay ahead at the same stage gates
 - Mutate an existing EPIC in place instead of appending a replacement.
 - Overfill one planning turn with a rushed batch of EPICs instead of leaving continuation work for later.
 - Include task file paths or `current` in planner output.
-- Slice one outcome into several EPICs along producer-specialty lines (one EPIC per surface or team). The same outcome traversing multiple stages is one EPIC with a longer roster.
+- Emit a whole-surface bucket such as "Build Home" when the producer would predictably need to checkpoint partial work for a later turn.
+- Slice one product layer into several EPICs along producer-specialty lines (one EPIC per API/UI/test/doc team). The same outcome slice traversing multiple stages is one EPIC with a longer roster.
 - Emit `next-action: continue` as padding ("I might need more later, not sure yet", "want more thinking time"). Continuation is for cases where execution evidence changes the later plan — not for reserving uncertainty. A pattern of continue turns that emit zero new EPICs trips the zero-emit safety and is a grading failure.
 - Ignore `Recent events` on a defer-to-end recall. The whole point of defer-to-end is that events.md now carries evidence the initial turn could not see.
 
 ## Examples (BAD / GOOD)
-
-Assume a web fullstack project whose registered roster is:
-
-```text
-db-migration-producer → backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
-```
-
-The goal asks for a user profile page.
-
-### BAD — outcome sliced along producer-specialty lines
+Assume a visual-novel player project whose registered roster is:
 
 ```text
-EP-1--profile-schema
-- roster: db-migration-producer
-
-EP-2--profile-api
-- roster: backend-api-producer
-
-EP-3--profile-ui
-- roster: frontend-ui-producer
-
-EP-4--profile-tests
-- roster: e2e-test-producer
-
-EP-5--profile-docs
-- roster: doc-producer
-
-EP-6--profile-commit
-- roster: git-producer
+api-producer → game-producer → verification-producer → doc-producer
 ```
 
-All six EPICs serve the single outcome "user can view and edit their profile." The EPIC list has become a team roster — no single EPIC names a shippable result, and the planner has quietly redesigned the runtime's fixed stage order into per-EPIC micro-flows. Fold into one EPIC with a long roster.
+The goal asks for a production-grade Home route.
 
-### GOOD — one EPIC per outcome, long roster inside
+### BAD — whole-surface bucket that invites producer self-deferral
+
+```text
+EP-1--home-route
+- outcome: Rebuild Home layout, header, discovery rails, account entry points, motion, all states, rendered evidence, and docs.
+- upstream: none
+- roster: api-producer → game-producer → verification-producer → doc-producer
+```
+
+The outcome is meaningful but too broad for one `game-producer` turn. It predicts a partial implementation followed by "finish evidence/tests next time", which wastes tokens because the next producer has to rediscover the same Home files.
+
+### GOOD — dependent producer-completable outcome slices
 
 ```text
 EPICs (this turn):
 
-EP-1--user-profile-page
-- outcome: Ship the `/profile` page so a logged-in user can view and edit their display name, handle, and bio end-to-end.
+EP-1--home-layout-foundation
+- outcome: Establish the Home route's responsive layout foundation, shared surface rhythm, and baseline loading/empty/error containers with rendered smoke evidence.
 - upstream: none
-- why: .harness/cycle/user-request-snapshot.md:L12 "Users need a profile page to manage personal info."
-- roster: db-migration-producer → backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
+- why: .harness/cycle/user-request-snapshot.md:L12 "Home should feel production-grade."
+- roster: game-producer → verification-producer
 
-EP-2--profile-avatar-upload
-- outcome: Let users upload an avatar image and render it on the profile page, using the S3 direct-upload pattern.
-- upstream: EP-1--user-profile-page
-- why: .harness/cycle/user-request-snapshot.md:L18 "Avatar upload must use S3 direct-upload."
-- roster: backend-api-producer → frontend-ui-producer → e2e-test-producer → doc-producer → git-producer
+EP-2--home-header-navigation
+- outcome: Build the Home header, search/account affordances, and navigation handoff on top of the established Home layout foundation.
+- upstream: EP-1--home-layout-foundation
+- why: .harness/cycle/user-request-snapshot.md:L15 "Navigation hierarchy should be clear."
+- roster: game-producer → verification-producer
 
 Remaining: none
 next-action: done
 Additional pairs required: none
 ```
 
-Each EPIC is **one shippable outcome traversing many stages**. EP-2 skips `db-migration-producer` (no schema change) — stages may be skipped, their relative order never changes. `upstream: EP-1--user-profile-page` is a **same-stage gate**: EP-2's `backend-api-producer` turn waits for EP-1's `backend-api-producer` turn, not for all of EP-1 to finish. EP-1 and EP-2 are two EPICs because they pass the "ship it alone?" test independently — the profile page is useful without avatar upload.
+Each EPIC is a producer-completable product layer, not a phase label. `upstream` ensures downstream producers receive prior task/review artifacts as evidence, so the header work can reuse the layout decisions instead of re-reading the whole route from scratch.

@@ -963,7 +963,7 @@ function renderProducerAgent(pair: RegistryPair): string {
       "3. Inspect current project files named by the task scope.\n" +
       "4. Produce the requested artifact or code change inside scope.\n" +
       "5. Run the smallest relevant verification command available.\n" +
-      "6. Report changed files, verification, and remaining work in the Producer Output Format.",
+      "6. Report changed files, verification, and any blocked or out-of-scope items in the Producer Output Format.",
   });
 }
 
@@ -1117,7 +1117,7 @@ function renderFinalizerFromTemplate(template: string, evidenceLines: string[]):
     "3. Inspect project files and cycle artifacts named by the envelope.\n" +
     "4. Perform only writes justified by scope, current contracts, and project evidence.\n" +
     "5. Run the smallest relevant verification for the cycle-end duty.\n" +
-    "6. Emit the Output Format block with concrete paths, verification, and remaining items.\n\n" +
+    "6. Emit the Output Format block with concrete paths, verification, and any blocked or out-of-scope items.\n\n" +
     "If the preserved intent no longer matches the current goal or project contract, emit the Structural Issue block and return `Status: FAIL`.\n";
   return replaceSection(template, "Task", task);
 }

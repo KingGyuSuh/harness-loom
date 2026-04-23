@@ -138,6 +138,8 @@ test("installed harness-finalizer body exposes the load-bearing contract section
     // for the Finalizer turn).
     assert.match(body, /Status:\s*PASS\s*\/\s*FAIL/);
     assert.match(body, /Self-verification:/);
+    assert.match(body, /Blocked or out-of-scope items:\s*\[\{item, reason\}\]/);
+    assert.doesNotMatch(body, /Remaining items:/);
 
     // Structural Issue block with planner upstream stage — the Finalizer's
     // only retreat trigger.

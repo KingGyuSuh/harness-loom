@@ -107,7 +107,7 @@ After a planner turn:
    - only `Additional pairs required` and no executable EPICs -> halt directly: clear `Next`, keep `loop: false`, clear any pending continuation flag, and tell the user to extend the harness and re-run. This blocked halt does not run the finalizer.
    - finalizer FAIL/RETREAT recall with zero executable EPICs -> halt directly: clear `Next`, keep `loop: false`, and tell the user to fix the finalizer body or the plan. This cuts any infinite Finalizer -> Planner -> Finalizer loop the planner cannot repair.
    - defer-to-end continuation recall with zero new executable EPICs -> force `planner-continuation: none`, append one orchestrator note to `events.md`, and continue with terminal handling below.
-7. If live EPICs remain and the ready set is non-empty, synthesize the next Pair dispatch from the selected EPIC.
+7. If live EPICs remain and the ready set is non-empty, synthesize the next Pair dispatch from the selected EPIC. Attach relevant same-EPIC rework artifacts plus upstream EPIC task/review artifacts that prove the selected EPIC's gate is satisfied as `Prior tasks` / `Prior reviews`.
 8. If live EPICs remain and the ready set is empty, recall the planner instead of dispatching a blocked stage:
    - `Next.To = planner`
    - `Next.EPIC = (none)`
@@ -123,7 +123,7 @@ The verdict source is the aggregated reviewer set.
 2. **Retreat (structural)** — read `Suspected upstream stage`:
    - if it resolves to `planner`, synthesize a planner recall with `Task path: (none)` and attach the relevant task/review artifacts as `Prior`
    - otherwise rewind the EPIC's `current` to that producer, carry the structural reason as `Intent`, attach the retreat-target artifacts as `Prior`, and allocate a fresh pair task path for the rewound producer
-3. **Forward advance (PASS)** — move the current EPIC to the next producer in its roster slice, or `done` if the slice is exhausted. Recompute the ready set across every live EPIC. If the ready set is non-empty, dispatch the ready EPIC with the smallest global roster position. If live EPICs remain but the ready set is empty, recall the planner with `Task path: (none)` and an `Intent` that names the gate condition. If no live EPICs remain, apply Terminal resolution below.
+3. **Forward advance (PASS)** — move the current EPIC to the next producer in its roster slice, or `done` if the slice is exhausted. Recompute the ready set across every live EPIC. If the ready set is non-empty, dispatch the ready EPIC with the smallest global roster position and attach relevant same-EPIC plus upstream dependency artifacts as `Prior tasks` / `Prior reviews`. If live EPICs remain but the ready set is empty, recall the planner with `Task path: (none)` and an `Intent` that names the gate condition. If no live EPICs remain, apply Terminal resolution below.
 
 `Phase` always echoes `Next.To`. Global stage comparison always resolves against the ordered registry, never against a per-EPIC local slot number.
 
@@ -154,6 +154,8 @@ Do not touch `planner-continuation` in this branch. The recovery loop is bounded
 Subagents run with `fork_context=false`, so the envelope is the only runtime payload they should trust for this turn. The envelope-facing field for `Next.Intent` is `Turn intent`; do not emit legacy phase wording for that field.
 
 `references/dispatch-envelope.md` owns the role-specific minimum field set. Every executable Planner, Pair, and Finalizer dispatch must carry `Goal`, `User request snapshot`, `Turn intent`, and `Scope`; placeholder fields for unrelated roles are omitted.
+
+For Pair dispatches, `Prior tasks` / `Prior reviews` are not only rework payloads. When `upstream` made an EPIC ready, attach the relevant upstream artifacts as dependency evidence so the next producer can inspect prior decisions instead of re-reading the same source surface from scratch.
 
 #### Context propagation
 

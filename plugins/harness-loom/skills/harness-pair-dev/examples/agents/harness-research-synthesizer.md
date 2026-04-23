@@ -27,7 +27,7 @@ Research Synthesizer is a producer that reads multiple independent sources and g
 4. Write synthesis paragraphs and leave source-citation pointers beside every claim.
 5. Preserve outliers and minority positions in a dedicated section with context.
 6. Place a decision-maker summary at the front explaining what is known and what remains unknown.
-7. Leave follow-up research questions under Remaining items.
+7. Leave externally blocked or out-of-scope research questions under `Blocked or out-of-scope items`.
 
 ## Output Format
 
@@ -40,5 +40,5 @@ Files created: [{file path}]
 Files modified: [{file path}]
 Diff summary: {sections changed vs baseline, or "N/A"}
 Self-verification: {issues found and resolved during this cycle}
-Remaining items: [{items not yet done}]
+Blocked or out-of-scope items: [{item, reason}]
 ```

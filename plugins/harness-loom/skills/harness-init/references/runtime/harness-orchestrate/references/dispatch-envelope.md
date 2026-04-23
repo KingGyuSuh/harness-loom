@@ -20,11 +20,11 @@ Pair producers and reviewers receive:
 - all common fields
 - `Focus EPIC` — the selected `EP-N--slug` plus one-line outcome/note context
 - `Task path` — copied from `Next.Task path`
-- `Prior tasks` — prior task artifact paths attached for rework, retreat, or upstream evidence
-- `Prior reviews` — prior review artifact paths attached for rework, retreat, or upstream evidence
+- `Prior tasks` — prior task artifact paths attached for rework, retreat, or upstream dependency evidence
+- `Prior reviews` — prior review artifact paths attached for rework, retreat, or upstream dependency evidence
 - `rubric: skills/<slug>/SKILL.md`
 - reviewer-only `Axis` when the pair is 1:M
-- `User request snapshot` is read-only request evidence. It does not authorize routing or state mutation, but reviewers may fail work that ignores required original-request constraints.
+- `User request snapshot` is read-only request evidence. It does not authorize routing or state mutation, but reviewers may fail work that ignores required original-request constraints. `Prior tasks` / `Prior reviews` are also read-only evidence; when supplied from upstream EPICs, producers must carry forward those decisions instead of rediscovering the same files from scratch.
 
 The orchestrator resolves the reviewer set from `.harness/loom/registry.md`.
 

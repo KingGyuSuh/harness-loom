@@ -48,7 +48,7 @@ const PRODUCER_BLOCK = [
   "Files modified: [{file path}]",
   'Diff summary: {sections changed vs baseline, or "N/A"}',
   "Self-verification: {issues found and resolved during this cycle}",
-  "Remaining items: [{items not yet done}]",
+  "Blocked or out-of-scope items: [{item, reason}]",
 ].join("\n");
 
 const REVIEWER_BLOCK = [
@@ -144,6 +144,16 @@ test("agent authoring guidance pins reduced pair surfaces and role exceptions", 
   assert.equal(codeBlockAfter(rules, "**Reviewer variant**"), REVIEWER_BLOCK);
   assert.match(rules, /A pair producer's `Status` is self-report only/);
   assert.match(rules, /The paired reviewer `Verdict` is the Pair turn's load-bearing verdict source/);
+  assert.match(
+    rules,
+    /must not defer in-scope acceptance, verification, or evidence/,
+    "producer blocked/out-of-scope field must not authorize self-deferral",
+  );
+  assert.match(
+    rules,
+    /returns `Status: FAIL` or `## Structural Issue`; it does not PASS by listing the blocker there/,
+    "producer authoring rules must fail or structurally escalate required-scope blockers",
+  );
   assert.match(rules, /Planner agents do not emit `Status` or `Escalation`/);
   assert.match(rules, /`next-action` field on a meta-role is load-bearing/);
   assert.match(rules, /Its own `Status: PASS \| FAIL` plus `Self-verification` block is the verdict/);
@@ -168,7 +178,7 @@ test("planner and finalizer templates preserve load-bearing fields and omit lega
 
   assert.match(finalizerBlock, /^Status: PASS \/ FAIL$/m);
   assert.match(finalizerBlock, /^Self-verification:/m);
-  assert.match(finalizerBlock, /^Remaining items:/m);
+  assert.match(finalizerBlock, /^Blocked or out-of-scope items:/m);
   assert.doesNotMatch(finalizerBlock, /^Verdict:|^Criteria:|^FAIL items:|^Escalation:/m);
   assert.match(finalizer, /Optional line: inside the fenced block, include `Files left alone \(intentionally\)/);
 
@@ -189,7 +199,7 @@ test("runtime contracts reject advisory routing fields and keep Structural Issue
   assert.match(orchestrate, /synthesizes the real `Next` from reviewer verdicts, planner `next-action`, finalizer `Status`, and `## Structural Issue`/);
   assert.match(orchestrate, /`## Structural Issue` is the only structural escalation surface/);
   assert.match(context, /Add advisory or escalation routing fields/);
-  assert.match(context, /use `Remaining items`, `Feedback`, or `## Structural Issue` according to role/);
+  assert.match(context, /use `Blocked or out-of-scope items`, `Feedback`, or `## Structural Issue` according to role/);
 
   assertNoLegacyFieldLines(orchestrate, "orchestrate template");
   assertNoLegacyFieldLines(context, "context template");
