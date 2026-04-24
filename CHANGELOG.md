@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-04-24
+
+### Changed
+
+- **`/harness-auto-setup --setup` now separates foundation refresh from
+  project-shaped authoring.** Fresh targets are still bootstrapped through
+  the foundation installer, while existing `.harness/loom/` /
+  `.harness/cycle/` foundation state is not snapshotted, reseeded,
+  restored, or migrated. Existing foundation refresh now belongs to
+  `--migration`; setup continues with repo/user analysis and additive
+  pair/finalizer authoring.
+- **`/harness-auto-setup` setup authoring is now project-grounded.**
+  Fresh setup no longer authors `harness-document`, `harness-verification`,
+  or generic implementation pairs solely because docs, tests, CI, or code
+  directories exist. The script now emits an analysis-needed summary, and the
+  skill expects assistant-side LLM project analysis or concise user
+  clarification before concrete pair/finalizer files are authored.
+- **`/harness-auto-setup --migration` now preserves compatible custom
+  sections.** Migration refreshes frontmatter, required `skills:`, role
+  Output Format blocks, and the finalizer Structural Issue contract while
+  keeping renamed or additional H2 sections such as `## Approach` and
+  `## Rollout Plan`. The JSON summary includes
+  `convergence.migrationPlan` for source/target overlay review.
+- **Migration restores non-pair custom loom entries after foundation
+  reseed.** Custom `loom/skills/*` directories and `loom/agents/*.md`
+  files that are not foundation or registered-pair artifacts are copied
+  back from the auto-setup snapshot during `--migration`.
+
 ## [0.3.1] — 2026-04-24
 
 ### Changed
@@ -67,7 +95,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   discarding active or unknown cycle state, reseed the foundation,
   reconstruct valid registered pairs and customized finalizer intent
   against current templates, and stop with an explicit
-  `node .harness/loom/sync.ts --provider <list>` handoff. Auto-setup
+  `node .harness/loom/sync.ts --provider <list>` next action. Auto-setup
   never writes `.claude/`, `.codex/`, or `.gemini/` directly.
 - **`/harness-pair-dev --remove <pair-slug>` guarded removal.**
   Safely unregisters a pair and deletes only pair-owned `.harness/loom/`
@@ -665,7 +693,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.2
 [0.3.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.1
 [0.3.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.0
 [0.2.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.2.2

@@ -15,7 +15,7 @@ Write only in canonical staging under `<target>/.harness/loom/`. Pair files live
 
 Cycle task and review history under `.harness/cycle/` is runtime evidence, not pair-authoring state. Pair authoring may inspect active-cycle references for safety, but it must not edit or delete cycle history.
 
-Use `scripts/pair-dev.ts` for deterministic command validation, registered-pair source preparation, and guarded removal. The helper returns preparation JSON for `--add` and `--improve`; it does not claim to author pair bodies unless files are actually written.
+Use `./scripts/pair-dev.ts` (resolved from this skill's directory) for deterministic command validation, registered-pair source preparation, and guarded removal. The helper returns preparation JSON for `--add` and `--improve`; it does not claim to author pair bodies unless files are actually written.
 
 ## Methodology
 
@@ -23,7 +23,7 @@ Use `scripts/pair-dev.ts` for deterministic command validation, registered-pair 
 
 - Target is always the current working directory.
 - Read the target codebase before authoring. The pair must fit the real repo, not a stock template.
-- Normalize user-facing bare names into canonical `harness-*` slugs before invoking `scripts/pair-dev.ts`; the helper accepts canonical slugs only.
+- Normalize user-facing bare names into canonical `harness-*` slugs before invoking `./scripts/pair-dev.ts`; the helper accepts canonical slugs only.
 - Keep reviewer coverage explicit. Every pair is 1:1 or 1:M. Reviewer-less work belongs in a finalizer, not in `## Registered pairs`.
 - Treat roster placement as execution order. Appending is correct only when the pair truly belongs at the end of the project-global workflow.
 - Treat legacy `--split` and `--hint` as unsupported v0.3.0 surface. Split is a manual sequence of `--add`, `--improve`, and `--remove`; intent is passed as positional `<purpose>`.
@@ -54,7 +54,7 @@ All slug-bearing arguments must be canonical before the deterministic helper or 
    - repeated `--reviewer <slug>` -> 1:M pair
 7. Read the authoring references, current roster, and relevant target code before writing anything.
 8. Author the producer, reviewer(s), and shared pair skill from templates. Without `--from`, ground them directly in repo evidence; with `--from`, apply template-first overlay.
-9. Run `register-pair.ts` to update `## Registered pairs` in `.harness/loom/registry.md`. Pass `--before <slug>` or `--after <slug>` whenever the right workflow position is known; omit anchors only when a true append is intended.
+9. Run `./scripts/register-pair.ts` to update `## Registered pairs` in `.harness/loom/registry.md`. Pass `--before <slug>` or `--after <slug>` whenever the right workflow position is known; omit anchors only when a true append is intended.
 
 ### 4. `--improve`
 
@@ -72,7 +72,7 @@ All slug-bearing arguments must be canonical before the deterministic helper or 
 2. Reject removal of the planner, finalizer, foundation runtime skills, `registry.md`, missing pairs, and anything outside `.harness/loom/agents/` or `.harness/loom/skills/`.
 3. Inspect `.harness/cycle/state.md` when it exists. If `## Next` references the pair, or if any non-terminal EPIC roster/current field references the pair, abort before mutating files.
 4. Treat unparsable active-cycle state as unsafe and abort. The default contract has no force flag.
-5. Run `register-pair.ts --unregister --target <target> --pair <pair-slug>` to remove only the roster entry from `## Registered pairs`.
+5. Run `./scripts/register-pair.ts --unregister --target <target> --pair <pair-slug>` to remove only the roster entry from `## Registered pairs`.
 6. Delete the pair-owned producer agent, reviewer agent(s), and pair skill directory from `.harness/loom/` after unregistering.
 7. Do not delete an agent or skill path that is still referenced by another remaining registry entry; abort or preserve it with an explicit warning rather than breaking another pair.
 8. Never delete or rewrite `.harness/cycle/`, `.harness/cycle/epics/`, task files, review files, or `events.md`. Historical task/review evidence stays intact after pair removal.
@@ -125,8 +125,8 @@ Treat that section as workflow order, not as a changelog.
 
 ## References
 
-- `scripts/pair-dev.ts` — deterministic command helper for validation, `--from` source preparation, and guarded `--remove`
-- `scripts/register-pair.ts` — deterministic registration helper (writes `.harness/loom/registry.md`)
+- `./scripts/pair-dev.ts` — deterministic command helper for validation, `--from` source preparation, and guarded `--remove`
+- `./scripts/register-pair.ts` — deterministic registration helper (writes `.harness/loom/registry.md`)
 - `templates/producer-agent.md`, `templates/reviewer-agent.md`, `templates/pair-skill.md` — skeletons copied and filled in for each new pair
 - `examples/agents/` — completed producer/reviewer exemplars to reference for tone and structure
 - `references/authoring/agent-authoring.md` — agent frontmatter, five principles, Task shape, Output Format rubric

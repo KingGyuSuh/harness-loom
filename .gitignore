@@ -16,8 +16,7 @@
 # target root (`docs/`, `*.md`) — not under `.harness/` — and are committed
 # to the target repo, not ignored there.
 # None of the `.harness/` paths should land in factory commits.
-.harness/
-
+.harness
 # Pointer docs the factory tracks as source-of-truth (authored by humans). They
 # are listed here so that a Finalizer write from a self-install run does NOT
 # silently overwrite the committed version; the committed files stay tracked

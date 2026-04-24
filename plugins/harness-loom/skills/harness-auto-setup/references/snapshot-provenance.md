@@ -48,4 +48,4 @@ Mode-aware runs may append additional keys such as `runMode` and `targetState` a
 
 ## Failure Contract
 
-If snapshot creation fails, stop before running install or deleting anything. Snapshot failure is a setup blocker, not a warning.
+If snapshot creation fails, stop before running install or deleting anything. Snapshot failure is a migration blocker, not a warning.

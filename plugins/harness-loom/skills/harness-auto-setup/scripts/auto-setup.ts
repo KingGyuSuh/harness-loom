@@ -1,13 +1,12 @@
 #!/usr/bin/env node
-// Purpose: Snapshot existing target harness state, classify cycle risk, then
-//          delegate foundation refresh to harness-init's installer. Valid
-//          registered pairs and customized finalizer intent are reconstructed
-//          from snapshot evidence on top of current templates; stale harness
-//          files are never blind-copied and platform sync is never run.
+// Purpose: Bootstrap fresh targets, recommend project-shaped additions for
+//          existing targets, or migrate existing harness foundations through a
+//          snapshot-first contract refresh. Stale harness files are never
+//          blind-copied and platform sync is never run.
 
 import { spawnSync } from "node:child_process";
 import { constants as FS, readFileSync } from "node:fs";
-import { access, cp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { access, cp, mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -23,7 +22,6 @@ const PAIR_DEV_SCRIPT = resolve(PAIR_DEV_DIR, "scripts/pair-dev.ts");
 const REGISTER_PAIR_SCRIPT = resolve(PAIR_DEV_DIR, "scripts/register-pair.ts");
 const PRODUCER_TEMPLATE = resolve(PAIR_DEV_DIR, "templates/producer-agent.md");
 const REVIEWER_TEMPLATE = resolve(PAIR_DEV_DIR, "templates/reviewer-agent.md");
-const PAIR_SKILL_TEMPLATE = resolve(PAIR_DEV_DIR, "templates/pair-skill.md");
 const ALLOWED_PROVIDERS = new Set(["claude", "codex", "gemini"]);
 const HARNESS_SLUG_RE = /^harness-[a-z0-9]+(-[a-z0-9]+)*$/;
 const FOUNDATION_SLUGS = new Set([
@@ -115,16 +113,9 @@ interface Manifest {
   };
 }
 
-interface PairIntent {
-  skillPath: string | null;
-  producerPath: string | null;
-  reviewerPaths: Record<string, string | null>;
-  evidenceLines: string[];
-}
-
-interface PairReconstruction {
+interface PairOperation {
   pair: string;
-  status: "authored" | "reconstructed" | "migrated" | "skipped";
+  status: "migrated" | "skipped";
   reason: string;
   producer: string;
   reviewers: string[];
@@ -153,17 +144,8 @@ interface ArtifactUsage {
   skills: Map<string, string[]>;
 }
 
-interface SetupPairPlan {
-  pair: RegistryPair;
-  purpose: string;
-  designThinking: string;
-  methodology: string;
-  evaluationCriteria: string;
-  taboos: string;
-}
-
-interface FinalizerReconstruction {
-  status: "authored" | "reconstructed" | "migrated" | "default-noop" | "missing" | "skipped";
+interface FinalizerOperation {
+  status: "migrated" | "default-noop" | "missing" | "skipped";
   reason: string;
   path: string | null;
   filesWritten: string[];
@@ -176,6 +158,67 @@ interface FinalizerReconstruction {
     stopReason: string;
     qualityVerdict: "acceptable" | "fallback" | "manual-review";
   };
+}
+
+interface PairRecommendationDetail {
+  pair: string | null;
+  command: string | null;
+  rationale: string;
+  evidence: string[];
+}
+
+interface RestoredCustomEntries {
+  skills: string[];
+  agents: string[];
+  skipped: { path: string; reason: string }[];
+}
+
+interface MigrationPlanPair {
+  pair: string;
+  source: {
+    skillPath: string | null;
+    producerPath: string | null;
+    reviewerPaths: Record<string, string | null>;
+    missingArtifacts: string[];
+  };
+  target: {
+    skillPath: string;
+    producerPath: string;
+    reviewerPaths: Record<string, string>;
+  };
+  overlayMethodology: string;
+  contractSurfaces: string[];
+  userSurfaces: string[];
+  manualReviewNotes: string[];
+}
+
+interface MigrationPlanFinalizer {
+  required: boolean;
+  source: { agentPath: string | null };
+  target: { agentPath: string };
+  overlayMethodology: string;
+  contractSurfaces: string[];
+  userSurfaces: string[];
+  manualReviewNotes: string[];
+}
+
+interface MigrationPlan {
+  pairs: MigrationPlanPair[];
+  finalizer: MigrationPlanFinalizer | null;
+}
+
+interface PairMigrationResult {
+  operations: PairOperation[];
+  migrationPlanPairs: MigrationPlanPair[];
+}
+
+interface InstallResult {
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  summary: unknown;
+  skipped?: boolean;
+  reason?: string;
 }
 
 function die(message: string, code = 1): never {
@@ -208,7 +251,7 @@ function parseArgs(argv: string[]): Args {
         "Usage: node skills/harness-auto-setup/scripts/auto-setup.ts [--setup | --migration] [--provider <claude,codex,gemini>]\n" +
           "  Target is always process.cwd(); run from the project root.\n" +
           "  Default mode is --setup. Use --migration for minimal-delta upgrades of an existing harness.\n" +
-          "  The provider list is only used to print the explicit sync handoff; sync is not run.\n",
+          "  The provider list is only used to print the explicit sync command; sync is not run.\n",
       );
       process.exit(0);
     } else if (arg === "--setup") {
@@ -249,6 +292,10 @@ function rel(target: string, path: string): string {
 
 function syncCommand(providers: string[]): string {
   return `node .harness/loom/sync.ts --provider ${providers.join(",")}`;
+}
+
+function autoSetupCommand(runMode: RunMode, providers: string[]): string {
+  return `/harness-auto-setup --${runMode} --provider ${providers.join(",")}`;
 }
 
 function snapshotStamp(date: Date): string {
@@ -311,25 +358,58 @@ function subsection(body: string, headingLine: string): string | null {
   return normalized.slice(bodyStart, bodyEnd);
 }
 
-function replaceSection(body: string, heading: string, replacement: string): string {
+function topLevelH2Bounds(body: string, heading: string): { headingStart: number; bodyStart: number; bodyEnd: number } | null {
   const normalized = body.replace(/\r\n/g, "\n");
-  const headingLine = `## ${heading}`;
-  const headingIdxLineStart = normalized.indexOf(`\n${headingLine}\n`);
-  const headingIdx =
-    headingIdxLineStart !== -1
-      ? headingIdxLineStart + 1
-      : normalized.startsWith(`${headingLine}\n`)
-      ? 0
-      : -1;
-  const sectionBody = replacement.trimEnd() + "\n";
-  if (headingIdx === -1) {
-    const sep = normalized.endsWith("\n") ? "" : "\n";
-    return `${normalized}${sep}\n${headingLine}\n\n${sectionBody}`;
+  const lines = normalized.split("\n");
+  let offset = 0;
+  let inFence = false;
+  let found: { headingStart: number; bodyStart: number } | null = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^(```|~~~)/.test(trimmed)) {
+      inFence = !inFence;
+    } else if (!inFence && line === `## ${heading}`) {
+      found = { headingStart: offset, bodyStart: offset + line.length + 1 };
+      break;
+    }
+    offset += line.length + 1;
   }
-  const bodyStart = normalized.indexOf("\n", headingIdx) + 1;
-  const nextHeading = normalized.indexOf("\n## ", bodyStart);
-  const bodyEnd = nextHeading === -1 ? normalized.length : nextHeading;
-  return normalized.slice(0, bodyStart) + sectionBody + normalized.slice(bodyEnd);
+  if (!found) return null;
+
+  let bodyEnd = normalized.length;
+  offset = found.bodyStart;
+  inFence = false;
+  for (const line of normalized.slice(found.bodyStart).split("\n")) {
+    const trimmed = line.trim();
+    if (/^(```|~~~)/.test(trimmed)) {
+      inFence = !inFence;
+    } else if (!inFence && /^##\s+/.test(line)) {
+      bodyEnd = offset;
+      break;
+    }
+    offset += line.length + 1;
+  }
+  return { ...found, bodyEnd };
+}
+
+function replaceTopLevelSection(body: string, heading: string, replacement: string): string {
+  const normalized = body.replace(/\r\n/g, "\n");
+  const bounds = topLevelH2Bounds(normalized, heading);
+  const sectionBody = replacement.trim() + "\n";
+  if (!bounds) {
+    const sep = normalized.endsWith("\n") ? "" : "\n";
+    return `${normalized}${sep}\n## ${heading}\n\n${sectionBody}`;
+  }
+  return normalized.slice(0, bounds.bodyStart) + "\n" + sectionBody + normalized.slice(bounds.bodyEnd);
+}
+
+function removeTopLevelSection(body: string, heading: string): string {
+  const normalized = body.replace(/\r\n/g, "\n");
+  const bounds = topLevelH2Bounds(normalized, heading);
+  if (!bounds) return normalized;
+  const prefix = normalized.slice(0, bounds.headingStart).replace(/\n+$/g, "\n\n");
+  const suffix = normalized.slice(bounds.bodyEnd).replace(/^\n+/, "");
+  return `${prefix}${suffix}`.trimEnd() + "\n";
 }
 
 function field(body: string, name: string): string | null {
@@ -567,17 +647,52 @@ function bodyWithoutFrontmatter(body: string): string {
   return normalized.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 }
 
-function topHeading(body: string): string | null {
+function topHeadingParts(body: string): { title: string; tail: string } | null {
   const content = bodyWithoutFrontmatter(body);
-  const match = content.match(/^#\s+([^\n]+)$/m);
-  return match ? match[1].trim() : null;
+  const match = /^#\s+([^\n]+)(?:\n|$)/m.exec(content);
+  if (!match) return null;
+  return {
+    title: match[1].trim(),
+    tail: content.slice(match.index + match[0].length).trimStart(),
+  };
+}
+
+function topHeading(body: string): string | null {
+  return topHeadingParts(body)?.title ?? null;
+}
+
+function bodyAfterTopHeading(body: string): string | null {
+  return topHeadingParts(body)?.tail ?? null;
+}
+
+function h2Headings(body: string | null): string[] {
+  if (!body) return [];
+  const out: string[] = [];
+  for (const match of bodyWithoutFrontmatter(body).matchAll(/^##\s+([^\n]+)$/gm)) {
+    const heading = match[1].trim();
+    if (!out.includes(heading)) out.push(heading);
+  }
+  return out;
+}
+
+function finalizerOutputFormatContract(template: string): string {
+  const normalized = template.replace(/\r\n/g, "\n");
+  const heading = "## Output Format";
+  const headingIdxLineStart = normalized.indexOf(`\n${heading}\n`);
+  const headingIdx =
+    headingIdxLineStart !== -1
+      ? headingIdxLineStart + 1
+      : normalized.startsWith(`${heading}\n`)
+      ? 0
+      : -1;
+  if (headingIdx === -1) return section(template, "Output Format") ?? "";
+  const bodyStart = normalized.indexOf("\n", headingIdx) + 1;
+  return normalized.slice(bodyStart).trimEnd();
 }
 
 function introAfterHeading(body: string): string | null {
-  const content = bodyWithoutFrontmatter(body);
-  const match = content.match(/^#\s+[^\n]+\n([\s\S]*)$/);
-  if (!match) return null;
-  const tail = match[1].trimStart();
+  const tail = bodyAfterTopHeading(body);
+  if (tail === null) return null;
   const nextSection = tail.search(/(^|\n)## /);
   const intro = (nextSection === -1 ? tail : tail.slice(0, nextSection)).trim();
   return intro || null;
@@ -1028,7 +1143,45 @@ async function repoSignals(target: string): Promise<RepoSignals> {
   return { files, directories, evidence };
 }
 
-function pairRecommendations(registry: RegistrySummary, signals: RepoSignals): string[] {
+function pairRecommendationDetails(
+  registry: RegistrySummary,
+  signals: RepoSignals,
+  runMode: RunMode,
+  targetState: TargetState,
+  loomExists: boolean,
+): PairRecommendationDetail[] {
+  if (runMode === "setup" && targetState === "existing" && !loomExists) {
+    return [
+      {
+        pair: null,
+        command: null,
+        rationale:
+          "Existing .harness/cycle state was detected without .harness/loom; setup leaves it untouched. Run --migration to repair or refresh the foundation before pair/finalizer authoring or sync.",
+        evidence: [...signals.files, ...signals.directories, ...signals.evidence],
+      },
+    ];
+  }
+
+  if (runMode === "setup" && targetState === "existing") {
+    const roster =
+      registry.pairCount > 0
+        ? `Existing registry already contains ${registry.pairCount} pair(s); the script phase leaves them unchanged. Continue with LLM project analysis and author only additive pair/finalizer changes unless the user requests an improvement pass. Use --migration to refresh existing foundation contracts.`
+        : "Existing harness state was detected, but no registered pairs were found; the script phase leaves the foundation unchanged. Continue with LLM project analysis or focused user clarification, then author the needed pair/finalizer configuration. Use --migration to refresh or repair the existing foundation.";
+    return [
+      {
+        pair: null,
+        command: null,
+        rationale: roster,
+        evidence: [
+          ...registry.pairs.map((pair) => pair.sourceLine),
+          ...signals.files,
+          ...signals.directories,
+          ...signals.evidence,
+        ],
+      },
+    ];
+  }
+
   if (registry.pairCount > 0) {
     return registry.pairs.map((pair) => {
       const reviewers = pair.reviewers.map((reviewer) => ` --reviewer ${reviewer}`).join("");
@@ -1036,33 +1189,59 @@ function pairRecommendations(registry: RegistrySummary, signals: RepoSignals): s
         pair.evidence.missing.length > 0
           ? ` Missing evidence: ${pair.evidence.missing.join(", ")}.`
           : "";
-      return `Re-author ${pair.pair} from snapshot evidence with current templates: /harness-pair-dev --add ${pair.pair} "Refresh ${pair.pair} against current repo evidence and contracts"${reviewers}.${missing}`;
+      return {
+        pair: pair.pair,
+        command: `/harness-pair-dev --add ${pair.pair} "Refresh ${pair.pair} against current repo evidence and contracts"${reviewers}`,
+        rationale: `Registered pair topology was found in .harness/loom/registry.md.${missing}`,
+        evidence: [pair.sourceLine, ...pair.evidence.missing.map((path) => `missing: ${path}`)],
+      };
     });
   }
 
-  const out: string[] = [];
-  if (signals.evidence.includes("documentation surface")) {
-    out.push(
-      'Repo has documentation evidence; consider /harness-pair-dev --add harness-document "Maintain user-facing docs and pointer-doc alignment" --reviewer harness-document-reviewer.',
-    );
-  }
-  if (signals.evidence.includes("test surface") || signals.evidence.includes("ci workflow surface")) {
-    out.push(
-      'Repo has verification evidence; consider /harness-pair-dev --add harness-verification "Maintain regression tests and smoke checks" --reviewer harness-verification-reviewer.',
-    );
-  }
-  if (signals.evidence.includes("implementation surface")) {
-    out.push(
-      'Repo has implementation surfaces; inspect ownership boundaries before adding a producer-reviewer implementation pair.',
-    );
-  }
-  if (out.length === 0) {
-    out.push("No strong repo-grounded pair recommendation found; leave registry empty until concrete workstreams are identified.");
-  }
-  return out;
+  const supportSignals = signals.evidence.filter((signal) =>
+    ["documentation surface", "test surface", "ci workflow surface"].includes(signal),
+  );
+  return [
+    {
+      pair: null,
+      command: null,
+      rationale:
+        supportSignals.length > 0
+          ? `Only script-level support surfaces were detected (${supportSignals.join(", ")}); perform LLM project analysis or focused user clarification before authoring pair axes.`
+          : "No deterministic script signal can identify project-specific pair axes; perform LLM project analysis or focused user clarification before authoring pairs.",
+      evidence: [...signals.files, ...signals.directories, ...signals.evidence],
+    },
+  ];
 }
 
-function finalizerRecommendation(finalizer: FinalizerSummary, signals: RepoSignals): string {
+function pairRecommendations(
+  registry: RegistrySummary,
+  signals: RepoSignals,
+  runMode: RunMode,
+  targetState: TargetState,
+  loomExists: boolean,
+): string[] {
+  return pairRecommendationDetails(registry, signals, runMode, targetState, loomExists).map((detail) =>
+    detail.command ? `${detail.rationale} Suggested command: ${detail.command}` : detail.rationale,
+  );
+}
+
+function finalizerRecommendation(
+  finalizer: FinalizerSummary,
+  signals: RepoSignals,
+  runMode: RunMode,
+  targetState: TargetState,
+  loomExists: boolean,
+): string {
+  if (runMode === "setup" && targetState === "existing" && !loomExists) {
+    return "No .harness/loom foundation is present; run --migration to repair or refresh the foundation before authoring finalizer work or running sync.";
+  }
+  if (runMode === "setup" && targetState === "existing") {
+    if (finalizer.customized) {
+      return "Existing customized finalizer is left unchanged during the script phase; change it only if project analysis or the user selects new cycle-end work. Use --migration to refresh contract-owned finalizer surfaces.";
+    }
+    return "Existing finalizer is left unchanged during the script phase; author concrete cycle-end work during setup only after project analysis or user clarification. Use --migration to refresh the foundation.";
+  }
   if (finalizer.customized) return finalizer.recommendation;
   if (signals.evidence.includes("documentation surface") && signals.evidence.includes("test surface")) {
     return "Consider a finalizer that checks goal coverage, summarizes verification, and refreshes release/docs notes at cycle end.";
@@ -1074,104 +1253,6 @@ function finalizerRecommendation(finalizer: FinalizerSummary, signals: RepoSigna
     return "Consider a finalizer that performs a cycle-end verification summary only when the goal requires it.";
   }
   return finalizer.recommendation;
-}
-
-function makeSetupPairPlan(
-  pair: string,
-  reviewers: string[],
-  purpose: string,
-  designThinking: string,
-  methodology: string,
-  evaluationCriteria: string,
-  taboos: string,
-): SetupPairPlan {
-  return {
-    pair: {
-      pair,
-      producer: `${pair}-producer`,
-      reviewers,
-      skill: pair,
-      sourceLine: "",
-      evidence: { skillPresent: false, producerPresent: false, reviewersPresent: [], missing: [] },
-    },
-    purpose,
-    designThinking,
-    methodology,
-    evaluationCriteria,
-    taboos,
-  };
-}
-
-function setupPairPlans(signals: RepoSignals): SetupPairPlan[] {
-  const out: SetupPairPlan[] = [];
-  if (signals.evidence.includes("implementation surface")) {
-    out.push(
-      makeSetupPairPlan(
-        "harness-implementation",
-        ["harness-implementation-reviewer"],
-        "Implement and review requested project changes in the main code surface.",
-        "This pair owns feature and bug-fix work in the repository's main implementation surface. Setup mode authors it by default when the repo shows real code ownership boundaries but no restored project-specific pair exists yet.",
-        "1. Read the orchestrator envelope and repo surface named in scope.\n2. Identify the smallest implementation slice that satisfies the current request.\n3. Change code, config, or tests only inside the declared ownership.\n4. Verify the user-visible or contract-level effect with the smallest relevant command.\n5. Report concrete files, verification, and blocked follow-up items.",
-        "- Scope stays inside the declared implementation surface.\n- Changed behavior is backed by concrete file edits and a verification step.\n- Review can trace user-facing impact or contract impact from the diff.\n- Regression-sensitive changes mention tests or why no automated check exists.\n- The pair does not silently broaden into docs/release ownership.",
-        "- Do not rewrite unrelated docs, release notes, or planner/runtime contracts from this pair.\n- Do not claim verification without a concrete command or file-backed reason.\n- Do not defer required in-scope acceptance work into blocked items.",
-      ),
-    );
-  }
-  if (signals.evidence.includes("test surface") || signals.evidence.includes("ci workflow surface")) {
-    out.push(
-      makeSetupPairPlan(
-        "harness-verification",
-        ["harness-verification-reviewer"],
-        "Maintain regression checks, smoke coverage, and verification evidence for the repository.",
-        "This pair owns the repository's regression and smoke-verification surface. Setup mode adds it when tests or CI workflows are present so the harness has a concrete place for verification work instead of pushing that responsibility into ad hoc producer turns.",
-        "1. Read the task scope and identify the affected regression surface.\n2. Inspect current tests, workflows, or smoke scripts before editing.\n3. Add or adjust the smallest verification artifact that protects the changed behavior.\n4. Run the narrowest relevant verification command.\n5. Record gaps, flaky surfaces, or blocked coverage honestly.",
-        "- Verification changes stay grounded in real tests, workflows, or smoke scripts already present.\n- Producer output cites the command or file proving the regression surface changed.\n- Reviewer can trace risk reduction from the edited artifact.\n- Missing automation is surfaced explicitly instead of hidden behind PASS.\n- Verification ownership does not drift into general implementation work.",
-        "- Do not invent fake coverage or green statuses.\n- Do not rewrite product implementation when the real gap is missing verification evidence.\n- Do not move cycle-end summary work into this pair; finalizer owns cycle-end synthesis.",
-      ),
-    );
-  }
-  if (signals.evidence.includes("documentation surface")) {
-    out.push(
-      makeSetupPairPlan(
-        "harness-document",
-        ["harness-document-reviewer"],
-        "Maintain user-facing docs, pointer docs, and explanation surfaces in sync with the implementation.",
-        "This pair owns user-facing documentation and explanation surfaces. Setup mode adds it when the repo exposes README/docs-style material so documentation work has a concrete producer-reviewer home rather than being folded into arbitrary implementation turns.",
-        "1. Read the envelope and identify which docs surface the task actually touches.\n2. Inspect implementation evidence before rewriting prose.\n3. Update only the docs files justified by changed behavior or structure.\n4. Keep pointer docs short and direct readers to the canonical source.\n5. Report exact files changed and any remaining doc debt that stayed out of scope.",
-        "- Documentation changes are tied to current implementation evidence.\n- Pointer docs stay lightweight and do not fork a second source of truth.\n- Reviewer can cite exact files/sections for drift or coverage gaps.\n- The pair leaves unrelated implementation files alone.\n- Follow-up doc debt is separated from in-scope corrections.",
-        "- Do not paraphrase code without checking the actual file surface.\n- Do not mirror dynamic runtime state into pointer docs.\n- Do not widen a narrow doc fix into a repo-wide rewrite without evidence.",
-      ),
-    );
-  }
-  return out;
-}
-
-function renderPlannedPairSkill(plan: SetupPairPlan): string {
-  return [
-    renderSkillFrontmatter(
-      plan.pair.skill,
-      `Use when \`/harness-orchestrate\` dispatches the \`${plan.pair.pair}\` pair in this project. Shared rubric for the producer and its reviewer(s).`,
-    ),
-    "",
-    `# ${titleFromSlug(plan.pair.pair)}`,
-    "",
-    "## Design Thinking",
-    "",
-    plan.designThinking,
-    "",
-    "## Methodology",
-    "",
-    plan.methodology,
-    "",
-    "## Evaluation Criteria",
-    "",
-    plan.evaluationCriteria,
-    "",
-    "## Taboos",
-    "",
-    plan.taboos,
-    "",
-  ].join("\n");
 }
 
 function renderGenericPairSkill(pair: RegistryPair, signals: RepoSignals): string {
@@ -1213,28 +1294,6 @@ function renderGenericPairSkill(pair: RegistryPair, signals: RepoSignals): strin
   ].join("\n");
 }
 
-function renderSetupFinalizerFromSignals(signals: RepoSignals): string {
-  const template = loadTemplateSync(FINALIZER_TEMPLATE);
-  let task = "1. Emit the Output Format block below with `Status: PASS`, `Summary: no cycle-end work registered for this project`, empty `Files created` / `Files modified`, `Self-verification` citing that no cycle-end work was required, and `Blocked or out-of-scope items: []`. Do not touch any file.";
-  if (signals.evidence.length > 0) {
-    const docsStep = signals.evidence.includes("documentation surface")
-      ? "4. Refresh README, docs, or CHANGELOG only when the cycle goal or changed behavior justifies it.\n"
-      : "";
-    const verifyStep =
-      signals.evidence.includes("test surface") || signals.evidence.includes("ci workflow surface")
-        ? "3. Summarize concrete verification evidence from the cycle artifacts before deciding PASS or FAIL.\n"
-        : "3. Summarize concrete completion evidence from the cycle artifacts before deciding PASS or FAIL.\n";
-    task =
-      "1. Read the finalizer envelope, current goal, and prior task artifacts.\n" +
-      "2. Check whether the cycle left any required cycle-end outputs or follow-up notes.\n" +
-      verifyStep +
-      docsStep +
-      "5. Emit the Output Format block with concrete files touched, files intentionally left alone, and blocked out-of-scope items.\n" +
-      "6. If upstream planning or contract assumptions are broken, emit the Structural Issue block and return `Status: FAIL`.";
-  }
-  return replaceSection(template, "Task", task);
-}
-
 function addUsage(map: Map<string, string[]>, slug: string, owner: string): void {
   const current = map.get(slug) ?? [];
   current.push(owner);
@@ -1262,7 +1321,7 @@ function sharedArtifactReason(kind: "agent" | "skill", slug: string, owners: str
   const unique = uniqueOwners(owners);
   if (unique.length <= 1) return null;
   const scope = kind === "agent" ? "pair roles" : "pair entries";
-  return `${kind} slug is shared by multiple ${scope} and cannot be safely reconstructed: ${slug} (${unique.join(", ")})`;
+  return `${kind} slug is shared by multiple ${scope} and cannot be safely migrated: ${slug} (${unique.join(", ")})`;
 }
 
 function validatePairBasics(pair: RegistryPair, seen: Set<string>): string | null {
@@ -1309,106 +1368,6 @@ async function readOptional(path: string): Promise<string | null> {
   }
 }
 
-async function collectPairIntent(target: string, snapshotPath: string, pair: RegistryPair): Promise<PairIntent> {
-  const snapshotLoom = join(snapshotPath, "loom");
-  const skillPath = join(snapshotLoom, "skills", pair.skill, "SKILL.md");
-  const producerPath = join(snapshotLoom, "agents", `${pair.producer}.md`);
-  const reviewerPaths: Record<string, string | null> = {};
-  const evidenceLines: string[] = [];
-
-  const skillBody = await readOptional(skillPath);
-  const skillMarkedEvidence = skillBody ? markedEvidence(skillBody) : null;
-  if (skillMarkedEvidence && skillMarkedEvidence.length > 0) {
-    for (const reviewer of pair.reviewers) {
-      const reviewerPath = join(snapshotLoom, "agents", `${reviewer}.md`);
-      reviewerPaths[reviewer] = (await exists(reviewerPath)) ? reviewerPath : null;
-    }
-    return {
-      skillPath,
-      producerPath: (await exists(producerPath)) ? producerPath : null,
-      reviewerPaths,
-      evidenceLines: skillMarkedEvidence,
-    };
-  }
-  if (skillBody) {
-    evidenceLines.push(...evidenceFromMarkdown(skillBody, ["Design Thinking", "Methodology", "Task"], "Prior skill"));
-  } else {
-    evidenceLines.push(`Prior skill missing: ${rel(target, skillPath)}`);
-  }
-
-  const producerBody = await readOptional(producerPath);
-  if (producerBody) {
-    evidenceLines.push(...evidenceFromMarkdown(producerBody, ["Task", "Principles"], "Prior producer"));
-  } else {
-    evidenceLines.push(`Prior producer missing: ${rel(target, producerPath)}`);
-  }
-
-  for (const reviewer of pair.reviewers) {
-    const reviewerPath = join(snapshotLoom, "agents", `${reviewer}.md`);
-    reviewerPaths[reviewer] = (await exists(reviewerPath)) ? reviewerPath : null;
-    const reviewerBody = await readOptional(reviewerPath);
-    if (reviewerBody) {
-      evidenceLines.push(
-        ...evidenceFromMarkdown(reviewerBody, ["Task", "Principles"], `Prior reviewer ${reviewer}`),
-      );
-    } else {
-      evidenceLines.push(`Prior reviewer missing: ${rel(target, reviewerPath)}`);
-    }
-  }
-
-  return {
-    skillPath: skillBody ? skillPath : null,
-    producerPath: producerBody ? producerPath : null,
-    reviewerPaths,
-    evidenceLines: uniqueCapped(evidenceLines, 10),
-  };
-}
-
-function evidenceBulletBlock(lines: string[]): string {
-  const body = lines.length > 0 ? lines : ["No readable prior body evidence; preserve only registry topology."];
-  return body.map((line) => `- ${line}`).join("\n");
-}
-
-function renderPairSkill(pair: RegistryPair, intent: PairIntent, signals: RepoSignals): string {
-  const evidence = evidenceBulletBlock(intent.evidenceLines);
-  const signalLine =
-    signals.evidence.length > 0
-      ? signals.evidence.join(", ")
-      : "no strong repo surface signal beyond the preserved harness registry";
-  return renderTemplate(
-    // The current pair-dev template owns section order and frontmatter shape.
-    // Auto-setup only fills it with conservative convergence prose.
-    loadTemplateSync(PAIR_SKILL_TEMPLATE).replace("name: {{PAIR_SLUG}}", "name: {{SKILL_SLUG}}"),
-    {
-      PAIR_SLUG: pair.pair,
-      SKILL_SLUG: pair.skill,
-      PAIR_TITLE: titleFromSlug(pair.pair),
-      DESIGN_THINKING_PARAGRAPH:
-        `${titleFromSlug(pair.pair)} preserves the target's registered producer-reviewer responsibility while refreshing the body against the current harness contract. The snapshot evidence below is intent input, not restored runtime law.`,
-      METHODOLOGY_BODY:
-        `### Preserved Snapshot Intent\n\n${evidence}\n\n` +
-        `### Repo Evidence\n\n- Detected surfaces: ${signalLine}.\n\n` +
-        "### Convergence Workflow\n\n" +
-        "1. Read the orchestrator envelope and the shared `harness-context` law before touching files.\n" +
-        "2. Use the preserved snapshot intent to identify the workstream this pair owns.\n" +
-        "3. Inspect current project files instead of assuming the snapshot body is still correct.\n" +
-        "4. Keep writes inside the envelope `Scope` and report every changed path.\n" +
-        "5. Treat split, reorder, or ownership ambiguity as a structural issue for planning.",
-      EVAL_CRITERIA_BULLETS:
-        "- The producer output satisfies the envelope goal and stays inside the declared scope.\n" +
-        "- Snapshot intent is used as evidence, not as a copied contract.\n" +
-        "- Current project files and tests are cited when behavior changes.\n" +
-        "- The reviewer can verify filesystem effects and regression evidence.\n" +
-        "- Structural ambiguity is surfaced instead of hidden in a PASS.",
-      TABOO_BULLETS:
-        "- Do not restore stale snapshot files by copying them over current templates.\n" +
-        "- Do not edit `.harness/cycle/`; only the orchestrator owns runtime state.\n" +
-        "- Do not write derived provider trees; use explicit sync after convergence.\n" +
-        "- Do not broaden this pair into unrelated repository ownership.",
-    },
-  );
-}
-
 function renderProducerAgent(pair: RegistryPair): string {
   const raw = loadTemplateSync(PRODUCER_TEMPLATE).replace(
     "name: {{PAIR_SLUG}}-producer",
@@ -1450,7 +1409,7 @@ function renderReviewerAgent(pair: RegistryPair, reviewer: string): string {
       `${titleFromSlug(reviewer)} is a reviewer for the registered \`${pair.pair}\` harness pair. It grades the paired producer artifact against the shared skill, current contracts, and concrete filesystem evidence.`,
     PRINCIPLE_1: "Review by evidence. Reason: verdicts must cite concrete files, lines, diffs, or command results.",
     PRINCIPLE_2: "Preserve the pair boundary. Reason: this reviewer grades its registered workstream, not adjacent ownership.",
-    PRINCIPLE_3: "Check contract freshness. Reason: reconstructed pairs must follow current templates and harness-context law.",
+    PRINCIPLE_3: "Check contract freshness. Reason: migrated pairs must follow current templates and harness-context law.",
     PRINCIPLE_4: "Treat missing tests honestly. Reason: a PASS without regression evidence can hide broken convergence.",
     PRINCIPLE_5: "Escalate structural gaps. Reason: invalid planning or ownership cannot be repaired by reviewer optimism.",
     TASK_STEPS:
@@ -1494,31 +1453,19 @@ async function writePairArtifacts(
 
 function migratedSkillBody(pair: RegistryPair, sourceBody: string | null, signals: RepoSignals): string {
   const base = renderGenericPairSkill(pair, signals);
+  const source = sourceBody ?? base;
   const description = sourceBody ? frontmatterDescription(sourceBody) : null;
-  const title = sourceBody ? topHeading(sourceBody) : null;
+  const title = topHeading(source) ?? topHeading(base) ?? titleFromSlug(pair.pair);
+  const body = bodyAfterTopHeading(source) ?? bodyAfterTopHeading(base) ?? "";
   return [
     renderSkillFrontmatter(
       pair.skill,
       description ?? frontmatterDescription(base) ?? `Use when \`/harness-orchestrate\` dispatches the \`${pair.pair}\` pair in this project.`,
     ),
     "",
-    `# ${title ?? topHeading(base) ?? titleFromSlug(pair.pair)}`,
+    `# ${title}`,
     "",
-    "## Design Thinking",
-    "",
-    (sourceBody && section(sourceBody, "Design Thinking")) || section(base, "Design Thinking") || "",
-    "",
-    "## Methodology",
-    "",
-    (sourceBody && section(sourceBody, "Methodology")) || section(base, "Methodology") || "",
-    "",
-    "## Evaluation Criteria",
-    "",
-    (sourceBody && section(sourceBody, "Evaluation Criteria")) || section(base, "Evaluation Criteria") || "",
-    "",
-    "## Taboos",
-    "",
-    (sourceBody && section(sourceBody, "Taboos")) || section(base, "Taboos") || "",
+    body.trimEnd(),
     "",
   ].join("\n");
 }
@@ -1532,34 +1479,20 @@ function migratedAgentBody(
 ): string {
   const requiredSkills = [pair.skill, "harness-context"];
   const skills = [...requiredSkills, ...preservedExtraSkills(sourceBody ?? "", requiredSkills)];
+  const source = sourceBody ?? templateBody;
   const description =
     (sourceBody && frontmatterDescription(sourceBody)) ||
     frontmatterDescription(templateBody) ||
     `Use when \`/harness-orchestrate\` dispatches the \`${pair.pair}\` ${role} turn.`;
   const model = sourceBody ? frontmatterScalar(sourceBody, "model") : null;
-  const title = (sourceBody && topHeading(sourceBody)) || topHeading(templateBody) || titleFromSlug(slug);
-  const intro = (sourceBody && introAfterHeading(sourceBody)) || introAfterHeading(templateBody) || "";
-  const principles = (sourceBody && section(sourceBody, "Principles")) || section(templateBody, "Principles") || "";
-  const task = (sourceBody && section(sourceBody, "Task")) || section(templateBody, "Task") || "";
-  const outputFormat = section(templateBody, "Output Format") || "";
+  const title = topHeading(source) || topHeading(templateBody) || titleFromSlug(slug);
+  const outputFormat = (section(templateBody, "Output Format") || "").trim();
+  const tail = bodyAfterTopHeading(source) ?? bodyAfterTopHeading(templateBody) ?? "";
+  const body = replaceTopLevelSection([`# ${title}`, "", tail.trimEnd(), ""].join("\n"), "Output Format", outputFormat);
   return [
     renderAgentFrontmatter(slug, description, skills, model),
     "",
-    `# ${title}`,
-    "",
-    intro,
-    "",
-    "## Principles",
-    "",
-    principles.trim(),
-    "",
-    "## Task",
-    "",
-    task.trim(),
-    "",
-    "## Output Format",
-    "",
-    outputFormat.trim(),
+    body.trimEnd(),
     "",
   ].join("\n");
 }
@@ -1572,35 +1505,17 @@ function migratedFinalizerBody(sourceBody: string): string {
     "Use when the orchestrator dispatches the cycle-end finalizer turn.";
   const model = frontmatterScalar(sourceBody, "model");
   const title = topHeading(sourceBody) ?? topHeading(template) ?? "Finalizer";
-  const intro = introAfterHeading(sourceBody) ?? introAfterHeading(template) ?? "";
-  const principles = section(sourceBody, "Principles") ?? section(template, "Principles") ?? "";
-  const task = section(sourceBody, "Task") ?? section(template, "Task") ?? "";
-  const outputFormat = section(template, "Output Format") ?? "";
-  const structuralIssue = (() => {
-    const marker = "If a structural issue is detected, include this block immediately before the Output Format block:";
-    const index = template.indexOf(marker);
-    return index === -1 ? "" : template.slice(index).trim();
-  })();
+  const outputFormat = finalizerOutputFormatContract(template).trim();
+  const tail = bodyAfterTopHeading(sourceBody) ?? bodyAfterTopHeading(template) ?? "";
+  const body = replaceTopLevelSection(
+    removeTopLevelSection([`# ${title}`, "", tail.trimEnd(), ""].join("\n"), "Structural Issue"),
+    "Output Format",
+    outputFormat,
+  );
   return [
     renderAgentFrontmatter("harness-finalizer", description, ["harness-context"], model),
     "",
-    `# ${title}`,
-    "",
-    intro,
-    "",
-    "## Principles",
-    "",
-    principles.trim(),
-    "",
-    "## Task",
-    "",
-    task.trim(),
-    "",
-    "## Output Format",
-    "",
-    outputFormat.trim(),
-    "",
-    structuralIssue,
+    body.trimEnd(),
     "",
   ].join("\n");
 }
@@ -1668,7 +1583,7 @@ function runRegisterPair(target: string, pair: RegistryPair): unknown {
   if (result.stderr) process.stderr.write(result.stderr);
   if (result.status !== 0) {
     const detail = result.stderr.trim() || result.stdout.trim() || "registration failed";
-    die(`pair reconstruction failed for ${pair.pair}: ${detail}`);
+    die(`pair migration registration failed for ${pair.pair}: ${detail}`);
   }
   try {
     return JSON.parse(result.stdout);
@@ -1677,134 +1592,15 @@ function runRegisterPair(target: string, pair: RegistryPair): unknown {
   }
 }
 
-async function reconstructPairs(
-  target: string,
-  snapshotPath: string | null,
-  registry: RegistrySummary,
-  signals: RepoSignals,
-): Promise<PairReconstruction[]> {
-  if (!snapshotPath || registry.pairCount === 0) return [];
-  const out: PairReconstruction[] = [];
-  const seen = new Set<string>();
-  const basicInvalidReasons = registry.pairs.map((pair) => validatePairBasics(pair, seen));
-  const artifactUsage = collectArtifactUsage(registry.pairs.filter((_, index) => !basicInvalidReasons[index]));
-
-  for (const [index, pair] of registry.pairs.entries()) {
-    const invalidReason = basicInvalidReasons[index] ?? validatePairArtifacts(pair, artifactUsage);
-    if (invalidReason) {
-      out.push({
-        pair: pair.pair,
-        status: "skipped",
-        reason: invalidReason,
-        producer: pair.producer,
-        reviewers: pair.reviewers,
-        skill: pair.skill,
-        filesWritten: [],
-        registry: null,
-        evidenceLines: [],
-        preserved: [],
-        replaced: [],
-        manualReview: [],
-        source: null,
-        convergence: {
-          improvementPasses: 0,
-          stopReason: "invalid snapshot registry entry",
-          qualityVerdict: "manual-review",
-        },
-      });
-      continue;
-    }
-    const intent = await collectPairIntent(target, snapshotPath, pair);
-    const reviewerBodies = Object.fromEntries(
-      pair.reviewers.map((reviewer) => [reviewer, renderReviewerAgent(pair, reviewer)]),
-    );
-    const filesWritten = await writePairArtifacts(
-      target,
-      pair,
-      renderPairSkill(pair, intent, signals),
-      renderProducerAgent(pair),
-      reviewerBodies,
-    );
-
-    const registration = runRegisterPair(target, pair);
-    out.push({
-      pair: pair.pair,
-      status: "reconstructed",
-      reason: "current pair-dev templates rendered from snapshot evidence",
-      producer: pair.producer,
-      reviewers: pair.reviewers,
-      skill: pair.skill,
-      filesWritten,
-      registry: registration,
-      evidenceLines: intent.evidenceLines,
-      preserved: ["registered pair topology", "snapshot intent evidence"],
-      replaced: ["skill body", "producer agent", "reviewer agent(s)", "current output contract"],
-      manualReview: [...pair.evidence.missing],
-      source: {
-        kind: "snapshot",
-        locator: snapshotLocator(snapshotPath, pair.pair),
-      },
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "draft met setup reconstruction bar",
-        qualityVerdict: "acceptable",
-      },
-    });
-  }
-  return out;
-}
-
-async function authorSetupPairs(target: string, signals: RepoSignals): Promise<PairReconstruction[]> {
-  const plans = setupPairPlans(signals);
-  if (plans.length === 0) return [];
-  const out: PairReconstruction[] = [];
-  for (const plan of plans) {
-    const reviewerBodies = Object.fromEntries(
-      plan.pair.reviewers.map((reviewer) => [reviewer, renderReviewerAgent(plan.pair, reviewer)]),
-    );
-    const filesWritten = await writePairArtifacts(
-      target,
-      plan.pair,
-      renderPlannedPairSkill(plan),
-      renderProducerAgent(plan.pair),
-      reviewerBodies,
-    );
-    const registration = runRegisterPair(target, plan.pair);
-    out.push({
-      pair: plan.pair.pair,
-      status: "authored",
-      reason: "setup mode authored a repo-grounded starter pair",
-      producer: plan.pair.producer,
-      reviewers: plan.pair.reviewers,
-      skill: plan.pair.skill,
-      filesWritten,
-      registry: registration,
-      evidenceLines: [`Purpose: ${plan.purpose}`, ...signals.evidence.map((signal) => `Repo signal: ${signal}`)],
-      preserved: [],
-      replaced: ["new pair skill", "new producer agent", "new reviewer agent(s)"],
-      manualReview: [],
-      source: {
-        kind: "repo-signals",
-        locator: null,
-      },
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "initial authored draft met setup quality bar",
-        qualityVerdict: "acceptable",
-      },
-    });
-  }
-  return out;
-}
-
 async function migratePairs(
   target: string,
   snapshotPath: string | null,
   registry: RegistrySummary,
   signals: RepoSignals,
-): Promise<PairReconstruction[]> {
-  if (!snapshotPath || registry.pairCount === 0) return [];
-  const out: PairReconstruction[] = [];
+): Promise<PairMigrationResult> {
+  if (!snapshotPath || registry.pairCount === 0) return { operations: [], migrationPlanPairs: [] };
+  const out: PairOperation[] = [];
+  const migrationPlanPairs: MigrationPlanPair[] = [];
   const seen = new Set<string>();
   const basicInvalidReasons = registry.pairs.map((pair) => validatePairBasics(pair, seen));
   const artifactUsage = collectArtifactUsage(registry.pairs.filter((_, index) => !basicInvalidReasons[index]));
@@ -1867,19 +1663,48 @@ async function migratePairs(
       reviewerBodies,
     );
     const registration = runRegisterPair(target, pair);
+    const userSurfaces = [
+      ...h2Headings(sourceSkillBody).map((heading) => `skill:${heading}`),
+      ...h2Headings(sourceProducerBody).map((heading) => `producer:${heading}`),
+      ...sourceReviewerBodies.flatMap(([reviewer, body]) =>
+        h2Headings(body).map((heading) => `${reviewer}:${heading}`),
+      ),
+    ].filter((surface) => !surface.endsWith(":Output Format"));
     const preserved = [
-      ...(sourceSkillBody && section(sourceSkillBody, "Design Thinking") ? ["skill Design Thinking"] : []),
-      ...(sourceSkillBody && section(sourceSkillBody, "Methodology") ? ["skill Methodology"] : []),
-      ...(sourceSkillBody && section(sourceSkillBody, "Evaluation Criteria") ? ["skill Evaluation Criteria"] : []),
-      ...(sourceSkillBody && section(sourceSkillBody, "Taboos") ? ["skill Taboos"] : []),
+      ...h2Headings(sourceSkillBody).map((heading) => `skill ${heading}`),
       ...(sourceProducerBody && introAfterHeading(sourceProducerBody) ? ["producer identity paragraph"] : []),
-      ...(sourceProducerBody && section(sourceProducerBody, "Principles") ? ["producer Principles"] : []),
-      ...(sourceProducerBody && section(sourceProducerBody, "Task") ? ["producer Task"] : []),
-      ...sourceReviewerBodies.flatMap(([reviewer, body]) => (body && section(body, "Task") ? [`${reviewer} Task`] : [])),
+      ...h2Headings(sourceProducerBody)
+        .filter((heading) => heading !== "Output Format")
+        .map((heading) => `producer ${heading}`),
+      ...sourceReviewerBodies.flatMap(([reviewer, body]) =>
+        h2Headings(body)
+          .filter((heading) => heading !== "Output Format")
+          .map((heading) => `${reviewer} ${heading}`),
+      ),
     ];
     const manualReview = [...prepared.from.missingArtifacts];
     if (!sourceSkillBody) manualReview.push(`missing migration source skill for ${pair.skill}`);
     if (!sourceProducerBody) manualReview.push(`missing migration source producer for ${pair.producer}`);
+    migrationPlanPairs.push({
+      pair: pair.pair,
+      source: {
+        skillPath: prepared.from.skillPath,
+        producerPath: prepared.from.producerPath,
+        reviewerPaths: prepared.from.reviewerPaths,
+        missingArtifacts: prepared.from.missingArtifacts,
+      },
+      target: {
+        skillPath: `.harness/loom/skills/${pair.skill}/SKILL.md`,
+        producerPath: `.harness/loom/agents/${pair.producer}.md`,
+        reviewerPaths: Object.fromEntries(
+          pair.reviewers.map((reviewer) => [reviewer, `.harness/loom/agents/${reviewer}.md`]),
+        ),
+      },
+      overlayMethodology: "plugins/harness-loom/skills/harness-pair-dev/references/authoring/from-overlay.md",
+      contractSurfaces: ["frontmatter name", "frontmatter skills", "role Output Format"],
+      userSurfaces,
+      manualReviewNotes: [...new Set(manualReview)],
+    });
 
     out.push({
       pair: pair.pair,
@@ -1899,7 +1724,6 @@ async function migratePairs(
         "frontmatter name",
         "frontmatter skills",
         "current Output Format",
-        "current runtime trigger descriptions",
       ],
       manualReview: [...new Set(manualReview)],
       source: {
@@ -1916,7 +1740,7 @@ async function migratePairs(
       },
     });
   }
-  return out;
+  return { operations: out, migrationPlanPairs };
 }
 
 function finalizerEvidence(body: string, summary: FinalizerSummary): string[] {
@@ -1930,156 +1754,24 @@ function finalizerEvidence(body: string, summary: FinalizerSummary): string[] {
   return uniqueCapped(out, 10);
 }
 
-function renderFinalizerFromTemplate(template: string, evidenceLines: string[]): string {
-  const evidence = evidenceBulletBlock(evidenceLines);
-  const task =
-    "\n" +
-    "This finalizer was reconstructed by `/harness-auto-setup` from snapshot evidence. The preserved intent below is evidence, not restored contract text.\n\n" +
-    "### Preserved Intent Evidence\n\n" +
-    `${evidence}\n\n` +
-    "### Current Contract Task\n\n" +
-    "1. Read the envelope and confirm the concrete cycle-end scope.\n" +
-    "2. Use preserved intent evidence to decide which cycle-end duty applies.\n" +
-    "3. Inspect project files and cycle artifacts named by the envelope.\n" +
-    "4. Perform only writes justified by scope, current contracts, and project evidence.\n" +
-    "5. Run the smallest relevant verification for the cycle-end duty.\n" +
-    "6. Emit the Output Format block with concrete paths, verification, and any blocked or out-of-scope items.\n\n" +
-    "If the preserved intent no longer matches the current goal or project contract, emit the Structural Issue block and return `Status: FAIL`.\n";
-  return replaceSection(template, "Task", task);
-}
-
-async function reconstructFinalizer(
-  target: string,
-  snapshotPath: string | null,
-  summary: FinalizerSummary,
-): Promise<FinalizerReconstruction> {
-  const finalizerPath = join(target, ".harness", "loom", "agents", "harness-finalizer.md");
-  if (summary.status === "absent") {
-    return {
-      status: "missing",
-      reason: "no prior finalizer existed; installed default skeleton left unchanged",
-      path: rel(target, finalizerPath),
-      filesWritten: [],
-      evidenceLines: [],
-      preserved: [],
-      replaced: [],
-      manualReview: [],
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "default skeleton retained",
-        qualityVerdict: "fallback",
-      },
-    };
-  }
-  if (summary.status !== "customized") {
-    return {
-      status: summary.status === "default-noop" ? "default-noop" : "skipped",
-      reason: `${summary.status} finalizer does not require reconstruction`,
-      path: rel(target, finalizerPath),
-      filesWritten: [],
-      evidenceLines: [],
-      preserved: [],
-      replaced: [],
-      manualReview: [],
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "no customized finalizer intent to rebuild",
-        qualityVerdict: "acceptable",
-      },
-    };
-  }
-  if (!snapshotPath) {
-    return {
-      status: "skipped",
-      reason: "customized finalizer was detected but no snapshot path is available",
-      path: rel(target, finalizerPath),
-      filesWritten: [],
-      evidenceLines: [],
-      preserved: [],
-      replaced: [],
-      manualReview: ["missing snapshot path for customized finalizer"],
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "customized finalizer could not be reconstructed without snapshot",
-        qualityVerdict: "manual-review",
-      },
-    };
-  }
-  const snapshotFinalizer = join(snapshotPath, "loom", "agents", "harness-finalizer.md");
-  const body = await readOptional(snapshotFinalizer);
-  if (!body) {
-    return {
-      status: "skipped",
-      reason: "customized finalizer evidence was not readable from snapshot",
-      path: rel(target, finalizerPath),
-      filesWritten: [],
-      evidenceLines: [],
-      preserved: [],
-      replaced: [],
-      manualReview: [rel(target, snapshotFinalizer)],
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "snapshot finalizer body missing",
-        qualityVerdict: "manual-review",
-      },
-    };
-  }
-  const template = await readFile(FINALIZER_TEMPLATE, "utf8");
-  const evidenceLines = finalizerEvidence(body, summary);
-  await writeFile(finalizerPath, renderFinalizerFromTemplate(template, evidenceLines));
-  return {
-    status: "reconstructed",
-    reason: "current finalizer skeleton rendered with preserved intent evidence",
-    path: rel(target, finalizerPath),
-    filesWritten: [rel(target, finalizerPath)],
-    evidenceLines,
-    preserved: ["finalizer intent evidence"],
-    replaced: ["Task section", "Output Format", "current structural-issue contract"],
-    manualReview: [],
-    convergence: {
-      improvementPasses: 0,
-      stopReason: "setup reconstruction preserved intent evidence on the current skeleton",
-      qualityVerdict: "acceptable",
-    },
-  };
-}
-
 async function authorSetupFinalizer(
   target: string,
   signals: RepoSignals,
-): Promise<FinalizerReconstruction> {
+): Promise<FinalizerOperation> {
   const finalizerPath = join(target, ".harness", "loom", "agents", "harness-finalizer.md");
-  if (signals.evidence.length === 0) {
-    return {
-      status: "default-noop",
-      reason: "repo signals are too thin; installed default finalizer remains in place",
-      path: rel(target, finalizerPath),
-      filesWritten: [],
-      evidenceLines: [],
-      preserved: [],
-      replaced: [],
-      manualReview: [],
-      convergence: {
-        improvementPasses: 0,
-        stopReason: "no repo-grounded cycle-end duty detected",
-        qualityVerdict: "fallback",
-      },
-    };
-  }
-  await writeFile(finalizerPath, renderSetupFinalizerFromSignals(signals));
   return {
-    status: "authored",
-    reason: "setup mode authored a concrete cycle-end finalizer from repo signals",
+    status: "default-noop",
+    reason: "fresh setup keeps the installed safe no-op until a concrete project cycle-end duty is selected",
     path: rel(target, finalizerPath),
-    filesWritten: [rel(target, finalizerPath)],
+    filesWritten: [],
     evidenceLines: signals.evidence.map((signal) => `Repo signal: ${signal}`),
     preserved: [],
-    replaced: ["finalizer Task section"],
+    replaced: [],
     manualReview: [],
     convergence: {
       improvementPasses: 0,
-      stopReason: "initial authored finalizer met setup quality bar",
-      qualityVerdict: "acceptable",
+      stopReason: "repo signals are recommendation evidence, not enough proof for script-authored finalizer work",
+      qualityVerdict: "fallback",
     },
   };
 }
@@ -2088,7 +1780,7 @@ async function migrateFinalizer(
   target: string,
   snapshotPath: string | null,
   summary: FinalizerSummary,
-): Promise<FinalizerReconstruction> {
+): Promise<FinalizerOperation> {
   const finalizerPath = join(target, ".harness", "loom", "agents", "harness-finalizer.md");
   if (summary.status === "absent") {
     return {
@@ -2182,6 +1874,26 @@ async function migrateFinalizer(
   };
 }
 
+function finalizerMigrationPlan(
+  target: string,
+  snapshotPath: string | null,
+  summary: FinalizerSummary,
+): MigrationPlanFinalizer | null {
+  const targetPath = ".harness/loom/agents/harness-finalizer.md";
+  if (summary.status === "absent" || summary.status === "default-noop") return null;
+  const sourcePath = snapshotPath ? rel(target, join(snapshotPath, "loom", "agents", "harness-finalizer.md")) : null;
+  return {
+    required: summary.status === "customized",
+    source: { agentPath: sourcePath },
+    target: { agentPath: targetPath },
+    overlayMethodology: "plugins/harness-loom/skills/harness-auto-setup/references/finalizer-overlay.md",
+    contractSurfaces: ["frontmatter name", "frontmatter skills", "Output Format", "Structural Issue contract"],
+    userSurfaces: ["intro", "Principles", "Task", "compatible custom H2 sections"],
+    manualReviewNotes:
+      summary.status === "customized" ? [] : [`finalizer status is ${summary.status}; inspect snapshot before migration`],
+  };
+}
+
 async function createSnapshot(
   target: string,
   createdAt: string,
@@ -2217,7 +1929,7 @@ async function createSnapshot(
     activeCycle,
     registrySummary,
     finalizerSummary,
-    nextAction: "Foundation refresh will reseed .harness/loom and .harness/cycle; valid registered pairs and customized finalizer intent will be reconstructed after refresh, then explicit sync remains a user handoff.",
+    nextAction: "Foundation refresh will reseed .harness/loom and .harness/cycle; valid registered pairs and customized finalizer intent will be migrated after refresh, then explicit sync remains a user-run command.",
     runMode,
     targetState,
     recommendations: {
@@ -2232,7 +1944,7 @@ async function createSnapshot(
   return { created: true, path: snapshotPath, manifestPath, copiedNamespaces };
 }
 
-function runInstall(target: string): { status: number | null; stdout: string; stderr: string; summary: unknown } {
+function runInstall(target: string): InstallResult {
   const result = spawnSync(process.execPath, [INSTALL_SCRIPT], { encoding: "utf8", cwd: target });
   let summary: unknown = null;
   if (result.stdout.trim()) {
@@ -2248,6 +1960,160 @@ function runInstall(target: string): { status: number | null; stdout: string; st
     stderr: result.stderr,
     summary,
   };
+}
+
+function skippedInstall(reason: string): InstallResult {
+  return { status: null, stdout: "", stderr: "", summary: null, skipped: true, reason };
+}
+
+function skippedExistingSetupFinalizer(path: string | null): FinalizerOperation {
+  return {
+    status: "skipped",
+    reason: "setup script phase leaves existing finalizer files unchanged; author cycle-end changes only after project analysis or user clarification",
+    path,
+    filesWritten: [],
+    evidenceLines: [],
+    preserved: [],
+    replaced: [],
+    manualReview: [],
+    convergence: {
+      improvementPasses: 0,
+      stopReason: "existing setup script phase is inspection-only; assistant authoring follows when needed",
+      qualityVerdict: "acceptable",
+    },
+  };
+}
+
+function convergenceMode(runMode: RunMode, targetState: TargetState, loomExists: boolean): string {
+  if (runMode === "migration") return "protected-migration-overlay";
+  if (targetState === "fresh") return "setup-bootstrap-authoring-required";
+  if (!loomExists) return "setup-cycle-only-migration-required";
+  return "setup-inspection-authoring-required";
+}
+
+function convergenceNote(runMode: RunMode, targetState: TargetState, loomExists: boolean): string {
+  if (runMode === "migration") {
+    return "Migration mode snapshots existing harness state, refreshes foundation contracts, preserves compatible source sections, and emits an explicit migration plan.";
+  }
+  if (targetState === "fresh") {
+    return "Setup script phase installs the foundation on fresh targets; the assistant must continue with project analysis or focused user clarification before authoring concrete pair/finalizer configuration.";
+  }
+  if (!loomExists) {
+    return "Setup script phase detected .harness/cycle without .harness/loom and left cycle state untouched; run --migration to repair or refresh the foundation before pair/finalizer authoring or sync.";
+  }
+  return "Setup script phase detected an existing harness and left the foundation untouched; the assistant must continue with project analysis or focused user clarification before authoring additive pair/finalizer configuration. Use --migration for foundation refresh.";
+}
+
+function setupAuthoringSummary(
+  runMode: RunMode,
+  targetState: TargetState,
+  loomExists: boolean,
+  providers: string[],
+): unknown {
+  if (runMode !== "setup") return null;
+  if (targetState === "existing" && !loomExists) {
+    return {
+      required: false,
+      blocked: true,
+      scriptPhaseOnly: true,
+      mayAskUser: false,
+      reason: ".harness/cycle exists but .harness/loom is missing, so setup cannot safely author pairs/finalizer or offer sync.",
+      expectedNextWork: `Run ${autoSetupCommand("migration", providers)} to repair or refresh the foundation before pair/finalizer authoring or sync.`,
+      stopCondition: "Stop setup-mode authoring until the foundation has been repaired or refreshed.",
+    };
+  }
+  return {
+    required: true,
+    scriptPhaseOnly: true,
+    mayAskUser: true,
+    questionPolicy: "Ask at most three concise questions only when repo evidence cannot determine project purpose, workflow boundary, or review axes.",
+    expectedNextWork:
+      targetState === "fresh"
+        ? "Inspect the project, then author the initial registered pair roster and customize the singleton finalizer only when a concrete cycle-end duty is selected."
+        : "Inspect the project and existing roster, then author additive registered pairs or finalizer changes without refreshing existing foundation state.",
+    stopCondition: "Stop without authoring only when the project is effectively blank or the user declines to choose a workflow boundary.",
+  };
+}
+
+function nextAction(runMode: RunMode, targetState: TargetState, loomExists: boolean, command: string, providers: string[]): string {
+  if (runMode === "migration") {
+    return `From the target root, run \`${command}\` for any platform trees you want to refresh.`;
+  }
+  if (targetState === "fresh") {
+    return `Continue setup by inspecting the project, asking focused questions only if needed, and authoring the initial pair/finalizer configuration under .harness/loom; after that authoring is complete, run \`${command}\` for any platform trees you want to refresh.`;
+  }
+  if (!loomExists) {
+    return `Run \`${autoSetupCommand("migration", providers)}\` before authoring pairs/finalizer or running sync; setup left existing .harness/cycle untouched because .harness/loom is missing.`;
+  }
+  return `Continue setup by inspecting the project and existing roster, then author only additive pair/finalizer changes under .harness/loom unless the user requested improvement; after that authoring is complete, run \`${command}\` for any platform trees you want to refresh.`;
+}
+
+function pairOwnedLoomEntries(registry: RegistrySummary): { skills: Set<string>; agents: Set<string> } {
+  const skills = new Set<string>();
+  const agents = new Set<string>();
+  for (const pair of registry.pairs) {
+    skills.add(pair.skill);
+    agents.add(`${pair.producer}.md`);
+    for (const reviewer of pair.reviewers) agents.add(`${reviewer}.md`);
+  }
+  return { skills, agents };
+}
+
+async function restoreCustomLoomEntries(
+  target: string,
+  snapshotPath: string | null,
+  registry: RegistrySummary,
+): Promise<RestoredCustomEntries> {
+  const restored: RestoredCustomEntries = { skills: [], agents: [], skipped: [] };
+  if (!snapshotPath) return restored;
+  const snapshotLoom = join(snapshotPath, "loom");
+  if (!(await exists(snapshotLoom))) return restored;
+  const owned = pairOwnedLoomEntries(registry);
+
+  const skillsRoot = join(snapshotLoom, "skills");
+  if (await exists(skillsRoot)) {
+    for (const entry of await readdir(skillsRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) {
+        restored.skipped.push({
+          path: `skills/${entry.name}`,
+          reason: "custom skill entries must be directories",
+        });
+        continue;
+      }
+      if (FOUNDATION_SLUGS.has(entry.name) || owned.skills.has(entry.name)) continue;
+      const source = join(skillsRoot, entry.name);
+      const targetPath = join(target, ".harness", "loom", "skills", entry.name);
+      await cp(source, targetPath, { recursive: true, force: true });
+      restored.skills.push(entry.name);
+    }
+  }
+
+  const agentsRoot = join(snapshotLoom, "agents");
+  if (await exists(agentsRoot)) {
+    for (const entry of await readdir(agentsRoot, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md")) {
+        restored.skipped.push({
+          path: `agents/${entry.name}`,
+          reason: "custom agent entries must be markdown files",
+        });
+        continue;
+      }
+      const slug = entry.name.replace(/\.md$/, "");
+      if (FOUNDATION_SLUGS.has(slug) || owned.agents.has(entry.name)) continue;
+      const source = join(agentsRoot, entry.name);
+      const targetPath = join(target, ".harness", "loom", "agents", entry.name);
+      await cp(source, targetPath, { force: true });
+      restored.agents.push(entry.name);
+    }
+  }
+
+  restored.skills.sort();
+  restored.agents.sort();
+  restored.skipped.sort((a, b) => a.path.localeCompare(b.path));
+  for (const skipped of restored.skipped) {
+    process.stderr.write(`harness-auto-setup: warning - skipped custom loom entry ${skipped.path}: ${skipped.reason}\n`);
+  }
+  return restored;
 }
 
 async function main() {
@@ -2284,13 +2150,14 @@ async function main() {
       };
   const signals = await repoSignals(args.target);
   const recommendations = {
-    pairs: pairRecommendations(registrySummary, signals),
-    finalizer: finalizerRecommendation(finalizerSummary, signals),
+    pairs: pairRecommendations(registrySummary, signals, args.runMode, targetState, loomExists),
+    finalizer: finalizerRecommendation(finalizerSummary, signals, args.runMode, targetState, loomExists),
     sync: command,
   };
+  const refreshesFoundation = args.runMode === "migration" || targetState === "fresh";
 
   const snapshot =
-    targetState === "existing"
+    args.runMode === "migration"
       ? await createSnapshot(
           args.target,
           createdAt,
@@ -2304,7 +2171,10 @@ async function main() {
       : { created: false, path: null, manifestPath: null, copiedNamespaces: [] };
 
   const warnings: string[] = [];
-  if (activeCycle.classification === "active" || activeCycle.classification === "unknown") {
+  if (
+    refreshesFoundation &&
+    (activeCycle.classification === "active" || activeCycle.classification === "unknown")
+  ) {
     warnings.push(
       `Existing cycle classified as ${activeCycle.classification}; it was copied to ${snapshot.path} and will be discarded/reseeded by foundation refresh.`,
     );
@@ -2313,30 +2183,37 @@ async function main() {
     process.stderr.write(`harness-auto-setup: warning - ${warning}\n`);
   }
 
-  const install = runInstall(args.target);
+  const install = refreshesFoundation
+    ? runInstall(args.target)
+    : skippedInstall("setup mode leaves existing .harness foundation untouched; use --migration to refresh it");
   if (install.stderr) process.stderr.write(install.stderr);
-  if (install.status !== 0) {
+  if (!install.skipped && install.status !== 0) {
     const detail = install.stderr.trim() || install.stdout.trim() || "install failed";
     die(`foundation refresh failed: ${detail}`);
   }
 
-  let pairReconstructions: PairReconstruction[] = [];
-  let finalizerReconstruction: FinalizerReconstruction;
+  const restoredCustomEntries =
+    args.runMode === "migration"
+      ? await restoreCustomLoomEntries(args.target, snapshot.path, registrySummary)
+      : { skills: [], agents: [], skipped: [] };
+
+  let pairOperations: PairOperation[] = [];
+  let finalizerOperation: FinalizerOperation;
+  let migrationPlan: MigrationPlan | null = null;
   if (args.runMode === "migration") {
-    pairReconstructions = await migratePairs(args.target, snapshot.path, registrySummary, signals);
-    finalizerReconstruction = await migrateFinalizer(args.target, snapshot.path, finalizerSummary);
-  } else if (registrySummary.pairCount > 0) {
-    pairReconstructions = await reconstructPairs(args.target, snapshot.path, registrySummary, signals);
-    finalizerReconstruction =
-      finalizerSummary.status === "customized"
-        ? await reconstructFinalizer(args.target, snapshot.path, finalizerSummary)
-        : await authorSetupFinalizer(args.target, signals);
+    const migratedPairs = await migratePairs(args.target, snapshot.path, registrySummary, signals);
+    pairOperations = migratedPairs.operations;
+    finalizerOperation = await migrateFinalizer(args.target, snapshot.path, finalizerSummary);
+    migrationPlan = {
+      pairs: migratedPairs.migrationPlanPairs,
+      finalizer: finalizerMigrationPlan(args.target, snapshot.path, finalizerSummary),
+    };
+  } else if (targetState === "existing") {
+    pairOperations = [];
+    finalizerOperation = skippedExistingSetupFinalizer(finalizerSummary.path);
   } else {
-    pairReconstructions = await authorSetupPairs(args.target, signals);
-    finalizerReconstruction =
-      finalizerSummary.status === "customized"
-        ? await reconstructFinalizer(args.target, snapshot.path, finalizerSummary)
-        : await authorSetupFinalizer(args.target, signals);
+    pairOperations = [];
+    finalizerOperation = await authorSetupFinalizer(args.target, signals);
   }
 
   const summary = {
@@ -2352,24 +2229,27 @@ async function main() {
     finalizerSummary,
     repoSignals: signals,
     convergence: {
-      mode: args.runMode === "migration" ? "protected-migration-overlay" : "setup-author-first",
-      note:
-        args.runMode === "migration"
-          ? "Migration mode preserved user-authored pair/finalizer guidance where possible while refreshing contract-owned runtime surfaces."
-          : "Setup mode authors or reconstructs usable pair/finalizer outputs in one run, falling back to recommendations only when repo grounding is too thin.",
-      pairReconstructions,
-      finalizerReconstruction,
+      mode: convergenceMode(args.runMode, targetState, loomExists),
+      note: convergenceNote(args.runMode, targetState, loomExists),
+      pairOperations,
+      finalizerOperation,
+      restoredCustomEntries,
+      migrationPlan,
+      setupAuthoring: setupAuthoringSummary(args.runMode, targetState, loomExists, args.providers),
       pairRecommendations: recommendations.pairs,
+      pairRecommendationDetails: pairRecommendationDetails(registrySummary, signals, args.runMode, targetState, loomExists),
       finalizerRecommendation: recommendations.finalizer,
     },
     install: {
       status: install.status,
       summary: install.summary,
+      skipped: install.skipped ?? false,
+      reason: install.reason ?? null,
     },
     warnings,
     providerTreesWritten: [],
     syncCommand: command,
-    nextAction: `From the target root, run \`${command}\` for any platform trees you want to refresh.`,
+    nextAction: nextAction(args.runMode, targetState, loomExists, command, args.providers),
   };
   process.stdout.write(JSON.stringify(summary, null, 2) + "\n");
 }
