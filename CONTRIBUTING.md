@@ -24,7 +24,10 @@ To use the plugin against a scratch project:
 mkdir /tmp/scratch && cd /tmp/scratch
 claude --plugin-dir /absolute/path/to/harness-loom
 # then in Claude Code:
-/harness-init
+/harness-auto-setup --setup --provider claude
+# then in the shell at the same target root:
+node .harness/loom/sync.ts --provider claude
+# then back in Claude Code if you want to grow the harness:
 /harness-pair-dev --add harness-sample "scratch test"
 ```
 
@@ -40,6 +43,7 @@ plugins/
     assets/                         # logos referenced by plugin.json
     skills/
       harness-init/                 # /harness-init (user-invocable)
+      harness-auto-setup/           # /harness-auto-setup (user-invocable)
       harness-pair-dev/             # /harness-pair-dev (user-invocable)
       harness-init/references/runtime/   # target-side runtime templates (`*.template.md`)
 tests/                              # node:test integration suite
@@ -80,7 +84,7 @@ project it initializes, and `gemini` auto-loads that workspace-scope tree.
 1. **Fork and branch.** Follow the naming rules above (e.g. `feat/pair-hint-flag`, `fix/codex-toml-schema`).
 2. **Run the test suite.**
    ```bash
-   node --test tests/*.test.mjs
+   node --test tests/*.mjs
    ```
    The suite spins up temp directories, runs `install.ts` / `sync.ts` /
    `register-pair.ts` / `hook.sh` against them, and asserts on the

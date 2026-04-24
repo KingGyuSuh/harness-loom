@@ -4,7 +4,7 @@
 
 [English](README.md) | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [Español](docs/README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multi-platform)
 
@@ -67,7 +67,7 @@ target project
 
 Project documentation (target-root `*.md` files, `docs/`) is authored **directly in the target**, not inside `.harness/`. You then derive at least one platform tree with `node .harness/loom/sync.ts --provider claude` (and add `codex,gemini` for multi-platform), then add domain-specific pairs with `/harness-pair-dev`. The install scaffold does not create request snapshots. On direct `/harness-orchestrate <file.md>` entry, the orchestrator preserves the full request body in `.harness/cycle/user-request-snapshot.md` and keeps `state.md`'s `Goal` header as a compact summary. The orchestrator runs as a four-state DFA — `Planner | Pair | Finalizer | Halt`. When every EPIC reaches terminal and no planner continuation remains, it enters the **Finalizer state** and dispatches the singleton `harness-finalizer` agent before halting. The seeded `harness-finalizer` agent is a generic skeleton; you replace its body with the concrete cycle-end work this project needs — documentation refresh (`CLAUDE.md`, `AGENTS.md`, `docs/`), request-coverage inspection against `events.md` and the user request snapshot, release prep, audit output, etc. You do not invoke the finalizer directly; the orchestrator dispatches it as the cycle-end turn before halting.
 
-`/harness-auto-setup` is the safer entry point for first setup or refresh. On a fresh target it seeds the foundation and emits repo-grounded pair/finalizer recommendations. On an existing target it snapshots live `.harness/loom/` and `.harness/cycle/` state under `.harness/_snapshots/auto-setup/<timestamp>/`, warns when the cycle looks active or unknown, refreshes the foundation, reconstructs valid registered pairs and customized finalizer intent on current templates, and stops with an explicit sync command. It never writes `.claude/`, `.codex/`, or `.gemini/` itself.
+`/harness-auto-setup` is the safer entry point for first setup, improvement, or migration. `--setup` (the default) bootstraps a fresh target or intentionally improves an existing harness; when repo signals exist, it authors usable starter pairs/finalizer work in one run instead of stopping at recommendations. `--migration` is for minimal-delta upgrades: it snapshots live `.harness/loom/` and `.harness/cycle/`, refreshes the foundation, preserves pair/finalizer guidance where possible, and rewrites only the contract-owned runtime surface. It never writes `.claude/`, `.codex/`, or `.gemini/` itself.
 
 ## Requirements
 
@@ -83,7 +83,7 @@ Project documentation (target-root `*.md` files, `docs/`) is authored **directly
 There are two installs in practice:
 
 1. Install the **factory plugin** into Claude Code or Codex CLI.
-2. Inside each target repository, run `/harness-auto-setup` to seed or converge `.harness/`, then `node .harness/loom/sync.ts --provider <list>` to deploy the assistant-specific runtime trees you actually want to use.
+2. Inside each target repository, run `/harness-auto-setup --setup` (or `--migration` for minimal-delta upgrades of an existing harness) to seed or converge `.harness/`, then `node .harness/loom/sync.ts --provider <list>` to deploy the assistant-specific runtime trees you actually want to use.
 
 The factory ships in the standard `plugins/<name>/` monorepo layout — the repo root holds `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`, and the actual plugin tree lives under `plugins/harness-loom/`.
 
@@ -139,7 +139,7 @@ Then, inside the Codex TUI, run `/plugins`, open the `Harness Loom` marketplace 
 
 Use Claude Code or Codex CLI to install the factory, then derive `.gemini/` inside the target project:
 
-1. From Claude Code or Codex CLI, install the factory and run `/harness-auto-setup --provider gemini`, then `node .harness/loom/sync.ts --provider gemini` inside your target project. This deploys the target-side runtime (`.harness/loom/`, `.harness/cycle/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` with `AfterAgent` hook).
+1. From Claude Code or Codex CLI, install the factory and run `/harness-auto-setup --setup --provider gemini`, then `node .harness/loom/sync.ts --provider gemini` inside your target project. This deploys the target-side runtime (`.harness/loom/`, `.harness/cycle/`, `.gemini/agents/`, `.gemini/skills/`, `.gemini/settings.json` with `AfterAgent` hook).
 2. `cd` into that target project and run `gemini`. The CLI auto-loads workspace-scope `.gemini/agents/*.md`, `.gemini/skills/<slug>/SKILL.md`, and the `AfterAgent` hook from `.gemini/settings.json`.
 3. Your orchestrator cycle runs on Gemini end-to-end — factory authoring remains on Claude/Codex, execution can be any of the three.
 
@@ -147,7 +147,7 @@ Use Claude Code or Codex CLI to install the factory, then derive `.gemini/` insi
 
 Once the factory is installed in your assistant, the usual target-repo flow is:
 
-1. Seed or converge `.harness/` with `/harness-auto-setup`.
+1. Seed, improve, or migrate `.harness/` with `/harness-auto-setup --setup` or `/harness-auto-setup --migration`.
 2. Deploy at least one assistant runtime tree with `sync.ts`.
 3. Add the first producer-reviewer pairs for your repo.
 4. Optionally customize the cycle-end finalizer.
@@ -158,16 +158,24 @@ Once the factory is installed in your assistant, the usual target-repo flow is:
 Open the target repository in Claude Code or Codex CLI and run:
 
 ```text
-/harness-auto-setup --provider claude
+/harness-auto-setup --setup --provider claude
 ```
 
 Use a comma-separated provider list when you know the platform trees you will refresh:
 
 ```text
-/harness-auto-setup --provider claude,codex,gemini
+/harness-auto-setup --setup --provider claude,codex,gemini
 ```
 
-This seeds a fresh target through the foundation installer. If the target already has `.harness/loom/` or `.harness/cycle/`, it snapshots those namespaces before refresh, preserves active or unparsable cycle state in the snapshot before discard/reseed, rebuilds valid registered pair files and customized finalizer intent from current templates, and prints the exact `node .harness/loom/sync.ts --provider <list>` command to run next. The snapshot is machine provenance and convergence evidence, not a restored source of truth.
+`--setup` seeds a fresh target through the foundation installer and, when repo signals exist, authors a usable starter pair roster/finalizer instead of leaving only recommendations. If the target already has `.harness/loom/` or `.harness/cycle/`, it snapshots those namespaces before refresh, preserves active or unparsable cycle state in the snapshot before discard/reseed, rebuilds valid registered pair files and customized finalizer intent from current templates, and prints the exact `node .harness/loom/sync.ts --provider <list>` command to run next.
+
+When you want a minimal-delta upgrade of an existing harness instead of author-first improvement, run:
+
+```text
+/harness-auto-setup --migration --provider claude
+```
+
+Migration mode preserves user-authored pair/finalizer guidance where possible and refreshes contract-owned surfaces such as required frontmatter, `skills:`, Output Format blocks, and the finalizer Structural Issue contract. The snapshot remains machine provenance and migration evidence, not a restored source of truth.
 
 If you only want a foundation reset with no convergence, run:
 
@@ -177,7 +185,7 @@ If you only want a foundation reset with no convergence, run:
 
 This writes the canonical staging tree under `.harness/loom/` and the runtime state scaffold under `.harness/cycle/`. It seeds `state.md`, `events.md`, `epics/`, and `finalizer/tasks/`; it does not create goal/request snapshot placeholders, `.claude/`, `.codex/`, or `.gemini/`.
 
-If you rerun `/harness-init` later, treat it as a reset of the target-side harness scaffolding: pair-authored `.harness/loom/` content and the current `.harness/cycle/` state are reseeded rather than preserved. Use `/harness-auto-setup` for existing targets when you want snapshot-first refresh and current-contract reconstruction.
+If you rerun `/harness-init` later, treat it as a reset of the target-side harness scaffolding: pair-authored `.harness/loom/` content and the current `.harness/cycle/` state are reseeded rather than preserved. Use `/harness-auto-setup --setup` when you want author-first refresh or improvement, and `/harness-auto-setup --migration` when you want snapshot-first minimal-delta contract refresh.
 
 ### 2. Deploy The Assistant Runtime You Actually Want To Use
 
@@ -270,9 +278,9 @@ A few terms recur across commands, files, and state. Knowing these is enough to 
 | Command | Purpose |
 |---------|---------|
 | `/harness-init` | Scaffold the canonical `.harness/loom/` staging tree plus the `.harness/cycle/` runtime state into the current working directory. Writes runtime skills, the `harness-planner` agent, the generic `harness-finalizer` cycle-end skeleton, and the `hook.sh` + `sync.ts` self-contained copies under `.harness/loom/`. Seeds `state.md`, `events.md`, `epics/`, and `finalizer/tasks/`, but no goal or request snapshot placeholder. Rerunning install reseeds both namespaces. Touches no platform tree. |
-| `/harness-auto-setup [--provider <list>]` | Safely set up or refresh the current working directory's harness. Fresh targets receive the foundation plus repo-grounded pair/finalizer recommendations. Existing targets are snapshotted under `.harness/_snapshots/auto-setup/`, active or unknown cycles are warned and preserved in the snapshot before discard/reseed, registered pairs and customized finalizer intent are reconstructed on current templates, and the command stops with an explicit sync handoff. Touches no platform tree. |
+| `/harness-auto-setup [--setup \| --migration] [--provider <list>]` | Safely set up, improve, or migrate the current working directory's harness. `--setup` (default) bootstraps fresh targets and intentionally improves existing harnesses, authoring repo-grounded starter pairs/finalizer work in one run when signals exist. `--migration` performs a minimal-delta upgrade for existing harnesses: snapshot first, refresh the foundation, then preserve pair/finalizer guidance while rewriting only contract-owned runtime surfaces. Both modes stop with an explicit sync handoff and touch no platform tree. |
 | `node .harness/loom/sync.ts --provider <list>` | Deploy canonical `.harness/loom/` into platform trees (`.claude/`, `.codex/`, `.gemini/`). One-way; never writes back into `.harness/loom/`. Provider selection is explicit: a bare invocation with no provider flags is an error. Claude keeps agent `skills:` frontmatter; Codex and Gemini receive required skill-loading prompts in generated agent bodies. |
-| `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...] [--before <slug> \| --after <slug>]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is required. `--from` accepts only a currently registered pair as a template-first overlay source: current harness shape stays fixed while compatible source domain guidance is preserved. It is not a snapshot, filesystem path, or provider-tree import. Default is 1:1; repeat `--reviewer` for 1:N reviewer topology. Authoring writes only into `.harness/loom/`; re-run `node .harness/loom/sync.ts --provider <list>` afterward. |
+| `/harness-pair-dev --add <slug> "<purpose>" [--from <source>] [--reviewer <slug> ...] [--before <slug> \| --after <slug>]` | Author a new producer-reviewer pair anchored to the current codebase. `<purpose>` is required. `--from` accepts either a currently registered live pair slug or a target-local `snapshot:<ts>/<pair>` / `archive:<ts>/<pair>` locator as the template-first overlay source: current harness shape stays fixed while compatible source domain guidance is preserved. It is not an arbitrary filesystem path or provider-tree import. Default is 1:1; repeat `--reviewer` for 1:N reviewer topology. Authoring writes only into `.harness/loom/`; re-run `node .harness/loom/sync.ts --provider <list>` afterward. |
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | Improve an existing registered pair with positional `<purpose>` as the primary revision axis, then fold in rubric hygiene and current repo evidence. If a pair has become two different jobs, use explicit add/improve/remove steps. Re-run sync afterward to refresh platform trees. |
 | `/harness-pair-dev --remove <slug>` | Safely unregister a pair and delete only pair-owned `.harness/loom/` files. Removal refuses foundation/singleton targets and active-cycle references in `## Next` or live EPIC roster/current fields before mutating, preserves `.harness/cycle/` task/review history, and touches no provider tree; re-run sync afterward. |
 | `/harness-orchestrate <file.md>` | Target-side runtime entry point. Reads the request file, preserves its full body in `.harness/cycle/user-request-snapshot.md`, and runs a four-state DFA (`Planner | Pair | Finalizer | Halt`) dispatching exactly one producer per response; hook re-entry advances the cycle from `state.md` and the existing snapshot path. When every EPIC reaches terminal and planner continuation is clear, the orchestrator enters the Finalizer state and dispatches the singleton `harness-finalizer` before halting. |

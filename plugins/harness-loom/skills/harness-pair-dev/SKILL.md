@@ -1,7 +1,7 @@
 ---
 name: harness-pair-dev
 description: "Use when `/harness-pair-dev` is invoked to author, revise, position, or remove a target project's producer-reviewer pair in `.harness/loom/`."
-argument-hint: "--add <pair-slug> \"<purpose>\" [--from <existing-pair-slug>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>] | --improve <pair-slug> \"<purpose>\" [--before <pair-slug> | --after <pair-slug>] | --remove <pair-slug>"
+argument-hint: "--add <pair-slug> \"<purpose>\" [--from <source>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>] | --improve <pair-slug> \"<purpose>\" [--before <pair-slug> | --after <pair-slug>] | --remove <pair-slug>"
 user-invocable: true
 ---
 
@@ -32,7 +32,7 @@ Use `scripts/pair-dev.ts` for deterministic command validation, registered-pair 
 ### 2. Command surface
 
 ```text
-/harness-pair-dev --add <pair-slug> "<purpose>" [--from <existing-pair-slug>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>]
+/harness-pair-dev --add <pair-slug> "<purpose>" [--from <source>] [--reviewer <slug> ...] [--before <pair-slug> | --after <pair-slug>]
 /harness-pair-dev --improve <pair-slug> "<purpose>" [--before <pair-slug> | --after <pair-slug>]
 /harness-pair-dev --remove <pair-slug>
 ```
@@ -42,8 +42,11 @@ All slug-bearing arguments must be canonical before the deterministic helper or 
 ### 3. `--add`
 
 1. Parse args and stop immediately if `<purpose>` is missing or the target does not yet contain the installed runtime foundation.
-2. If `--from <existing-pair-slug>` is present, resolve it only from the target's current `.harness/loom/registry.md` `## Registered pairs`.
-3. Reject `--from` values that are snapshot paths, agent paths, skill paths, derived platform paths, missing registry entries, planner/finalizer slugs, or foundation skill names.
+2. If `--from <source>` is present, resolve it from one of:
+   - a currently registered live pair slug in `.harness/loom/registry.md`
+   - `snapshot:<ts>/<pair-slug>` under `.harness/_snapshots/auto-setup/<ts>/loom/`
+   - `archive:<ts>/<pair-slug>` under `.harness/_archive/<ts>/loom/`
+3. Reject `--from` values that are arbitrary filesystem paths, derived platform paths, missing registry entries, planner/finalizer slugs, or foundation skill names.
 4. When `--from` is present, follow `references/authoring/from-overlay.md`: start from current templates, enforce current runtime shape, then overlay compatible source-pair domain material.
 5. Let `<purpose>` override the source pair's old intent whenever the two conflict. `<purpose>` remains required even with `--from`.
 6. Decide the reviewer shape:
@@ -93,7 +96,7 @@ Treat that section as workflow order, not as a changelog.
 ## Evaluation Criteria
 
 - `--add` receives a required positional `<purpose>` and uses it as the main axis for the pair.
-- `--add --from` accepts only a currently registered pair slug and applies template-first overlay, never snapshot/path/provider import or blind copy.
+- `--add --from` accepts a current live pair slug or a target-local `snapshot:` / `archive:` locator and applies template-first overlay, never arbitrary path/provider import or blind copy.
 - `--improve` receives a required positional `<purpose>` and uses it as the main axis for revision.
 - All authored files live under `.harness/loom/`.
 - `--add` and `--improve` start from actual codebase evidence.
@@ -113,7 +116,7 @@ Treat that section as workflow order, not as a changelog.
 - Rename slugs casually during `--improve`.
 - Accept `--hint`; intent belongs in positional `<purpose>`.
 - Accept `--split`; split is a user-directed multi-command sequence, not a single pair-dev command.
-- Accept `--from` as a snapshot path, file path, derived platform path, or blind-copy import.
+- Accept `--from` as an arbitrary snapshot path, file path, derived platform path, or blind-copy import.
 - Preserve source `skills:` wholesale during `--from`; the new pair skill plus `harness-context` are mandatory template authority, while extra domain skills are preservation candidates.
 - Remove a pair referenced by the active cycle's `Next` or live EPIC roster.
 - Delete `.harness/cycle/` history during pair removal.

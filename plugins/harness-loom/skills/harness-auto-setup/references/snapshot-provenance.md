@@ -40,6 +40,8 @@ Do not copy derived platform trees by default. `.claude/`, `.codex/`, and `.gemi
 9. `finalizerSummary`
 10. `nextAction`
 
+Mode-aware runs may append additional keys such as `runMode` and `targetState` after the ten load-bearing fields above.
+
 `copiedNamespaces` must be sorted and use target-relative namespace names such as `.harness/loom` and `.harness/cycle`.
 
 `activeCycle` must record both the classification and the parse reason so a later reviewer can tell whether the refresh discarded pristine, halted, active, or unknown cycle state.

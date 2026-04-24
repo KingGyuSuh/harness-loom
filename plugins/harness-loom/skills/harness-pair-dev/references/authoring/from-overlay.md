@@ -1,21 +1,27 @@
 ---
 name: from-overlay
-description: "Use when `/harness-pair-dev --add <pair> \"<purpose>\" --from <existing-pair>` authors a new pair from a currently registered source pair. Defines template-first overlay, mandatory runtime shape, and source material preservation rules."
+description: "Use when `/harness-pair-dev --add <pair> \"<purpose>\" --from <source>` authors a new pair from a live registered source pair or a target-local snapshot/archive locator. Defines template-first overlay, mandatory runtime shape, and source material preservation rules."
 user-invocable: false
 ---
 
 # From Overlay
 
-`--from` means "start from the current pair templates, then overlay compatible source-pair knowledge." It is not a blind copy, snapshot import, filesystem import, or provider-tree import.
+`--from` means "start from the current pair templates, then overlay compatible source-pair knowledge." It is not a blind copy, arbitrary filesystem import, or provider-tree import.
 
-The source pair must already be registered in the target's current `.harness/loom/registry.md`. A current registered pair is trusted more than an auto-setup snapshot, so preserve useful domain shape aggressively, but never let source text override current harness runtime contracts.
+Supported sources are:
+
+- a live registered pair slug from the target's current `.harness/loom/registry.md`
+- `snapshot:<ts>/<pair>` from `.harness/_snapshots/auto-setup/<ts>/loom/`
+- `archive:<ts>/<pair>` from `.harness/_archive/<ts>/loom/`
+
+Live registered pairs are the strongest source because they already reflect the current target harness. Snapshot/archive sources are migration evidence: preserve useful domain shape, but never let stale text override current harness runtime contracts.
 
 ## Methodology
 
 ### 1. Template-first sequence
 
-1. Run `scripts/pair-dev.ts --add <new-pair> "<purpose>" --from <source-pair>` and confirm it returns preparation JSON.
-2. Read the source pair skill and source producer/reviewer agents from `.harness/loom/`.
+1. Run `scripts/pair-dev.ts --add <new-pair> "<purpose>" --from <source>` and confirm it returns preparation JSON.
+2. Read the source pair skill and source producer/reviewer agents from the resolved live or non-live source root.
 3. Create the new pair from the current templates:
    - `templates/pair-skill.md`
    - `templates/producer-agent.md`
@@ -83,7 +89,7 @@ Do not preserve the source `skills:` list wholesale.
 ## Taboos
 
 - Blind-copy source pair files into the new pair.
-- Treat `--from` as a snapshot path, filesystem path, or derived provider-tree import.
+- Treat `--from` as an arbitrary snapshot path, filesystem path, or derived provider-tree import.
 - Preserve an old Output Format because the source used it.
 - Preserve source `skills:` wholesale.
 - Drop all source domain guidance and produce a generic pair despite `--from`.

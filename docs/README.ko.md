@@ -4,7 +4,7 @@
 
 [English](../README.md) | [한국어](README.ko.md) | [日本語](README.ja.md) | [简体中文](README.zh-CN.md) | [Español](README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.3.0-blue.svg)](../CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.1-blue.svg)](../CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](../LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](../README.md#multi-platform)
 
@@ -12,7 +12,7 @@
 
 <br clear="left" />
 
-> **상태:** 0.3.0
+> **상태:** 0.3.1
 
 ## 현재 기준 요약
 
@@ -24,14 +24,14 @@
 
 ## 핵심 명령
 
-- `/harness-auto-setup [--provider <list>]`
-  현재 작업 디렉터리를 처음 설정하거나, 기존 하네스를 스냅샷한 뒤 현재 계약에 맞게 갱신합니다.
+- `/harness-auto-setup [--setup | --migration] [--provider <list>]`
+  현재 작업 디렉터리의 하네스를 안전하게 설정, 향상, 마이그레이션합니다. `--setup`(기본값)은 fresh target bootstrap 또는 기존 하네스의 intentional improvement 용도이고, `--migration`은 기존 하네스를 snapshot-first minimal-delta 방식으로 올리는 용도입니다.
 - `/harness-init`
   현재 작업 디렉터리에 `.harness/loom/` 과 `.harness/cycle/` 기반 foundation runtime을 설치하거나 재설정합니다.
 - `node .harness/loom/sync.ts --provider claude,codex,gemini`
   canonical staging을 원하는 플랫폼 트리로 배포합니다.
-- `/harness-pair-dev --add <slug> "<purpose>" [--from <existing-pair>] [--reviewer <slug> ...]`
-  현재 등록된 pair만 `--from` overlay source로 받아 최신 template 위에 호환되는 원본 지식을 보존해 `.harness/loom/`에 작성합니다.
+- `/harness-pair-dev --add <slug> "<purpose>" [--from <source>] [--reviewer <slug> ...]`
+  `--from` 은 현재 등록된 live pair slug 또는 target-local `snapshot:<ts>/<pair>` / `archive:<ts>/<pair>` locator 를 overlay source 로 받아, 최신 template 위에 호환되는 원본 지식을 보존해 `.harness/loom/`에 작성합니다.
 - `/harness-pair-dev --improve <slug> "<purpose>"`
   positional purpose를 기준으로 기존 등록 pair를 개선합니다.
 - `/harness-pair-dev --remove <slug>`
