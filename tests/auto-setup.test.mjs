@@ -76,46 +76,7 @@ function readAgentBodies(target, slugs) {
   return Object.fromEntries(slugs.map((slug) => [slug, readAgent(target, slug)]));
 }
 
-function assertReconstructedProducerAgent(body, { pair, skill, producer }) {
-  assert.match(body, new RegExp(`^name: ${producer}$`, "m"));
-  assert.match(body, new RegExp(`^skills:\\n  - ${skill}\\n  - harness-context$`, "m"));
-  assert.match(body, new RegExp(`registered \`${pair}\` harness pair`));
-  assert.match(body, /^## Output Format$/m);
-  assert.match(body, /End your response with this structured block:/);
-  assert.match(body, /Status: PASS \/ FAIL/);
-  assert.match(body, /Files created: \[\{file path\}\]/);
-  assert.match(body, /Files modified: \[\{file path\}\]/);
-  assert.match(body, /Diff summary: \{sections changed vs baseline, or "N\/A"\}/);
-  assert.match(body, /Self-verification: \{issues found and resolved during this cycle\}/);
-  assert.match(body, /Blocked or out-of-scope items: \[\{item, reason\}\]/);
-  assert.doesNotMatch(body, /Suggested next-work|Advisory-next|Regression gate|Escalation/);
-  assert.doesNotMatch(body, /Verdict: PASS \/ FAIL/);
-}
-
-function assertReconstructedReviewerAgent(body, { pair, skill, reviewer }) {
-  assert.match(body, new RegExp(`^name: ${reviewer}$`, "m"));
-  assert.match(
-    body,
-    new RegExp(
-      `^description: "Use when \`/harness-orchestrate\` dispatches the \`${pair}\` reviewer turn\\. Read the shared pair skill plus \`harness-context\`, grade the paired producer task, and end with the Reviewer Output Format block\\."$`,
-      "m",
-    ),
-  );
-  assert.match(body, new RegExp(`^skills:\\n  - ${skill}\\n  - harness-context$`, "m"));
-  assert.match(body, new RegExp(`registered \`${pair}\` harness pair`));
-  assert.match(body, /Check contract freshness\. Reason: reconstructed pairs must follow current templates and harness-context law\./);
-  assert.match(body, /Verify the producer used current contracts rather than stale snapshot copies\./);
-  assert.match(body, /^## Output Format$/m);
-  assert.match(body, /End your response with this structured block:/);
-  assert.match(body, /Verdict: PASS \/ FAIL/);
-  assert.match(body, /Criteria: \[\{criterion, result, evidence-citation \(file:line\)\}\]/);
-  assert.match(body, /FAIL items: \[\{item, level \(technical\/creative\/structural\), reason\}\]/);
-  assert.match(body, /Feedback: \{short free-form rationale\}/);
-  assert.doesNotMatch(body, /Suggested next-work|Advisory-next|Regression gate|Escalation/);
-  assert.doesNotMatch(body, /Status: PASS \/ FAIL/);
-}
-
-test("auto-setup fresh target installs foundation and prints explicit sync handoff", () => {
+test("auto-setup fresh target installs foundation and prints explicit sync command", () => {
   const target = makeTempDir();
   try {
     writeFileSync(join(target, "README.md"), "# Demo\n");
@@ -129,21 +90,57 @@ test("auto-setup fresh target installs foundation and prints explicit sync hando
     assert.equal(summary.install.summary.verification.ok, true);
     assert.equal(summary.syncCommand, "node .harness/loom/sync.ts --provider codex");
     assert.deepEqual(summary.providerTreesWritten, []);
-    assert.equal(summary.convergence.pairReconstructions.length, 1);
-    assert.equal(summary.convergence.pairReconstructions[0].status, "authored");
-    assert.equal(summary.convergence.pairReconstructions[0].pair, "harness-document");
-    assert.equal(summary.convergence.finalizerReconstruction.status, "authored");
+    assert.equal(summary.convergence.pairOperations.length, 0);
+    assert.equal(summary.convergence.finalizerOperation.status, "default-noop");
+    assert.equal(summary.convergence.setupAuthoring.required, true);
+    assert.equal(summary.convergence.setupAuthoring.scriptPhaseOnly, true);
+    assert.match(summary.convergence.setupAuthoring.expectedNextWork, /author the initial registered pair roster/);
+    assert.equal(summary.convergence.pairRecommendationDetails[0].pair, null);
+    assert.match(summary.convergence.pairRecommendations[0], /LLM project analysis/);
+    assert.match(summary.convergence.note, /authoring concrete pair\/finalizer configuration/);
+    assert.match(summary.nextAction, /Continue setup by inspecting the project/);
+    assert.match(summary.nextAction, /after that authoring is complete/);
+    assert.match(summary.nextAction, /node \.harness\/loom\/sync\.ts --provider codex/);
     assert.ok(existsSync(join(target, ".harness/loom/sync.ts")));
     assert.ok(existsSync(join(target, ".harness/cycle/state.md")));
-    assert.ok(existsSync(join(target, ".harness/loom/agents/harness-document-producer.md")));
-    assert.match(
-      readFileSync(join(target, ".harness/loom/registry.md"), "utf8"),
-      /^- harness-document:/m,
-    );
+    assert.equal(existsSync(join(target, ".harness/loom/agents/harness-document-producer.md")), false);
+    assert.doesNotMatch(readFileSync(join(target, ".harness/loom/registry.md"), "utf8"), /^- harness-document:/m);
     assert.match(
       readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8"),
-      /Refresh README, docs, or CHANGELOG/,
+      /no cycle-end work registered for this project/,
     );
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup requires LLM analysis before fresh pair authoring", () => {
+  const target = makeTempDir();
+  try {
+    writeFileSync(join(target, "README.md"), "# Harness Loom Like\n");
+    mkdirSync(join(target, "plugins/harness-loom/skills/harness-init/scripts"), { recursive: true });
+    mkdirSync(join(target, "plugins/harness-loom/skills/harness-auto-setup"), { recursive: true });
+    mkdirSync(join(target, "plugins/harness-loom/skills/harness-pair-dev/scripts"), { recursive: true });
+    writeFileSync(join(target, "plugins/harness-loom/skills/harness-init/SKILL.md"), "# init\n");
+    writeFileSync(join(target, "plugins/harness-loom/skills/harness-auto-setup/SKILL.md"), "# setup\n");
+    writeFileSync(join(target, "plugins/harness-loom/skills/harness-pair-dev/SKILL.md"), "# pair\n");
+    writeFileSync(join(target, "plugins/harness-loom/skills/harness-init/scripts/sync.ts"), "// sync\n");
+    writeFileSync(join(target, "plugins/harness-loom/skills/harness-pair-dev/scripts/pair-dev.ts"), "// pair\n");
+
+    const { summary } = runAutoSetup(target, ["--setup"]);
+
+    assert.equal(summary.convergence.pairOperations.length, 0);
+    assert.equal(summary.convergence.pairRecommendationDetails.length, 1);
+    assert.match(summary.convergence.setupAuthoring.questionPolicy, /at most three concise questions/);
+    assert.equal(summary.convergence.pairRecommendationDetails[0].pair, null);
+    assert.equal(summary.convergence.pairRecommendationDetails[0].command, null);
+    assert.match(summary.convergence.pairRecommendationDetails[0].rationale, /LLM project analysis/);
+    assert.match(summary.convergence.pairRecommendationDetails[0].rationale, /authoring pair axes/);
+    assert.ok(summary.convergence.pairRecommendationDetails[0].evidence.includes("README.md"));
+    assert.doesNotMatch(summary.convergence.pairRecommendations.join("\n"), /harness-document/);
+    assert.doesNotMatch(summary.convergence.pairRecommendations.join("\n"), /harness-verification/);
+    assert.doesNotMatch(summary.convergence.pairRecommendations.join("\n"), /harness-runtime-contract/);
     assertNoProviderTrees(target);
   } finally {
     cleanupDir(target);
@@ -162,7 +159,7 @@ test("auto-setup rejects unknown flags before writing harness state", () => {
   }
 });
 
-test("auto-setup preserves pre-existing provider trees and only prints sync handoff", () => {
+test("auto-setup on an existing target leaves the foundation and provider trees untouched", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -179,6 +176,8 @@ test("auto-setup preserves pre-existing provider trees and only prints sync hand
     writeFileSync(join(target, ".gemini/skills/harness-stale/SKILL.md"), "STALE GEMINI SKILL\n");
 
     const before = new Map([
+      [".harness/loom", snapshotTree(join(target, ".harness/loom"))],
+      [".harness/cycle", snapshotTree(join(target, ".harness/cycle"))],
       [".claude", snapshotTree(join(target, ".claude"))],
       [".codex", snapshotTree(join(target, ".codex"))],
       [".gemini", snapshotTree(join(target, ".gemini"))],
@@ -188,15 +187,26 @@ test("auto-setup preserves pre-existing provider trees and only prints sync hand
 
     assert.equal(summary.mode, "setup");
     assert.equal(summary.targetState, "existing");
+    assert.equal(summary.snapshot.created, false);
+    assert.equal(summary.install.skipped, true);
+    assert.equal(summary.convergence.mode, "setup-inspection-authoring-required");
+    assert.match(summary.convergence.note, /left the foundation untouched/);
+    assert.equal(summary.convergence.pairOperations.length, 0);
+    assert.equal(summary.convergence.finalizerOperation.status, "skipped");
+    assert.equal(summary.convergence.setupAuthoring.required, true);
+    assert.match(summary.convergence.setupAuthoring.expectedNextWork, /author additive registered pairs/);
+    assert.match(summary.convergence.pairRecommendations[0], /script phase leaves the foundation unchanged/);
+    assert.match(summary.convergence.pairRecommendations[0], /author the needed pair\/finalizer configuration/);
     assert.equal(summary.syncCommand, "node .harness/loom/sync.ts --provider claude,gemini");
-    assert.equal(
-      summary.nextAction,
-      "From the target root, run `node .harness/loom/sync.ts --provider claude,gemini` for any platform trees you want to refresh.",
-    );
+    assert.match(summary.nextAction, /Continue setup by inspecting the project and existing roster/);
+    assert.match(summary.nextAction, /author only additive pair\/finalizer changes/);
+    assert.match(summary.nextAction, /after that authoring is complete/);
+    assert.match(summary.nextAction, /node \.harness\/loom\/sync\.ts --provider claude,gemini/);
     assert.deepEqual(summary.providerTreesWritten, []);
-    for (const platformDir of [".claude", ".codex", ".gemini"]) {
+    for (const platformDir of [".harness/loom", ".harness/cycle", ".claude", ".codex", ".gemini"]) {
       assertTreeUnchanged(before.get(platformDir), join(target, platformDir));
     }
+    assert.ok(!existsSync(join(target, ".harness/_snapshots")));
     assert.ok(!existsSync(join(target, ".claude/agents/harness-planner.md")));
     assert.ok(!existsSync(join(target, ".codex/hooks.json")));
     assert.ok(!existsSync(join(target, ".gemini/agents/harness-planner.md")));
@@ -205,7 +215,72 @@ test("auto-setup preserves pre-existing provider trees and only prints sync hand
   }
 });
 
-test("auto-setup reconstructs registered pair files and registry after refresh", () => {
+test("auto-setup setup mode directs cycle-only targets to migration before sync", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    rmSync(join(target, ".harness/loom"), { recursive: true, force: true });
+
+    const { summary } = runAutoSetup(target, ["--setup", "--provider", "codex"]);
+
+    assert.equal(summary.mode, "setup");
+    assert.equal(summary.targetState, "existing");
+    assert.equal(summary.snapshot.created, false);
+    assert.equal(summary.install.skipped, true);
+    assert.equal(summary.convergence.mode, "setup-cycle-only-migration-required");
+    assert.match(summary.convergence.note, /\.harness\/cycle without \.harness\/loom/);
+    assert.equal(summary.convergence.setupAuthoring.required, false);
+    assert.equal(summary.convergence.setupAuthoring.blocked, true);
+    assert.match(summary.convergence.setupAuthoring.expectedNextWork, /\/harness-auto-setup --migration --provider codex/);
+    assert.match(summary.convergence.pairRecommendations[0], /without \.harness\/loom/);
+    assert.match(summary.convergence.finalizerRecommendation, /No \.harness\/loom foundation is present/);
+    assert.match(summary.nextAction, /\/harness-auto-setup --migration --provider codex/);
+    assert.doesNotMatch(summary.nextAction, /node \.harness\/loom\/sync\.ts/);
+    assert.equal(existsSync(join(target, ".harness/loom")), false);
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup restores non-pair custom loom skills and agents after reseed", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    mkdirSync(join(target, ".harness/loom/skills/my-playbook"), { recursive: true });
+    writeFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "# Demo Pair Skill\n");
+    writeFileSync(join(target, ".harness/loom/skills/my-playbook/SKILL.md"), "# Custom Playbook\n");
+    writeFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "# Demo Producer\n");
+    writeFileSync(join(target, ".harness/loom/agents/harness-demo-reviewer.md"), "# Demo Reviewer\n");
+    writeFileSync(join(target, ".harness/loom/agents/my-helper.md"), "# Custom Helper\n");
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    const { summary } = runAutoSetup(target, ["--migration"]);
+
+    assert.deepEqual(summary.convergence.restoredCustomEntries.skills, ["my-playbook"]);
+    assert.deepEqual(summary.convergence.restoredCustomEntries.agents, ["my-helper.md"]);
+    assert.deepEqual(summary.convergence.restoredCustomEntries.skipped, []);
+    assert.match(readFileSync(join(target, ".harness/loom/skills/my-playbook/SKILL.md"), "utf8"), /Custom Playbook/);
+    assert.match(readFileSync(join(target, ".harness/loom/agents/my-helper.md"), "utf8"), /Custom Helper/);
+    assert.equal(summary.convergence.pairOperations[0].pair, "harness-demo");
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
+test("auto-setup setup mode preserves registered pairs before additive authoring", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -222,9 +297,13 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
       "",
       "Own custom demo release packaging.",
       "",
-      "## Methodology",
+      "## Approach",
       "",
       "Keep custom build scripts and fixture snapshots aligned.",
+      "",
+      "## Rollout Plan",
+      "",
+      "Preserve fixture promotion steps.",
       "",
       "## Evaluation Criteria",
       "",
@@ -261,44 +340,26 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
       ].join("\n"),
     );
 
+    const loomBefore = snapshotTree(join(target, ".harness/loom"));
+    const cycleBefore = snapshotTree(join(target, ".harness/cycle"));
     const { summary } = runAutoSetup(target, ["--setup"]);
-    const manifest = readJson(summary.snapshot.manifestPath);
 
     assert.equal(summary.mode, "setup");
     assert.equal(summary.targetState, "existing");
-    assert.equal(summary.snapshot.created, true);
-    assert.deepEqual(summary.snapshot.copiedNamespaces, [".harness/cycle", ".harness/loom"]);
-    assertManifestShape(manifest);
-    assert.equal(manifest.registrySummary.pairCount, 1);
-    assert.equal(manifest.registrySummary.pairs[0].pair, "harness-demo");
-    assert.equal(manifest.activeCycle.classification, "pristine");
-    assert.ok(existsSync(join(summary.snapshot.path, "loom/skills/harness-demo/SKILL.md")));
-    assert.ok(existsSync(join(summary.snapshot.path, "cycle/state.md")));
+    assert.equal(summary.snapshot.created, false);
+    assert.equal(summary.install.skipped, true);
+    assert.equal(summary.convergence.mode, "setup-inspection-authoring-required");
+    assert.equal(summary.convergence.pairOperations.length, 0);
+    assert.equal(summary.convergence.finalizerOperation.status, "skipped");
+    assert.match(summary.convergence.setupAuthoring.stopCondition, /Stop without authoring only/);
+    assert.match(summary.convergence.pairRecommendationDetails[0].rationale, /script phase leaves them unchanged/);
+    assert.match(summary.convergence.pairRecommendationDetails[0].rationale, /author only additive pair\/finalizer changes/);
+    assert.match(summary.convergence.pairRecommendationDetails[0].rationale, /Use --migration/);
+    assertTreeUnchanged(loomBefore, join(target, ".harness/loom"));
+    assertTreeUnchanged(cycleBefore, join(target, ".harness/cycle"));
 
-    assert.equal(summary.convergence.pairReconstructions[0].status, "reconstructed");
-    assert.deepEqual(summary.convergence.pairReconstructions[0].reviewers, [
-      "harness-demo-reviewer",
-      "harness-demo-security-reviewer",
-    ]);
     const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
-    assert.notEqual(currentSkill, oldSkill);
-    assert.match(currentSkill, /name: harness-demo/);
-    assert.match(currentSkill, /### Preserved Snapshot Intent/);
-    assert.match(currentSkill, /custom build scripts/);
-    assert.match(currentSkill, /Current project files and tests are cited/);
-
-    assertReconstructedProducerAgent(readAgent(target, "harness-demo-producer"), {
-      pair: "harness-demo",
-      skill: "harness-demo",
-      producer: "harness-demo-producer",
-    });
-    for (const reviewer of ["harness-demo-reviewer", "harness-demo-security-reviewer"]) {
-      assertReconstructedReviewerAgent(readAgent(target, reviewer), {
-        pair: "harness-demo",
-        skill: "harness-demo",
-        reviewer,
-      });
-    }
+    assert.equal(currentSkill, oldSkill);
 
     const registry = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
     assert.match(
@@ -306,6 +367,7 @@ test("auto-setup reconstructs registered pair files and registry after refresh",
       /- harness-demo: producer `harness-demo-producer` ↔ reviewers \[`harness-demo-reviewer`, `harness-demo-security-reviewer`\], skill `harness-demo`/,
     );
     assert.equal(registry.match(/^- harness-demo:/gm).length, 1);
+    assert.ok(!existsSync(join(target, ".harness/_snapshots")));
     assertNoProviderTrees(target);
   } finally {
     cleanupDir(target);
@@ -329,9 +391,13 @@ test("auto-setup migration preserves custom pair and finalizer bodies while refr
       "",
       "Own custom demo release packaging.",
       "",
-      "## Methodology",
+      "## Approach",
       "",
       "Keep custom build scripts and fixture snapshots aligned.",
+      "",
+      "## Rollout Plan",
+      "",
+      "Preserve fixture promotion steps.",
       "",
       "## Evaluation Criteria",
       "",
@@ -368,6 +434,15 @@ test("auto-setup migration preserves custom pair and finalizer bodies while refr
         "",
         "1. Maintain custom build scripts.",
         "",
+        "## Rollout Plan",
+        "",
+        "Keep demo release packaging sequenced.",
+        "",
+        "```markdown",
+        "## Output Format",
+        "fenced producer example should survive",
+        "```",
+        "",
         "## Output Format",
         "",
         "Status: PASS / FAIL",
@@ -398,6 +473,10 @@ test("auto-setup migration preserves custom pair and finalizer bodies while refr
         "",
         "1. Audit fixture snapshots.",
         "",
+        "## Review Notes",
+        "",
+        "Escalate packaging drift.",
+        "",
       ].join("\n"),
     );
     writeFileSync(
@@ -421,6 +500,20 @@ test("auto-setup migration preserves custom pair and finalizer bodies while refr
         "",
         "1. Refresh docs/ and CHANGELOG.md after verified release work.",
         "",
+        "## Output Format",
+        "",
+        "Status: PASS / FAIL",
+        "Summary: stale finalizer block",
+        "",
+        "```markdown",
+        "## Structural Issue",
+        "- legacy fenced example",
+        "```",
+        "",
+        "## Release Checklist",
+        "",
+        "Keep release notes and docs aligned.",
+        "",
       ].join("\n"),
     );
     writeFileSync(
@@ -439,29 +532,52 @@ test("auto-setup migration preserves custom pair and finalizer bodies while refr
 
     assert.equal(summary.mode, "migration");
     assert.equal(summary.targetState, "existing");
-    assert.equal(summary.convergence.pairReconstructions[0].status, "migrated");
-    assert.equal(summary.convergence.pairReconstructions[0].source.kind, "snapshot");
-    assert.match(summary.convergence.pairReconstructions[0].replaced.join("\n"), /frontmatter skills/);
+    assert.equal(summary.convergence.pairOperations[0].status, "migrated");
+    assert.equal(summary.convergence.setupAuthoring, null);
+    assert.equal(summary.convergence.pairOperations[0].source.kind, "snapshot");
+    assert.match(summary.convergence.pairOperations[0].replaced.join("\n"), /frontmatter skills/);
+    assert.doesNotMatch(
+      summary.convergence.pairOperations[0].replaced.join("\n"),
+      /current runtime trigger descriptions/,
+    );
+    assert.equal(summary.convergence.migrationPlan.pairs[0].pair, "harness-demo");
+    assert.match(summary.convergence.migrationPlan.pairs[0].overlayMethodology, /from-overlay\.md/);
+    assert.ok(summary.convergence.migrationPlan.pairs[0].userSurfaces.includes("skill:Approach"));
+    assert.ok(summary.convergence.migrationPlan.pairs[0].userSurfaces.includes("skill:Rollout Plan"));
+    assert.match(summary.convergence.migrationPlan.finalizer.overlayMethodology, /finalizer-overlay\.md/);
     const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
     assert.match(currentSkill, /Own custom demo release packaging/);
+    assert.match(currentSkill, /## Approach/);
     assert.match(currentSkill, /Keep custom build scripts and fixture snapshots aligned/);
+    assert.match(currentSkill, /## Rollout Plan/);
+    assert.match(currentSkill, /Preserve fixture promotion steps/);
     assert.doesNotMatch(currentSkill, /### Preserved Snapshot Intent/);
 
     const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
     assert.match(currentProducer, /Producer identity that should survive migration/);
     assert.match(currentProducer, /1\. Maintain custom build scripts\./);
+    assert.match(currentProducer, /## Rollout Plan/);
+    assert.match(currentProducer, /Keep demo release packaging sequenced/);
+    assert.match(currentProducer, /fenced producer example should survive/);
     assert.match(currentProducer, /^skills:\n  - harness-demo\n  - harness-context\n  - demo-domain$/m);
     assert.match(currentProducer, /^Status: PASS \/ FAIL$/m);
+    assert.doesNotMatch(currentProducer, /Summary: legacy block/);
 
     const currentReviewer = readFileSync(join(target, ".harness/loom/agents/harness-demo-reviewer.md"), "utf8");
     assert.match(currentReviewer, /Reviewer identity that should survive migration/);
     assert.match(currentReviewer, /1\. Audit fixture snapshots\./);
+    assert.match(currentReviewer, /## Review Notes/);
+    assert.match(currentReviewer, /Escalate packaging drift/);
     assert.match(currentReviewer, /^Verdict: PASS \/ FAIL$/m);
 
-    assert.equal(summary.convergence.finalizerReconstruction.status, "migrated");
+    assert.equal(summary.convergence.finalizerOperation.status, "migrated");
     const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
     assert.match(currentFinalizer, /Finalizer intro that should survive migration/);
     assert.match(currentFinalizer, /Refresh docs\/ and CHANGELOG\.md after verified release work/);
+    assert.match(currentFinalizer, /## Release Checklist/);
+    assert.match(currentFinalizer, /Keep release notes and docs aligned/);
+    assert.doesNotMatch(currentFinalizer, /Summary: stale finalizer block/);
+    assert.doesNotMatch(currentFinalizer, /legacy fenced example/);
     assert.match(currentFinalizer, /^Status: PASS \/ FAIL$/m);
     assert.match(currentFinalizer, /## Structural Issue/);
     assertNoProviderTrees(target);
@@ -1110,7 +1226,7 @@ test("auto-setup migration rejects a fresh target", () => {
   }
 });
 
-test("auto-setup skips registry pairs that reuse foundation slugs before reconstruction writes", () => {
+test("auto-setup skips registry pairs that reuse foundation slugs before migration writes", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -1128,12 +1244,12 @@ test("auto-setup skips registry pairs that reuse foundation slugs before reconst
       ].join("\n"),
     );
 
-    const { summary } = runAutoSetup(target);
+    const { summary } = runAutoSetup(target, ["--migration"]);
 
-    assert.equal(summary.convergence.pairReconstructions.length, 1);
-    assert.equal(summary.convergence.pairReconstructions[0].status, "skipped");
+    assert.equal(summary.convergence.pairOperations.length, 1);
+    assert.equal(summary.convergence.pairOperations[0].status, "skipped");
     assert.match(
-      summary.convergence.pairReconstructions[0].reason,
+      summary.convergence.pairOperations[0].reason,
       /producer slug is reserved for a foundation or singleton role: harness-planner/,
     );
     assert.equal(
@@ -1153,7 +1269,7 @@ test("auto-setup skips registry pairs that reuse foundation slugs before reconst
   }
 });
 
-test("auto-setup skips registry pairs with shared or colliding reconstruction artifacts", () => {
+test("auto-setup skips registry pairs with shared or colliding migration artifacts", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -1171,12 +1287,12 @@ test("auto-setup skips registry pairs with shared or colliding reconstruction ar
       ].join("\n"),
     );
 
-    const { summary } = runAutoSetup(target);
+    const { summary } = runAutoSetup(target, ["--migration"]);
     const byPair = Object.fromEntries(
-      summary.convergence.pairReconstructions.map((reconstruction) => [reconstruction.pair, reconstruction]),
+      summary.convergence.pairOperations.map((operation) => [operation.pair, operation]),
     );
 
-    assert.equal(summary.convergence.pairReconstructions.length, 3);
+    assert.equal(summary.convergence.pairOperations.length, 3);
     assert.equal(byPair["harness-alpha"].status, "skipped");
     assert.equal(byPair["harness-beta"].status, "skipped");
     assert.equal(byPair["harness-collision"].status, "skipped");
@@ -1199,67 +1315,54 @@ test("auto-setup skips registry pairs with shared or colliding reconstruction ar
   }
 });
 
-test("auto-setup reconstructs customized finalizer on current skeleton", () => {
+test("auto-setup setup mode leaves customized finalizer unchanged", () => {
   const target = makeTempDir();
   try {
     installTo(target);
+    const customFinalizer = [
+      "---",
+      "name: harness-finalizer",
+      "skills:",
+      "  - harness-context",
+      "---",
+      "",
+      "# Finalizer",
+      "",
+      "## Task",
+      "",
+      "1. Refresh docs/ and CHANGELOG.md after verified release work.",
+      "",
+      "## Output Format",
+      "",
+      "Status: PASS / FAIL",
+      "Summary: release docs refreshed",
+      "Self-verification: docs and changelog checked",
+      "",
+    ].join("\n");
     writeFileSync(
       join(target, ".harness/loom/agents/harness-finalizer.md"),
-      [
-        "---",
-        "name: harness-finalizer",
-        "skills:",
-        "  - harness-context",
-        "---",
-        "",
-        "# Finalizer",
-        "",
-        "## Task",
-        "",
-        "1. Refresh docs/ and CHANGELOG.md after verified release work.",
-        "",
-        "## Output Format",
-        "",
-        "Status: PASS / FAIL",
-        "Summary: release docs refreshed",
-        "Self-verification: docs and changelog checked",
-        "",
-      ].join("\n"),
+      customFinalizer,
     );
 
-    const { summary } = runAutoSetup(target);
-    const manifest = readJson(summary.snapshot.manifestPath);
+    const { summary } = runAutoSetup(target, ["--setup"]);
 
     assert.equal(summary.finalizerSummary.status, "customized");
     assert.equal(summary.finalizerSummary.customized, true);
     assert.ok(summary.finalizerSummary.signals.includes("docs"));
-    assert.equal(manifest.finalizerSummary.status, "customized");
-    assert.match(manifest.finalizerSummary.recommendation, /snapshot finalizer as intent evidence/);
-    assert.match(readFileSync(join(summary.snapshot.path, "loom/agents/harness-finalizer.md"), "utf8"), /CHANGELOG/);
-
-    assert.equal(summary.convergence.finalizerReconstruction.status, "reconstructed");
+    assert.equal(summary.snapshot.created, false);
+    assert.equal(summary.install.skipped, true);
+    assert.equal(summary.convergence.finalizerOperation.status, "skipped");
+    assert.match(summary.convergence.finalizerRecommendation, /left unchanged/);
     const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
-    assert.match(currentFinalizer, /The finalizer is a \*\*singleton cycle-end role\*\*/);
-    assert.match(currentFinalizer, /### Preserved Intent Evidence/);
-    assert.match(currentFinalizer, /CHANGELOG/);
-    assert.match(currentFinalizer, /Files left alone \(intentionally\)/);
-    assert.match(currentFinalizer, /Status: PASS \/ FAIL/);
-    assert.match(currentFinalizer, /Self-verification:/);
-    assert.match(currentFinalizer, /Blocked or out-of-scope items: \[\{item, reason\}\]/);
-    assert.match(currentFinalizer, /## Structural Issue/);
-    assert.match(currentFinalizer, /Suspected upstream stage:\s*planner/i);
-    assert.doesNotMatch(currentFinalizer, /^(Suggested next-work|Advisory-next|Regression gate|Escalation):/m);
-    assert.doesNotMatch(currentFinalizer, /^Verdict: PASS \/ FAIL$/m);
-    assert.doesNotMatch(currentFinalizer, /^Criteria:/m);
-    assert.doesNotMatch(currentFinalizer, /^FAIL items:/m);
-    assert.doesNotMatch(currentFinalizer, /Summary: release docs refreshed/);
+    assert.equal(currentFinalizer, customFinalizer);
+    assert.ok(!existsSync(join(target, ".harness/_snapshots")));
     assertNoProviderTrees(target);
   } finally {
     cleanupDir(target);
   }
 });
 
-test("auto-setup rerun allocates a new snapshot and keeps reconstructed pair idempotent", () => {
+test("auto-setup migration rerun allocates a new snapshot and keeps migrated pair idempotent", () => {
   const target = makeTempDir();
   try {
     installTo(target);
@@ -1301,7 +1404,7 @@ test("auto-setup rerun allocates a new snapshot and keeps reconstructed pair ide
       ].join("\n"),
     );
 
-    const first = runAutoSetup(target).summary;
+    const first = runAutoSetup(target, ["--migration"]).summary;
     const skillAfterFirst = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
     const agentBodiesAfterFirst = readAgentBodies(target, [
       "harness-demo-producer",
@@ -1309,7 +1412,7 @@ test("auto-setup rerun allocates a new snapshot and keeps reconstructed pair ide
     ]);
     const registryAfterFirst = readFileSync(join(target, ".harness/loom/registry.md"), "utf8");
 
-    const second = runAutoSetup(target).summary;
+    const second = runAutoSetup(target, ["--migration"]).summary;
     const skillAfterSecond = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
     const agentBodiesAfterSecond = readAgentBodies(target, [
       "harness-demo-producer",
@@ -1322,16 +1425,20 @@ test("auto-setup rerun allocates a new snapshot and keeps reconstructed pair ide
     assert.ok(existsSync(second.snapshot.path));
     assert.equal(skillAfterSecond, skillAfterFirst);
     assert.deepEqual(agentBodiesAfterSecond, agentBodiesAfterFirst);
-    assertReconstructedProducerAgent(agentBodiesAfterSecond["harness-demo-producer"], {
-      pair: "harness-demo",
-      skill: "harness-demo",
-      producer: "harness-demo-producer",
-    });
-    assertReconstructedReviewerAgent(agentBodiesAfterSecond["harness-demo-reviewer"], {
-      pair: "harness-demo",
-      skill: "harness-demo",
-      reviewer: "harness-demo-reviewer",
-    });
+    assert.match(
+      agentBodiesAfterSecond["harness-demo-producer"],
+      /^skills:\n  - harness-demo\n  - harness-context$/m,
+    );
+    assert.match(agentBodiesAfterSecond["harness-demo-producer"], /1\. Produce demo workflow changes\./);
+    assert.match(agentBodiesAfterSecond["harness-demo-producer"], /^## Output Format$/m);
+    assert.match(agentBodiesAfterSecond["harness-demo-producer"], /Status: PASS \/ FAIL/);
+    assert.match(
+      agentBodiesAfterSecond["harness-demo-reviewer"],
+      /^skills:\n  - harness-demo\n  - harness-context$/m,
+    );
+    assert.match(agentBodiesAfterSecond["harness-demo-reviewer"], /1\. Review demo workflow changes\./);
+    assert.match(agentBodiesAfterSecond["harness-demo-reviewer"], /^## Output Format$/m);
+    assert.match(agentBodiesAfterSecond["harness-demo-reviewer"], /Verdict: PASS \/ FAIL/);
     assert.equal(registryAfterSecond, registryAfterFirst);
     assert.equal(registryAfterSecond.match(/^- harness-demo:/gm).length, 1);
     assertNoProviderTrees(target);
@@ -1348,7 +1455,7 @@ test("auto-setup warns and snapshots active cycle before discard and reseed", ()
     const activeState = readFileSync(statePath, "utf8").replace("loop: false", "loop: true");
     writeFileSync(statePath, `<!-- active-cycle-sentinel -->\n${activeState}`);
 
-    const { result, summary } = runAutoSetup(target);
+    const { result, summary } = runAutoSetup(target, ["--migration"]);
     const manifest = readJson(summary.snapshot.manifestPath);
 
     assert.match(result.stderr, /warning .*Existing cycle classified as active/);
@@ -1375,7 +1482,7 @@ test("auto-setup warns and preserves unknown cycle before discard and reseed", (
     writeFileSync(join(cycleDir, "unknown-cycle-sentinel.txt"), "preserve me\n");
     rmSync(statePath);
 
-    const { result, summary } = runAutoSetup(target);
+    const { result, summary } = runAutoSetup(target, ["--migration"]);
     const manifest = readJson(summary.snapshot.manifestPath);
 
     assert.match(result.stderr, /warning .*Existing cycle classified as unknown/);
