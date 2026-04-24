@@ -20,7 +20,7 @@ Live registered pairs are the strongest source because they already reflect the 
 
 ### 1. Template-first sequence
 
-1. Run `scripts/pair-dev.ts --add <new-pair> "<purpose>" --from <source>` and confirm it returns preparation JSON.
+1. Run `./scripts/pair-dev.ts --add <new-pair> "<purpose>" --from <source>` (resolved from the harness-pair-dev skill directory) and confirm it returns preparation JSON.
 2. Read the source pair skill and source producer/reviewer agents from the resolved live or non-live source root.
 3. Create the new pair from the current templates:
    - `templates/pair-skill.md`
@@ -28,7 +28,7 @@ Live registered pairs are the strongest source because they already reflect the 
    - `templates/reviewer-agent.md`
 4. Fill every mandatory runtime field for the new pair first.
 5. Overlay source-pair material only after the new template shape is valid.
-6. Register the new pair with `register-pair.ts`.
+6. Register the new pair with `./scripts/register-pair.ts`.
 7. Tell the user to run `node .harness/loom/sync.ts --provider <list>`.
 
 ### 2. Mandatory new shape
