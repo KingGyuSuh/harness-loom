@@ -586,6 +586,132 @@ test("auto-setup migration preserves custom pair and finalizer bodies while refr
   }
 });
 
+test("auto-setup migration preserves source sections when top heading follows a preamble", () => {
+  const target = makeTempDir();
+  try {
+    installTo(target);
+    mkdirSync(join(target, ".harness/loom/skills/harness-demo"), { recursive: true });
+    writeFileSync(
+      join(target, ".harness/loom/skills/harness-demo/SKILL.md"),
+      [
+        "---",
+        "name: harness-demo",
+        'description: "Use when maintaining custom demo build scripts."',
+        "user-invocable: false",
+        "---",
+        "",
+        "<!-- generated skill preamble -->",
+        "# Preamble Demo",
+        "",
+        "## Approach",
+        "",
+        "Skill section after preamble must survive migration.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-producer.md"),
+      [
+        "---",
+        "name: harness-demo-producer",
+        'description: "Use when maintaining custom demo producer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "<!-- generated producer preamble -->",
+        "# Preamble Producer",
+        "",
+        "Producer intro after preamble must survive migration.",
+        "",
+        "## Task",
+        "",
+        "1. Preserve producer section after preamble.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-demo-reviewer.md"),
+      [
+        "---",
+        "name: harness-demo-reviewer",
+        'description: "Use when auditing demo reviewer work."',
+        "skills:",
+        "  - harness-demo",
+        "  - harness-context",
+        "---",
+        "",
+        "<!-- generated reviewer preamble -->",
+        "# Preamble Reviewer",
+        "",
+        "Reviewer intro after preamble must survive migration.",
+        "",
+        "## Task",
+        "",
+        "1. Preserve reviewer section after preamble.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/agents/harness-finalizer.md"),
+      [
+        "---",
+        "name: harness-finalizer",
+        "skills:",
+        "  - harness-context",
+        "---",
+        "",
+        "<!-- generated finalizer preamble -->",
+        "# Preamble Finalizer",
+        "",
+        "Finalizer intro after preamble must survive migration.",
+        "",
+        "## Task",
+        "",
+        "1. Preserve finalizer section after preamble.",
+        "",
+      ].join("\n"),
+    );
+    writeFileSync(
+      join(target, ".harness/loom/registry.md"),
+      [
+        "# Registry",
+        "",
+        "## Registered pairs",
+        "",
+        "- harness-demo: producer `harness-demo-producer` ↔ reviewer `harness-demo-reviewer`, skill `harness-demo`",
+        "",
+      ].join("\n"),
+    );
+
+    const { summary } = runAutoSetup(target, ["--migration"]);
+
+    assert.ok(summary.convergence.pairOperations[0].preserved.includes("producer identity paragraph"));
+    assert.ok(summary.convergence.finalizerOperation.preserved.includes("finalizer intro"));
+    const currentSkill = readFileSync(join(target, ".harness/loom/skills/harness-demo/SKILL.md"), "utf8");
+    assert.match(currentSkill, /Skill section after preamble must survive migration/);
+
+    const currentProducer = readFileSync(join(target, ".harness/loom/agents/harness-demo-producer.md"), "utf8");
+    assert.match(currentProducer, /Producer intro after preamble must survive migration/);
+    assert.match(currentProducer, /1\. Preserve producer section after preamble\./);
+    assert.match(currentProducer, /^Status: PASS \/ FAIL$/m);
+
+    const currentReviewer = readFileSync(join(target, ".harness/loom/agents/harness-demo-reviewer.md"), "utf8");
+    assert.match(currentReviewer, /Reviewer intro after preamble must survive migration/);
+    assert.match(currentReviewer, /1\. Preserve reviewer section after preamble\./);
+    assert.match(currentReviewer, /^Verdict: PASS \/ FAIL$/m);
+
+    const currentFinalizer = readFileSync(join(target, ".harness/loom/agents/harness-finalizer.md"), "utf8");
+    assert.match(currentFinalizer, /Finalizer intro after preamble must survive migration/);
+    assert.match(currentFinalizer, /1\. Preserve finalizer section after preamble\./);
+    assert.match(currentFinalizer, /^Status: PASS \/ FAIL$/m);
+    assertNoProviderTrees(target);
+  } finally {
+    cleanupDir(target);
+  }
+});
+
 test("auto-setup migration handles source agents and finalizer without intro paragraphs", () => {
   const target = makeTempDir();
   try {

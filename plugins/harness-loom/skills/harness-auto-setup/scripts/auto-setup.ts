@@ -647,16 +647,22 @@ function bodyWithoutFrontmatter(body: string): string {
   return normalized.replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 }
 
-function topHeading(body: string): string | null {
+function topHeadingParts(body: string): { title: string; tail: string } | null {
   const content = bodyWithoutFrontmatter(body);
-  const match = content.match(/^#\s+([^\n]+)$/m);
-  return match ? match[1].trim() : null;
+  const match = /^#\s+([^\n]+)(?:\n|$)/m.exec(content);
+  if (!match) return null;
+  return {
+    title: match[1].trim(),
+    tail: content.slice(match.index + match[0].length).trimStart(),
+  };
+}
+
+function topHeading(body: string): string | null {
+  return topHeadingParts(body)?.title ?? null;
 }
 
 function bodyAfterTopHeading(body: string): string | null {
-  const content = bodyWithoutFrontmatter(body);
-  const match = content.match(/^#\s+[^\n]+\n([\s\S]*)$/);
-  return match ? match[1].trimStart() : null;
+  return topHeadingParts(body)?.tail ?? null;
 }
 
 function h2Headings(body: string | null): string[] {
@@ -685,10 +691,8 @@ function finalizerOutputFormatContract(template: string): string {
 }
 
 function introAfterHeading(body: string): string | null {
-  const content = bodyWithoutFrontmatter(body);
-  const match = content.match(/^#\s+[^\n]+\n([\s\S]*)$/);
-  if (!match) return null;
-  const tail = match[1].trimStart();
+  const tail = bodyAfterTopHeading(body);
+  if (tail === null) return null;
   const nextSection = tail.search(/(^|\n)## /);
   const intro = (nextSection === -1 ? tail : tail.slice(0, nextSection)).trim();
   return intro || null;
