@@ -18,7 +18,7 @@ Canonical shape for the file produced by `/harness-goal-interview`. The file is 
 ## Constraints
 
 - <hard requirement, compatibility rule, performance/latency/cost budget, deadline, compliance rule, platform or dependency that must be honored>
-- <keep one item per line; omit the section only when there are genuinely no user-supplied constraints>
+- <one item per line; the section stays even when empty — record `- none surfaced during the interview` rather than dropping the heading, since the contract requires all five sections in canonical order>
 
 ## Out of scope
 
