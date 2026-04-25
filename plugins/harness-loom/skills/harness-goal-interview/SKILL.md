@@ -107,11 +107,13 @@ When a file already exists at the target path, show a diff-style summary and req
 
 ### 6. Write and hand off
 
-Write the final body to the chosen path and stop. End the turn with the exact next command the user should run:
+Write the final body to the chosen path and stop. End the turn with the exact next command the user should run, substituting the path you actually wrote:
 
 ```bash
-/harness-orchestrate ./goal-notification-center.md
+/harness-orchestrate ./<the-file-you-just-wrote>.md
 ```
+
+For example, after writing `./goal-notification-center.md`, the line reads `/harness-orchestrate ./goal-notification-center.md`. Do not echo that example filename when the file you wrote was named something else.
 
 Do not invoke `/harness-orchestrate` automatically. The harness cycle is a separate decision point — the user may want to review the file, `git add` it, or have a teammate look at it first.
 
