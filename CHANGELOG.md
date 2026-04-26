@@ -6,6 +6,48 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.5] — 2026-04-27
+
+### Changed
+
+- **README onboarding rework** (#42). Restructured root README and the
+  four locale READMEs (ko/ja/zh-CN/es) so a new user reaches an
+  actionable install step inside the first screen instead of scrolling
+  through ~80 lines of motivation prose. New `What It Does`
+  (2-paragraph orientation), `Quick Start` (install + setup + sync in
+  four commands), and `How It Works` (Mermaid flowchart of factory ↔
+  target data flow) lead the document. The standalone ASCII
+  `Factory And Runtime` section was removed; the new Mermaid diagram
+  carries the same information. Codex install commands updated from
+  `codex marketplace add ...` to the current `codex plugin marketplace
+  add ...` syntax. NOTICE link restored in the canonical
+  `Project Documents` list. First install action moved from line 81 →
+  line 21 in the root README.
+- **`/harness-goal-interview` no longer narrows user-stated scope**
+  (#43, PR #44). Encoded *cycle scope is the user's intent, not an
+  interview filter* into the skill rubric. Cascade size and file count
+  are now explicitly identified as *planner* concerns rather than
+  interview filters; multi-surface goals that share one motivation
+  (e.g. an API endpoint plus a DB migration plus a UI screen for the
+  same feature) stay together in the goal file by default. New taboo:
+  *splitting a user-stated multi-surface goal across cycles on cost or
+  cascade grounds alone*. Axis 4 (Boundaries) and Axis 5 (User-side
+  technical decisions) updated so probing aims at *genuine* non-goals
+  (surfaces sharing no motivation, explicit user deferral, or hard
+  external constraints), and `scope depth` is no longer a default
+  surface in axis 5.
+
+### Maintenance
+
+- **Stale milestone cleanup**: closed v0.2.0, v0.2.1, v0.2.2, v0.3.0,
+  v0.3.1, v0.3.2 (each had only closed issues but lingered open).
+  Opened v0.3.6 milestone for follow-up audit candidates (CLI safety
+  hardening, factory event vocabulary, dispatch envelope intent signal,
+  finalizer output standardization).
+- **Issue housekeeping**: closed #41 ("operational vs audit log
+  responsibility split") as not-planned after evidence review showed
+  the source observations were stale.
+
 ## [0.3.4] — 2026-04-26
 
 ### Fixed
@@ -751,7 +793,8 @@ First public release.
 - **Repo scaffolding** — README, CONTRIBUTING, SECURITY,
   CODE_OF_CONDUCT, PRIVACY, TERMS, and `.github/` issue + PR templates.
 
-[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/KingGyuSuh/harness-loom/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.5
 [0.3.2]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.2
 [0.3.1]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.1
 [0.3.0]: https://github.com/KingGyuSuh/harness-loom/releases/tag/v0.3.0
