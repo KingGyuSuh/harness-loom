@@ -28,18 +28,24 @@
 //   placed in those directories (`team-reviewer.md`, custom skills) are
 //   preserved verbatim.
 //
-// Platform contract (verified against official specs):
-//   - Codex subagents pin `model = "gpt-5.4"`, `model_reasoning_effort = "xhigh"`.
+// Platform contract (verified against official specs, last bumped 2026-04-26):
+//   - Codex subagents pin `model = "gpt-5.5"`, `model_reasoning_effort = "xhigh"`.
+//     gpt-5.5 is OpenAI's newest GA frontier model (introduced 2026-04-23) and
+//     the recommended starting point per developers.openai.com/codex/models;
+//     xhigh keeps the reasoning ceiling we already rely on for harness pairs.
 //     Agent body goes in `developer_instructions = """..."""` — NOT `prompt`.
 //     Required skill bodies are loaded through explicit `$skill-name` mentions
 //     prepended to developer_instructions; sync does not emit `[[skills.config]]`.
-//     Source: developers.openai.com/codex/subagents
+//     Source: developers.openai.com/codex/subagents, developers.openai.com/codex/models
 //   - Claude agents pin `model: inherit`. Skills are loaded by directory.
-//   - Gemini agents pin `model: gemini-3.1-pro-preview`. Frontmatter is
+//   - Gemini agents pin `model: gemini-3.1-pro-preview`. As of 2026-04-26 no
+//     GA Gemini 3 line exists — every Gemini 3 variant ships as preview, and
+//     gemini-cli ≥ v0.31.0 enables 3.1 Pro Preview by default (the predecessor
+//     `gemini-3-pro-preview` was shut down 2026-03-26). Frontmatter is
 //     `.strict()` and rejects unknown keys (including `skills`). Skills are
 //     mirrored globally under `.gemini/skills/`; required skill names are
 //     prepended to the agent body so the runtime can activate them explicitly.
-//     Source: github.com/google-gemini/gemini-cli (packages/core/src/agents/agentLoader.ts)
+//     Source: github.com/google-gemini/gemini-cli (packages/core/src/agents/agentLoader.ts), ai.google.dev/gemini-api/docs/models
 //   - Each platform's hook setting wires to `bash .harness/loom/hook.sh
 //     <platform>` (Stop for claude/codex, AfterAgent for gemini).
 //
@@ -72,7 +78,7 @@ interface PlatformPin {
 
 const PIN: Record<Platform, PlatformPin> = {
   claude: { model: "inherit" },
-  codex: { model: "gpt-5.4", reasoning: "xhigh" },
+  codex: { model: "gpt-5.5", reasoning: "xhigh" },
   gemini: { model: "gemini-3.1-pro-preview" },
 };
 

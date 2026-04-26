@@ -6,6 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.4] — 2026-04-26
+
+### Fixed
+
+- **`harness-goal-interview` SKILL.md description shortened to 987
+  characters** (#37). Codex CLI rejected the previous 1033-character
+  description with `exceeds maximum length of 1024 character`, blocking
+  install of the skill. The five trigger semantics (explicit invoke,
+  new feature/initiative requirements articulation, `write down what we're
+  trying to do` example, vague/plan-shaped goal recovery, proactive use
+  before any `/harness-orchestrate` handoff) are preserved.
+
+### Changed
+
+- **Codex platform pin bumped `gpt-5.4` → `gpt-5.5`** in
+  `plugins/harness-loom/skills/harness-init/scripts/sync.ts` and the
+  `README.md` Multi-platform table (#36). gpt-5.5 is OpenAI's newest GA
+  frontier model (introduced 2026-04-23) and the documented starting
+  point for Codex tasks. `model_reasoning_effort` stays at `xhigh`. The
+  Gemini pin remains `gemini-3.1-pro-preview`: as of 2026-04-26 no GA
+  Gemini 3 line exists, gemini-cli ≥ v0.31.0 enables 3.1 Pro Preview by
+  default, and the predecessor `gemini-3-pro-preview` was shut down on
+  2026-03-26 — sync.ts now records this provenance and the verification
+  source URLs in its platform-contract comment block.
+- **Localized READMEs (`docs/README.{ko,ja,zh-CN,es}.md`) replaced with
+  full translations of the canonical English README** (#36). Previously
+  each locale shipped a 48-line abridged variant capped at version
+  badge `0.3.2`; they now mirror all 13 sections of `README.md` (Why
+  This Shape / What Gets Installed / Requirements / Install The Factory
+  / Start A Target Project / What You Usually Customize / Concepts /
+  Commands / Factory And Runtime / Multi-platform / When To Use It /
+  Contributing / Project Documents) at version `0.3.4`. Code blocks,
+  command names, file paths, and frontmatter keys remain identical to
+  the English source; the prior abridgement disclaimer is reduced to a
+  single "English README is authoritative" note.
+
 ## [0.3.2] — 2026-04-24
 
 ### Changed
