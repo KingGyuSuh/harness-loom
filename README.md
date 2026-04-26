@@ -342,3 +342,4 @@ Issues, bug fixes, and rubric refinements are welcome. See [CONTRIBUTING.md](./C
 - [SECURITY.md](./SECURITY.md) - responsible disclosure
 - [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md) - community expectations
 - [LICENSE](./LICENSE) - Apache 2.0
+- [NOTICE](./NOTICE) - attribution notice required by Apache 2.0
