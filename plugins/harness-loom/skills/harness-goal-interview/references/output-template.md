@@ -55,6 +55,8 @@ Hard rules the cycle must honor. These often come from outside engineering: comp
 
 The most under-specified section in practice. Probe actively during the interview: "what are we explicitly *not* doing?" Record deferred work, adjacent features the user considered, and areas the planner might otherwise wander into. If the user genuinely declines to name non-goals, say so in one line rather than leaving the section empty.
 
+Probe for *genuine* non-goals — surfaces the user has explicitly excluded — not for shaving the user's stated scope down to something that "feels smaller". Cycle breadth that the user has named is the goal, not a non-goal candidate. Do not push items into this section on cascade-size or file-count grounds alone; that is a planner cost concern, not an interview filter. Legitimate non-goal triggers are: surfaces sharing no motivation with the rest of the goal, explicit user deferral, or hard external constraints (deadline, freeze, capacity).
+
 ### Completion criteria
 
 Observable signals only. Prefer:

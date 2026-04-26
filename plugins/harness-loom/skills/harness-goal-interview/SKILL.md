@@ -23,6 +23,8 @@ The interview elicits exactly the two things the planner cannot supply on its ow
 
 Everything else — file layout, function names, library picks that follow from repo evidence, task ordering, EPIC shape, review axes — belongs to planner and producer turns. Leaving those decisions to the harness is a feature of the design, not a gap in the goal file.
 
+**Cycle scope is the user's intent, not an interview filter.** When the user names a goal that spans several surfaces (a new API endpoint plus a DB migration plus a UI screen for the same feature, for example), the interview's job is to capture that breadth precisely, not to negotiate it down. Cascade size, file count, and "this feels like a lot" are *planner* concerns — the planner is the right surface to decompose breadth into EPICs, and how much fits in one cycle is the planner's call once the goal is anchored. Splitting those surfaces across cycles on cost grounds — i.e. asking the user to drop some surfaces and run them as a follow-up cycle later — collapses each cycle into something a single producer-reviewer pair could already handle, which is the failure mode the harness is designed to avoid. Multi-surface goals that share one motivation are the harness's strong suit, not a smell.
+
 Files always land at the **target project root** so the user can run `/harness-orchestrate ./<file>.md` directly. The skill does not touch `.harness/loom/` or `.harness/cycle/`; those are orchestrator territory.
 
 ## Methodology
@@ -166,7 +168,8 @@ No file paths, no library picks, no React/backend choice spelled out — the pla
 - **Writing the file under `.harness/loom/`, `.harness/cycle/`, `.claude/`, `.codex/`, `.gemini/`, or outside the target project root.** Those trees belong to the orchestrator or provider derivation, not to request-anchor authoring.
 - **Invoking `/harness-orchestrate`, `node .harness/loom/sync.ts`, or editing the pair registry.** The handoff is the user's move.
 - **Silently overwriting an existing goal file.** A revision is a conversation, not a file operation.
-- **Packing multiple unrelated goals into a single file.** The orchestrator anchors one cycle to one request; mixing goals pollutes EPIC decomposition downstream.
+- **Packing multiple *unrelated* goals into a single file.** The orchestrator anchors one cycle to one request; mixing goals that share no motivation pollutes EPIC decomposition downstream. *Multi-surface* goals that share one motivation (e.g., the API endpoint, the DB migration, and the UI screen for the same feature) are not "unrelated" — keep them together unless the user explicitly asks to split.
+- **Splitting a user-stated multi-surface goal across cycles on cost or cascade grounds alone.** Cycle scope reflects the user's intent; cascade size is a planner concern, not an interview filter. Push back toward narrowing only when the surfaces are genuinely unrelated, when the user explicitly signals a smaller goal, or when a hard external constraint forces it (deadline, freeze, capacity). "This feels like a lot" is not a constraint.
 
 ## References
 
