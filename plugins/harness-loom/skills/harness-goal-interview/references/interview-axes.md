@@ -57,6 +57,8 @@ Starter prompts (non-goals):
 
 Non-goals are almost always under-supplied. Probe at least twice before moving on. If the user declines to name any, record that decision explicitly rather than leaving the section empty.
 
+**Probe for genuine non-goals, not for narrowing the user's stated scope.** A non-goal is something the user has *deliberately excluded* (out of frame, out of timing, out of authority). It is not "everything that would make the cycle feel smaller." If the user names a multi-surface goal, the breadth itself is not a non-goal — the planner decomposes breadth into EPICs. Push back on scope only when (a) the surfaces share no motivation, (b) the user explicitly signals a smaller goal, or (c) a hard external constraint forces narrowing (deadline, freeze, capacity). "This feels like a lot" is a planner cost concern, not an interview filter; treat it as evidence the planner will need a strong decomposition, not as a reason to drop surfaces from the goal file.
+
 ## 5. User-side technical decisions
 
 **Goal:** resolve choices only the user can make, before the planner has to guess.
@@ -70,7 +72,7 @@ Typical surfaces:
 - **build vs. integrate** (write it ourselves vs. adopt an existing tool or service)
 - **sync vs. async**, **push vs. pull**, **server-side vs. client-side** when both are viable
 - **strict vs. permissive** (reject edge cases vs. tolerate them)
-- **scope depth** (MVP slice vs. full coverage in one cycle)
+- **scope depth** — *only when* an external constraint genuinely forces a slice (deadline, capacity, dependency on a still-unresolved upstream). Cycle breadth itself is the user's intent, not a trade-off — when the user has named a wider scope, do not present "MVP slice vs. full coverage" as a surface. The planner is responsible for decomposing breadth into EPICs.
 - **coupling** (shared module vs. duplicated per-consumer)
 
 Frame each surface as a short choice with named options and one-line trade-offs. Do **not** invent decision surfaces to look thorough. If no genuine user-side axis exists, skip this entirely.
