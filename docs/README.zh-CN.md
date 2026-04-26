@@ -22,7 +22,7 @@
 
 ## 快速开始
 
-把工厂安装到 Claude Code (或 Codex / Gemini —— 完整选项见 [安装工厂](#安装工厂)):
+把工厂安装到 Claude Code。Codex 与 Gemini 也是类似流程 —— 见 [安装工厂](#安装工厂)。
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
@@ -151,13 +151,13 @@ claude --plugin-dir ./plugins/harness-loom
 
 ```bash
 # 本地检出
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # 公共 git 仓库
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # 如需固定 tag
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 然后在 Codex TUI 内运行 `/plugins`,打开 `Harness Loom` marketplace 条目并安装该插件。

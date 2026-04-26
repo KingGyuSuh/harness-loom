@@ -22,7 +22,7 @@ Esto es ajuste fino del harness, no del modelo —codifica los estándares de re
 
 ## Inicio rápido
 
-Instala la fábrica en Claude Code (o Codex / Gemini —ver [Instalar la fábrica](#instalar-la-fábrica) para todas las opciones):
+Instala la fábrica en Claude Code. Codex y Gemini siguen flujos similares —ver [Instalar la fábrica](#instalar-la-fábrica).
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
@@ -151,13 +151,13 @@ Añade la fuente de marketplace —el argumento apunta a la raíz del repo (que 
 
 ```bash
 # checkout local
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # repo git público
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # fija un tag si es necesario
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 Después, dentro del TUI de Codex, ejecuta `/plugins`, abre la entrada de marketplace `Harness Loom` e instala el plugin.

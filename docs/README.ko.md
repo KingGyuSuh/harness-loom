@@ -22,7 +22,7 @@
 
 ## 빠른 시작
 
-팩토리를 Claude Code (또는 Codex / Gemini — 전체 옵션은 [팩토리 설치](#팩토리-설치) 참고) 에 설치합니다:
+팩토리를 Claude Code 에 설치합니다. Codex 와 Gemini 도 비슷한 흐름 — [팩토리 설치](#팩토리-설치) 참고.
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
@@ -151,13 +151,13 @@ claude --plugin-dir ./plugins/harness-loom
 
 ```bash
 # 로컬 체크아웃
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # 공개 git 리포
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # 필요하면 태그 핀
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 그런 다음 Codex TUI 안에서 `/plugins` 를 실행하고 `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.

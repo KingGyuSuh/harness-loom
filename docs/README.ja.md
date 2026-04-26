@@ -22,7 +22,7 @@
 
 ## クイックスタート
 
-ファクトリーを Claude Code (または Codex / Gemini —— 全オプションは [ファクトリーのインストール](#ファクトリーのインストール) を参照) にインストールします:
+ファクトリーを Claude Code にインストールします。Codex と Gemini も同様のフロー —— [ファクトリーのインストール](#ファクトリーのインストール) を参照してください。
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
@@ -151,13 +151,13 @@ claude --plugin-dir ./plugins/harness-loom
 
 ```bash
 # ローカルチェックアウト
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # 公開 git リポ
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # 必要に応じてタグにピン
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 その後、Codex TUI の中で `/plugins` を実行し、`Harness Loom` マーケットプレースエントリーを開いてプラグインをインストールします。

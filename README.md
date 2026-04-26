@@ -20,7 +20,7 @@ This is harness fine-tuning, not model fine-tuning — you encode your repo's re
 
 ## Quick Start
 
-Install the factory into Claude Code (or Codex / Gemini — see [Install The Factory](#install-the-factory) for full options):
+Install the factory into Claude Code. Codex and Gemini have similar flows — see [Install The Factory](#install-the-factory) for those.
 
 ```text
 /plugin marketplace add KingGyuSuh/harness-loom
@@ -149,13 +149,13 @@ Add the marketplace source — the argument points at the repo root (which conta
 
 ```bash
 # local checkout
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # public git repo
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # pin a tag if needed
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 Then, inside the Codex TUI, run `/plugins`, open the `Harness Loom` marketplace entry, and install the plugin.
