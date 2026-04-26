@@ -42,6 +42,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the English source; the prior abridgement disclaimer is reduced to a
   single "English README is authoritative" note.
 
+## [0.3.3] — 2026-04-25
+
+### Added
+
+- **`/harness-goal-interview` factory skill** (#33, PR #34). New
+  user-invocable skill that runs a full interview with the user and
+  writes a harness-ready goal markdown (Why / Goal / Constraints /
+  Out of scope / Completion criteria) at the target project root. The
+  output file is the direct input to `/harness-orchestrate <file.md>`.
+  The interview is scoped to requirements precision and user-side
+  technical decisions only — implementation detail stays with the
+  planner and producer-reviewer pairs. Ships
+  `references/output-template.md` and `references/interview-axes.md`
+  alongside the SKILL body.
+
+### Changed
+
+- Marketplace and plugin metadata bumped to `0.3.3` across
+  `.claude-plugin/marketplace.json`,
+  `plugins/harness-loom/.claude-plugin/plugin.json`, and
+  `plugins/harness-loom/.codex-plugin/plugin.json`.
+
 ## [0.3.2] — 2026-04-24
 
 ### Changed
