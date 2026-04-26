@@ -14,22 +14,58 @@
 
 > 表現に齟齬がある場合、正本は [英語版 README](../README.md) です。
 
-`harness-loom` はターゲットリポジトリにランタイムハーネスをインストールし、プロジェクト固有の producer-reviewer pair をペアごとに育てていくファクトリープラグインです。
+## 何をするか
 
-最近のアシスタント製品はもはや「モデル + プロンプト」だけではありません。planner、hook、subagent、skill、ツールルーティング、制御フローを束ねた汎用ハーネスを同梱しており、作業がどう計画され、委譲され、レビューされ、再開されるかを決めます。そのレイヤーには価値がありますが、あなたのプロダクションシステム —— どのレビューが重要か、どの成果物を永続化すべきか、作業がどう分解されるか、権限境界がどこにあるか —— までは知りません。
+`harness-loom` はターゲットリポジトリにランタイムハーネスをインストールし、プロジェクト固有の producer-reviewer pair をペアごとに育てていくファクトリープラグインです。ファクトリーはユーザーが呼び出すスラッシュコマンドを 4 つ (`/harness-init`、`/harness-auto-setup`、`/harness-pair-dev`、`/harness-goal-interview`) と `sync.ts` スクリプトを出荷します。インストールされると、ターゲットには planner、orchestrator、`.harness/` 配下の共有コントロールプレーン、そして時間とともに追加していくプロジェクト固有の producer-reviewer pair の場所が揃います。
 
-選んだモデルスタックがすでにプロダクション品質の作業を生み出すだけの能力を持っているなら、レバレッジの主軸はモデル選定から **ハーネスエンジニアリング** へと移ります —— つまり、リポジトリのレビュー基準、タスク形状、完了の定義を、毎セッションでプロンプトし直す代わりに、バージョン管理されたインフラに刻み込むという仕事です。これはモデルのファインチューンではなく、ハーネスのファインチューンです。
+これはモデルのファインチューンではなく、ハーネスのファインチューンです —— リポのレビュー基準、タスク形状、完了の定義を、毎セッションでプロンプトし直す代わりに、バージョン管理されたインフラに刻み込みます。`harness-loom` はアシスタントスタックにすでにプロダクション品質の可能性を見出していて、それをセッションではなくシステムとして振る舞わせたいチームのためのものです。
 
-`harness-loom` はアシスタントスタックにすでにプロダクション品質の可能性を見出していて、それをセッションではなくシステムとして振る舞わせたいチームのためのものです。
+## クイックスタート
 
-このリポはファクトリーです。次の構成からなるターゲット側ランタイムハーネスをシードまたは収束させます:
+ファクトリーを Claude Code (または Codex / Gemini —— 全オプションは [ファクトリーのインストール](#ファクトリーのインストール) を参照) にインストールします:
 
-- planner と orchestrator
-- `.harness/` 配下の共有コントロールプレーン
-- すべての subagent のための共通ランタイムコンテキスト
-- 時間とともに追加していくプロジェクト固有の producer-reviewer pair
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom-marketplace
+```
 
-ターゲットの `.harness/` は 2 つの兄弟ネームスペースに分かれます —— `loom/` は setup と pair authoring が所有する正本ステージングツリー、`cycle/` は orchestrator が所有するランタイム状態です。サイクル外の成果物(ターゲットルートの `*.md`、`docs/`、リリースノート、監査出力など)は、サイクル終了の **Finalizer** ターンが `.harness/` の中ではなくターゲットルートに直接書き込みます。プラットフォームツリー(`.claude/`、`.codex/`、`.gemini/`)は必要なときに `.harness/loom/` から派生します。
+ターゲットリポジトリの中で:
+
+```bash
+# 1. .harness/ をシードまたは移行
+/harness-auto-setup --setup
+
+# 2. アシスタントランタイムツリーを派生
+node .harness/loom/sync.ts --provider claude
+#   (マルチプラットフォームには codex,gemini を追加)
+```
+
+ここまでが foundation のセットアップです。プロジェクト固有の producer-reviewer pair を追加して最初のサイクルを実行する手順は [ターゲットプロジェクトを始める](#ターゲットプロジェクトを始める) を参照してください。
+
+## どう動くか
+
+```mermaid
+flowchart LR
+    subgraph Factory["harness-loom (factory plugin)"]
+        AS["/harness-auto-setup"]
+        PD["/harness-pair-dev"]
+        GI["/harness-goal-interview"]
+        OR["/harness-orchestrate"]
+    end
+    subgraph Target["target repository"]
+        L[".harness/loom/<br/>canonical staging"]
+        C[".harness/cycle/<br/>runtime state"]
+        P[".claude/ / .codex/ / .gemini/<br/>derived provider trees"]
+    end
+    AS -->|seed / migrate| L
+    PD -->|author pairs| L
+    GI -->|writes goal file| Target
+    L -->|node sync.ts --provider| P
+    OR -->|reads| L
+    OR -->|writes| C
+```
+
+ファクトリープラグインはアシスタント CLI の中に存在し、ターゲットリポジトリの中でスラッシュコマンドを実行すると `.harness/loom/` (setup と pair authoring が所有する正本ステージング) と `.harness/cycle/` (orchestrator が所有するランタイム状態) に書き込みます。プラットフォームツリー (`.claude/`、`.codex/`、`.gemini/`) は正本ステージングが変わるたびに `sync.ts` で再派生する成果物 —— 直接編集してはいけません。サイクル終了の **Finalizer** ターンは、ターゲットルートの成果物 (ドキュメント、監査、リリースノート) を `.harness/` の中ではなくターゲットに直接書き込みます。
 
 ## なぜこの形なのか
 
@@ -41,35 +77,24 @@
 
 ## インストールされるもの
 
-ターゲットリポジトリの中で `/harness-init` を実行すると、`harness-loom` は使い捨てプロンプトテンプレートではなくランタイムハーネスをインストールします。`/harness-auto-setup` を実行すると、同じ foundation インストーラーをより安全な setup/migration ワークフローの中で使います。
-
 ```text
 target project
 └── .harness/
     ├── loom/                    # canonical staging (setup + pair authoring own; sync reads)
-    │   ├── skills/
-    │   │   ├── harness-orchestrate/
-    │   │   ├── harness-planning/
-    │   │   └── harness-context/
-    │   ├── agents/
-    │   │   ├── harness-planner.md
-    │   │   └── harness-finalizer.md     # generic cycle-end skeleton; project fills in
+    │   ├── skills/{harness-orchestrate, harness-planning, harness-context}/
+    │   ├── agents/{harness-planner, harness-finalizer}.md
     │   ├── hook.sh
     │   └── sync.ts
     ├── cycle/                   # runtime state (orchestrator owns)
-    │   ├── state.md
-    │   ├── events.md
-    │   ├── epics/
-    │   └── finalizer/
-    │       └── tasks/
-    ├── _snapshots/              # auto-setup provenance, when convergence runs
-    │   └── auto-setup/
-    └── _archive/                # past cycles, created on goal-different reset
+    │   ├── state.md, events.md
+    │   └── epics/, finalizer/tasks/
+    ├── _snapshots/              # auto-setup provenance (when migration runs)
+    └── _archive/                # past cycles (created on goal-different reset)
 ```
 
-プロジェクトドキュメント(ターゲットルートの `*.md` ファイル、`docs/`)は `.harness/` の中ではなく **ターゲットの中に直接** author します。その後 `node .harness/loom/sync.ts --provider claude` で少なくとも 1 つのプラットフォームツリーを派生し(マルチプラットフォームには `codex,gemini` を追加)、`/harness-pair-dev` でドメイン固有のペアを追加します。インストール scaffold はリクエストスナップショットを作成しません。`/harness-orchestrate <file.md>` で直接エントリした場合、orchestrator は完全なリクエスト本文を `.harness/cycle/user-request-snapshot.md` に保存し、`state.md` の `Goal` ヘッダーは圧縮された要約として保ちます。orchestrator は 4 状態 DFA —— `Planner | Pair | Finalizer | Halt` —— として動作します。すべての EPIC が terminal に到達し、planner がそれ以上続行することがなくなったとき、**Finalizer 状態** に入って singleton `harness-finalizer` エージェントを dispatch してから停止します。シードされた `harness-finalizer` は generic skeleton です; プロジェクトが必要とする具体的なサイクル終了作業 —— ドキュメント更新(`CLAUDE.md`、`AGENTS.md`、`docs/`)、`events.md` とユーザーリクエストスナップショットに対するリクエストカバレッジ点検、リリース準備、監査出力など —— で本文を置き換えます。finalizer を直接呼び出すことはなく、orchestrator が停止直前のサイクル終了ターンとして dispatch します。
+プロジェクトドキュメント (ターゲットルートの `*.md`、`docs/`) は `.harness/` の中ではなく **ターゲットの中に直接** author します。orchestrator は 4 状態 DFA —— `Planner | Pair | Finalizer | Halt` —— として動作します。すべての EPIC が terminal に到達し、planner がそれ以上続行することがなくなったとき、singleton `harness-finalizer` エージェントを dispatch してから停止します; 本文はプロジェクトが必要とするサイクル終了作業 (ドキュメント更新、リクエストカバレッジ点検、リリース準備、監査出力) で置き換えます。
 
-`/harness-auto-setup` は初回セットアップ、プロジェクト形状に合わせた設定、または既存ハーネスの移行のためのより安全なエントリポイントです。`--setup`(デフォルト)は新規ターゲットをブートストラップし、既存の `.harness/` がある場合は foundation には触れずに、プロジェクト分析と必要に応じたユーザー確認の後、追加的な pair/finalizer authoring を続行します。`--migration` は既存 foundation を扱うモードです: ライブの `.harness/loom/` と `.harness/cycle/` をスナップショットし、foundation を更新し、ペアではないカスタム loom 項目を復元し、互換性のある pair/finalizer ガイドを保ちながら contract 所有のランタイム表面のみを書き直します。`.claude/`、`.codex/`、`.gemini/` を直接書くことはありません。
+`/harness-auto-setup` はより安全なエントリポイントです: `--setup` (デフォルト) は新規ターゲットをブートストラップするか、既存ハーネスを追加的 (additive) に拡張します; `--migration` はライブの `.harness/loom/` と `.harness/cycle/` をスナップショットし、foundation を更新し、互換性のあるカスタムの pair/finalizer ガイドを保ちます。
 
 ## 要件
 
@@ -286,37 +311,6 @@ EOF
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | positional `<purpose>` を主な改訂軸として登録済みペアを改善し、その後 rubric 整備と現在のリポ証拠を取り込みます。1 つのペアが 2 つの異なる仕事になっていたら、明示的な add/improve/remove ステップを使ってください。その後 sync を再実行してプラットフォームツリーを更新してください。 |
 | `/harness-pair-dev --remove <slug>` | ペアを安全に登録解除し、ペア所有の `.harness/loom/` ファイルだけを削除します。変異前に foundation/singleton ターゲットや、`## Next` または ライブ EPIC roster/current フィールドの active-cycle 参照を拒否し、`.harness/cycle/` の task/review 履歴を保ち、いかなる provider ツリーにも触れません; その後 sync を再実行してください。 |
 | `/harness-orchestrate <file.md>` | ターゲット側ランタイムエントリポイント。リクエストファイルを読み、その完全な本文を `.harness/cycle/user-request-snapshot.md` に保存し、応答ごとに正確に 1 名の producer を dispatch する 4 状態 DFA(`Planner | Pair | Finalizer | Halt`)を実行します; hook 再進入は `state.md` と既存のスナップショットパスからサイクルを進めます。すべての EPIC が terminal に到達し planner の継続性が明確なとき、orchestrator は Finalizer 状態に入って singleton `harness-finalizer` を dispatch してから停止します。 |
-
-## ファクトリーとランタイム
-
-```text
-factory (this repo)                            target project
------------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          installs ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
-plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/,finalizer/tasks/}
-plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .harness/loom/skills/<slug>/SKILL.md
-plugins/harness-loom/skills/harness-auto-setup/    migrates ->      .harness/_snapshots/auto-setup/<timestamp>/
-                                                                    .harness/loom/ + .harness/cycle/ refreshed in --migration
-plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loom/agents/<slug>-producer.md
-                                                                    .harness/loom/agents/<reviewer>.md
-                                                                    .harness/loom/skills/<slug>/SKILL.md
-                                                     |
-                                                     +-- node .harness/loom/sync.ts --provider <list>
-                                                         -> .claude/{agents,skills,settings.json}
-                                                         -> .codex/
-                                                         -> .gemini/
-                                                     |
-                                                     +-- Finalizer state auto-fires at cycle halt
-                                                         -> .harness/loom/agents/harness-finalizer.md
-                                                         -> whatever that finalizer body writes
-```
-
-この分離は意図的です:
-
-- ファクトリーは小さく、ユーザーが直接呼び出せる状態を保つ
-- ターゲットランタイムはプロジェクト固有の作業状態を保持する
-- サイクル終了 hook は singleton で、プロジェクトがカスタマイズ可能
-- プラットフォーム固有のツリーは派生成果物であり authoring surface ではない
 
 ## マルチプラットフォーム
 

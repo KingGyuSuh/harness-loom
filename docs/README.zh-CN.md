@@ -14,22 +14,58 @@
 
 > 如有表述差异,以[英文 README](../README.md) 为准。
 
-`harness-loom` 是一个工厂插件,会把运行时 harness 装入目标仓库,并按 pair 逐步扩展 producer-reviewer 组合。
+## 它做什么
 
-如今的助手产品早已不再只是"模型 + 提示词"。它们随附一整套通用 harness —— planner、hook、subagent、skill、工具路由、控制流 —— 决定工作如何被规划、委派、复核与续接。这一层很有价值,但它并不了解你的生产体系:哪些 review 重要、哪些产物需要长存、工作如何被分解、权限边界在哪里。
+`harness-loom` 是一个工厂插件,会把运行时 harness 装入目标仓库,并按 pair 逐步扩展 producer-reviewer 组合。工厂提供四个面向用户的斜杠命令 (`/harness-init`、`/harness-auto-setup`、`/harness-pair-dev`、`/harness-goal-interview`) 以及一个 `sync.ts` 脚本。安装之后,目标仓库就具备 planner、orchestrator、`.harness/` 之下的共享控制平面,以及随时间累积的、项目特有的 producer-reviewer pair 的位置。
 
-一旦你选定的模型栈已经具备足以产出生产级别成果的能力,杠杆点就从模型选择转向 **harness 工程** —— 把仓库的 review 标准、任务形态与"完成"定义编码进版本化的基础设施,而不是每个会话都重新提示一次。这是 harness 微调,不是模型微调。
+这是 harness 微调,不是模型微调 —— 把仓库的 review 标准、任务形态与"完成"定义编码进版本化的基础设施,而不是每个会话都重新提示一次。`harness-loom` 面向的是已经在助手栈中看到生产质量潜力,且希望它像一个系统而不是一次会话那样运转的团队。
 
-`harness-loom` 面向的是已经在助手栈中看到生产质量潜力,且希望它像一个系统而不是一次会话那样运转的团队。
+## 快速开始
 
-本仓库就是工厂。它会种入或收敛一份目标侧的运行时 harness,由以下部分组成:
+把工厂安装到 Claude Code (或 Codex / Gemini —— 完整选项见 [安装工厂](#安装工厂)):
 
-- 一个 planner 与一个 orchestrator
-- 位于 `.harness/` 之下的共享控制平面
-- 服务于所有 subagent 的通用运行时上下文
-- 你随时间累积的、项目特有的 producer-reviewer pair
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom-marketplace
+```
 
-目标的 `.harness/` 划分为两个并列命名空间 —— `loom/` 是由 setup 与 pair authoring 拥有的正本 staging 树,`cycle/` 是由 orchestrator 拥有的运行时状态。周期之外的产物(目标根目录下的 `*.md`、`docs/`、发布说明、审计输出等)由周期收尾的 **Finalizer** 轮次直接写到目标根目录,而不是写入 `.harness/`。平台树(`.claude/`、`.codex/`、`.gemini/`)按需从 `.harness/loom/` 派生。
+在目标仓库内:
+
+```bash
+# 1. 种入或迁移 .harness/
+/harness-auto-setup --setup
+
+# 2. 派生助手运行时树
+node .harness/loom/sync.ts --provider claude
+#   (多平台时再追加 codex,gemini)
+```
+
+到这里 foundation 就位了。要为你的仓库添加项目特定的 producer-reviewer pair 并运行第一个周期,请见 [启动一个目标项目](#启动一个目标项目)。
+
+## 工作方式
+
+```mermaid
+flowchart LR
+    subgraph Factory["harness-loom (factory plugin)"]
+        AS["/harness-auto-setup"]
+        PD["/harness-pair-dev"]
+        GI["/harness-goal-interview"]
+        OR["/harness-orchestrate"]
+    end
+    subgraph Target["target repository"]
+        L[".harness/loom/<br/>canonical staging"]
+        C[".harness/cycle/<br/>runtime state"]
+        P[".claude/ / .codex/ / .gemini/<br/>derived provider trees"]
+    end
+    AS -->|seed / migrate| L
+    PD -->|author pairs| L
+    GI -->|writes goal file| Target
+    L -->|node sync.ts --provider| P
+    OR -->|reads| L
+    OR -->|writes| C
+```
+
+工厂插件存在于你的助手 CLI 中;在目标仓库内运行它的斜杠命令,会写入 `.harness/loom/`(由 setup 与 pair authoring 拥有的正本 staging)与 `.harness/cycle/`(由 orchestrator 拥有的运行时状态)。平台树 (`.claude/`、`.codex/`、`.gemini/`) 是每当正本 staging 变化时用 `sync.ts` 重新派生的产物 —— 不要直接编辑它们。周期收尾的 **Finalizer** 轮次把目标根产物(文档、审计、发布说明)直接写到目标里,而不是写入 `.harness/`。
 
 ## 为什么是这种形态
 
@@ -41,35 +77,24 @@
 
 ## 安装的内容
 
-在目标仓库中运行 `/harness-init` 时,`harness-loom` 安装的是一个运行时 harness,而不是一份一次性的提示词模板。运行 `/harness-auto-setup` 则在更安全的 setup/migration 工作流中复用同一套 foundation 安装器。
-
 ```text
 target project
 └── .harness/
     ├── loom/                    # canonical staging (setup + pair authoring own; sync reads)
-    │   ├── skills/
-    │   │   ├── harness-orchestrate/
-    │   │   ├── harness-planning/
-    │   │   └── harness-context/
-    │   ├── agents/
-    │   │   ├── harness-planner.md
-    │   │   └── harness-finalizer.md     # generic cycle-end skeleton; project fills in
+    │   ├── skills/{harness-orchestrate, harness-planning, harness-context}/
+    │   ├── agents/{harness-planner, harness-finalizer}.md
     │   ├── hook.sh
     │   └── sync.ts
     ├── cycle/                   # runtime state (orchestrator owns)
-    │   ├── state.md
-    │   ├── events.md
-    │   ├── epics/
-    │   └── finalizer/
-    │       └── tasks/
-    ├── _snapshots/              # auto-setup provenance, when convergence runs
-    │   └── auto-setup/
-    └── _archive/                # past cycles, created on goal-different reset
+    │   ├── state.md, events.md
+    │   └── epics/, finalizer/tasks/
+    ├── _snapshots/              # auto-setup provenance (when migration runs)
+    └── _archive/                # past cycles (created on goal-different reset)
 ```
 
-项目文档(目标根目录的 `*.md` 文件、`docs/`)是 **直接在目标里** author 的,不在 `.harness/` 里。然后用 `node .harness/loom/sync.ts --provider claude` 至少派生一棵平台树(多平台时再追加 `codex,gemini`),再用 `/harness-pair-dev` 添加领域特定的 pair。安装 scaffold 不会创建请求快照。当你直接以 `/harness-orchestrate <file.md>` 进入时,orchestrator 会把请求全文保存在 `.harness/cycle/user-request-snapshot.md`,而 `state.md` 的 `Goal` 头部保留为压缩摘要。orchestrator 以四状态 DFA —— `Planner | Pair | Finalizer | Halt` —— 运行。当所有 EPIC 都到达 terminal 且 planner 没有可继续的工作时,它进入 **Finalizer 状态**,dispatch 单例 `harness-finalizer` 代理后停机。种入的 `harness-finalizer` 是一份通用骨架;你需要把项目实际所需的周期收尾工作 —— 文档刷新(`CLAUDE.md`、`AGENTS.md`、`docs/`)、对照 `events.md` 与用户请求快照检查请求覆盖、发布准备、审计输出等 —— 写进它的正文。你不会直接调用 finalizer,而是由 orchestrator 在停机前作为周期收尾轮次 dispatch 它。
+项目文档(目标根目录的 `*.md`、`docs/`)是 **直接在目标里** author 的,不在 `.harness/` 里。orchestrator 以四状态 DFA —— `Planner | Pair | Finalizer | Halt` —— 运行。当所有 EPIC 都到达 terminal 且 planner 没有可继续的工作时,它 dispatch 单例 `harness-finalizer` 代理后停机;由项目用具体的周期收尾工作(文档刷新、请求覆盖检查、发布准备、审计输出)替换正文。
 
-`/harness-auto-setup` 是首次安装、按项目形态进行配置或迁移既有 harness 的更安全入口。`--setup`(默认)用于从零启动新的目标,如果已经存在 `.harness/`,它不会触动 foundation,会在项目分析与必要的用户澄清之后,继续以增量方式 author pair/finalizer。`--migration` 是处理既有 foundation 的模式:对当前的 `.harness/loom/` 与 `.harness/cycle/` 做快照,刷新 foundation,恢复非 pair 的自定义 loom 条目,在保留兼容的 pair/finalizer 指引的同时只重写 contract 所拥有的运行时表面。它从不直接写 `.claude/`、`.codex/`、`.gemini/`。
+`/harness-auto-setup` 是更安全的入口:`--setup`(默认)用于从零启动新的目标,或对既有 harness 做增量(additive)扩展;`--migration` 对实时的 `.harness/loom/` 与 `.harness/cycle/` 做快照,刷新 foundation,并保留兼容的自定义 pair/finalizer 指引。
 
 ## 要求
 
@@ -286,37 +311,6 @@ EOF
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | 以位置参数 `<purpose>` 为主要修订维度改进已注册的 pair,然后整合 rubric 卫生与当前仓库证据。如果一个 pair 已经变成两份不同的工作,请使用显式的 add/improve/remove 步骤。之后重新运行 sync 以刷新平台树。 |
 | `/harness-pair-dev --remove <slug>` | 安全地注销 pair,并且只删除该 pair 所拥有的 `.harness/loom/` 文件。在变更前会拒绝 foundation/单例目标以及 `## Next` 或活动 EPIC roster/current 字段中的 active-cycle 引用,会保留 `.harness/cycle/` 中的 task/review 历史,且不触碰任何 provider 树;之后请重新运行 sync。 |
 | `/harness-orchestrate <file.md>` | 目标侧运行时入口。读取请求文件,把全文保存在 `.harness/cycle/user-request-snapshot.md`,并以四状态 DFA(`Planner | Pair | Finalizer | Halt`)运行,每次响应正好 dispatch 一个 producer;hook 重新进入会从 `state.md` 与已有的快照路径推进周期。当所有 EPIC 到达 terminal 且 planner 续接清晰时,orchestrator 进入 Finalizer 状态,dispatch 单例 `harness-finalizer` 后停机。 |
-
-## 工厂与运行时
-
-```text
-factory (this repo)                            target project
------------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          installs ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
-plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/,finalizer/tasks/}
-plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .harness/loom/skills/<slug>/SKILL.md
-plugins/harness-loom/skills/harness-auto-setup/    migrates ->      .harness/_snapshots/auto-setup/<timestamp>/
-                                                                    .harness/loom/ + .harness/cycle/ refreshed in --migration
-plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loom/agents/<slug>-producer.md
-                                                                    .harness/loom/agents/<reviewer>.md
-                                                                    .harness/loom/skills/<slug>/SKILL.md
-                                                     |
-                                                     +-- node .harness/loom/sync.ts --provider <list>
-                                                         -> .claude/{agents,skills,settings.json}
-                                                         -> .codex/
-                                                         -> .gemini/
-                                                     |
-                                                     +-- Finalizer state auto-fires at cycle halt
-                                                         -> .harness/loom/agents/harness-finalizer.md
-                                                         -> whatever that finalizer body writes
-```
-
-这种拆分是有意为之的:
-
-- 工厂保持小巧,可由用户直接调用
-- 目标运行时持有项目特定的工作状态
-- 周期收尾 hook 保持单例,且可由项目自定义
-- 平台特定树是派生产物,而不是 authoring surface
 
 ## 多平台
 
