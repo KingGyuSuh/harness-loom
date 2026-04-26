@@ -4,7 +4,7 @@
 
 [English](README.md) | [한국어](docs/README.ko.md) | [日本語](docs/README.ja.md) | [简体中文](docs/README.zh-CN.md) | [Español](docs/README.es.md)
 
-[![Version](https://img.shields.io/badge/version-0.3.2-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.4-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Platforms](https://img.shields.io/badge/platforms-Claude%20Code%20%7C%20Codex%20%7C%20Gemini-purple.svg)](#multi-platform)
 
@@ -323,7 +323,7 @@ Platform pins applied by `sync.ts`:
 | Platform | Model | Hook event | Notes |
 |----------|-------|------------|-------|
 | Claude | `inherit` | `Stop` | `.claude/settings.json` triggers `.harness/loom/hook.sh`. |
-| Codex | `gpt-5.4`, `model_reasoning_effort: xhigh` | `Stop` | Agent TOMLs prepend required `$skill-name` mentions to `developer_instructions`; skills are mirrored under `.codex/skills/`. |
+| Codex | `gpt-5.5`, `model_reasoning_effort: xhigh` | `Stop` | Agent TOMLs prepend required `$skill-name` mentions to `developer_instructions`; skills are mirrored under `.codex/skills/`. |
 | Gemini | `gemini-3.1-pro-preview` | `AfterAgent` | Agent bodies name the required skills; skills are mirrored under `.gemini/skills/`. |
 
 ## When To Use It
