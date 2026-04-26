@@ -14,22 +14,58 @@
 
 > En caso de discrepancia, el [README en inglés](../README.md) es la versión normativa.
 
-`harness-loom` es un plugin de fábrica que instala un harness en tiempo de ejecución dentro de un repositorio destino y lo hace crecer pareja por pareja.
+## Qué hace
 
-Los productos de asistente modernos ya no son solo "un modelo más un prompt". Vienen con un harness de propósito general —planificadores, hooks, subagentes, skills, enrutamiento de herramientas, control de flujo— que decide cómo se planifica, delega, revisa y reanuda el trabajo. Esa capa es valiosa, pero no conoce tu sistema de producción: qué revisiones importan, qué artefactos deben persistir, cómo se descompone tu trabajo, dónde están tus límites de autoridad.
+`harness-loom` es un plugin de fábrica que instala un harness en tiempo de ejecución dentro de un repositorio destino y lo hace crecer pareja por pareja. La fábrica entrega cuatro comandos slash para el usuario (`/harness-init`, `/harness-auto-setup`, `/harness-pair-dev`, `/harness-goal-interview`) y un script `sync.ts`. Una vez instalado, tu destino dispone de un planner, un orquestador, un plano de control compartido bajo `.harness/`, y un sitio donde añadir parejas producer-reviewer específicas del proyecto a lo largo del tiempo.
 
-Una vez que el stack de modelos elegido ya es lo bastante capaz para producir trabajo de calidad de producción, la palanca principal se traslada de la elección del modelo a la **ingeniería del harness** —codificar los estándares de revisión de tu repo, las formas de las tareas y la definición de hecho en infraestructura versionada en lugar de re-promptearla en cada sesión. Esto es ajuste fino del harness, no del modelo.
+Esto es ajuste fino del harness, no del modelo —codifica los estándares de revisión de tu repo, las formas de las tareas y la definición de hecho en infraestructura versionada en lugar de re-promptearla en cada sesión. `harness-loom` es para equipos que ya ven el potencial de calidad de producción en su stack de asistentes y ahora quieren que se comporte como un sistema en lugar de como una sesión.
 
-`harness-loom` es para equipos que ya ven el potencial de calidad de producción en su stack de asistentes y ahora quieren que se comporte como un sistema en lugar de como una sesión.
+## Inicio rápido
 
-Este repo es la fábrica. Siembra o converge un harness en tiempo de ejecución del lado del destino compuesto por:
+Instala la fábrica en Claude Code. Codex y Gemini siguen flujos similares —ver [Instalar la fábrica](#instalar-la-fábrica).
 
-- un planificador y un orquestador
-- un plano de control compartido bajo `.harness/`
-- un contexto en tiempo de ejecución común para todos los subagentes
-- parejas producer-reviewer específicas del proyecto que vas añadiendo con el tiempo
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom-marketplace
+```
 
-El `.harness/` del destino se divide en dos espacios de nombres hermanos —`loom/` es el árbol de staging canónico que poseen el setup y la autoría de pares, y `cycle/` contiene el estado en tiempo de ejecución que posee el orquestador. Los artefactos fuera de ciclo (`*.md` en la raíz del destino, `docs/`, notas de versión, salida de auditoría) los escribe el turno **Finalizer** de cierre de ciclo directamente en la raíz del destino, no dentro de `.harness/`. Los árboles de plataforma (`.claude/`, `.codex/`, `.gemini/`) se derivan a demanda desde `.harness/loom/`.
+Dentro de tu repositorio destino:
+
+```bash
+# 1. sembrar o migrar .harness/
+/harness-auto-setup --setup
+
+# 2. derivar el árbol de runtime del asistente
+node .harness/loom/sync.ts --provider claude
+#   (añade codex,gemini para multi-plataforma)
+```
+
+Hasta aquí queda la foundation. Para añadir parejas producer-reviewer específicas del proyecto y ejecutar tu primer ciclo, ver [Empezar un proyecto destino](#empezar-un-proyecto-destino).
+
+## Cómo funciona
+
+```mermaid
+flowchart LR
+    subgraph Factory["harness-loom (factory plugin)"]
+        AS["/harness-auto-setup"]
+        PD["/harness-pair-dev"]
+        GI["/harness-goal-interview"]
+        OR["/harness-orchestrate"]
+    end
+    subgraph Target["target repository"]
+        L[".harness/loom/<br/>canonical staging"]
+        C[".harness/cycle/<br/>runtime state"]
+        P[".claude/ / .codex/ / .gemini/<br/>derived provider trees"]
+    end
+    AS -->|seed / migrate| L
+    PD -->|author pairs| L
+    GI -->|writes goal file| Target
+    L -->|node sync.ts --provider| P
+    OR -->|reads| L
+    OR -->|writes| C
+```
+
+El plugin de fábrica vive en tu CLI de asistente; ejecutar sus comandos slash dentro de un repositorio destino escribe en `.harness/loom/` (staging canónico que poseen el setup y el authoring de pares) y `.harness/cycle/` (estado en tiempo de ejecución que posee el orquestador). Los árboles de plataforma (`.claude/`, `.codex/`, `.gemini/`) son artefactos derivados que regeneras con `sync.ts` cada vez que el staging canónico cambia —nunca los edites directamente. El turno **Finalizer** de cierre de ciclo escribe los artefactos de la raíz del destino (documentación, auditoría, notas de release) directamente en el destino, no dentro de `.harness/`.
 
 ## Por qué esta forma
 
@@ -41,35 +77,24 @@ El `.harness/` del destino se divide en dos espacios de nombres hermanos —`loo
 
 ## Qué se instala
 
-Cuando ejecutas `/harness-init` dentro de un repositorio destino, `harness-loom` instala un harness en tiempo de ejecución y no una plantilla de prompt de un solo uso. Cuando ejecutas `/harness-auto-setup`, usa ese mismo instalador de foundation dentro de un flujo más seguro de setup/migración.
-
 ```text
 target project
 └── .harness/
     ├── loom/                    # canonical staging (setup + pair authoring own; sync reads)
-    │   ├── skills/
-    │   │   ├── harness-orchestrate/
-    │   │   ├── harness-planning/
-    │   │   └── harness-context/
-    │   ├── agents/
-    │   │   ├── harness-planner.md
-    │   │   └── harness-finalizer.md     # generic cycle-end skeleton; project fills in
+    │   ├── skills/{harness-orchestrate, harness-planning, harness-context}/
+    │   ├── agents/{harness-planner, harness-finalizer}.md
     │   ├── hook.sh
     │   └── sync.ts
     ├── cycle/                   # runtime state (orchestrator owns)
-    │   ├── state.md
-    │   ├── events.md
-    │   ├── epics/
-    │   └── finalizer/
-    │       └── tasks/
-    ├── _snapshots/              # auto-setup provenance, when convergence runs
-    │   └── auto-setup/
-    └── _archive/                # past cycles, created on goal-different reset
+    │   ├── state.md, events.md
+    │   └── epics/, finalizer/tasks/
+    ├── _snapshots/              # auto-setup provenance (when migration runs)
+    └── _archive/                # past cycles (created on goal-different reset)
 ```
 
-La documentación del proyecto (archivos `*.md` en la raíz del destino, `docs/`) se author **directamente en el destino**, no dentro de `.harness/`. Después derivas al menos un árbol de plataforma con `node .harness/loom/sync.ts --provider claude` (y añade `codex,gemini` para multi-plataforma), y luego añades pares específicos del dominio con `/harness-pair-dev`. El scaffold de instalación no crea snapshots de request. Al entrar directamente con `/harness-orchestrate <file.md>`, el orquestador conserva el cuerpo completo de la request en `.harness/cycle/user-request-snapshot.md` y mantiene la cabecera `Goal` de `state.md` como un resumen compacto. El orquestador funciona como un DFA de cuatro estados —`Planner | Pair | Finalizer | Halt`. Cuando todo EPIC alcanza terminal y no queda continuación del planner, entra en el **estado Finalizer** y despacha el agente singleton `harness-finalizer` antes de detenerse. El `harness-finalizer` sembrado es un esqueleto genérico; reemplazas su cuerpo por el trabajo de cierre de ciclo concreto que necesite este proyecto —refresco de documentación (`CLAUDE.md`, `AGENTS.md`, `docs/`), inspección de cobertura de la request frente a `events.md` y la snapshot de request del usuario, preparación de release, salida de auditoría, etc. No invocas el finalizer directamente; el orquestador lo despacha como turno de cierre de ciclo antes de detenerse.
+La documentación del proyecto (`*.md` en la raíz del destino, `docs/`) se author **directamente en el destino**, no dentro de `.harness/`. El orquestador funciona como un DFA de cuatro estados —`Planner | Pair | Finalizer | Halt`. Cuando todo EPIC alcanza terminal y no queda continuación del planner, despacha el agente singleton `harness-finalizer` antes de detenerse; reemplazas su cuerpo por el trabajo de cierre de ciclo concreto que necesite el proyecto (refresco de documentación, inspección de cobertura de la request, preparación de release, salida de auditoría).
 
-`/harness-auto-setup` es el punto de entrada más seguro para la primera instalación, configuración por forma de proyecto o migración de un harness existente. `--setup` (por defecto) hace bootstrap de un destino nuevo; cuando hay un `.harness/` existente, deja la foundation intacta y continúa hacia authoring aditivo de pares/finalizer tras el análisis de proyecto y cualquier aclaración necesaria con el usuario. `--migration` es el modo que maneja foundations existentes: hace snapshot de los `.harness/loom/` y `.harness/cycle/` vivos, refresca la foundation, restaura entradas custom de loom que no son pares, conserva la guía compatible de pares/finalizer y reescribe solo la superficie en tiempo de ejecución que es propiedad del contract. Nunca escribe `.claude/`, `.codex/` ni `.gemini/` por sí solo.
+`/harness-auto-setup` es el punto de entrada más seguro: `--setup` (por defecto) hace bootstrap de un destino nuevo o extiende un harness existente de forma aditiva; `--migration` hace snapshot de `.harness/loom/` y `.harness/cycle/` vivos, refresca la foundation y conserva la guía custom compatible de pares/finalizer.
 
 ## Requisitos
 
@@ -126,13 +151,13 @@ Añade la fuente de marketplace —el argumento apunta a la raíz del repo (que 
 
 ```bash
 # checkout local
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # repo git público
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # fija un tag si es necesario
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 Después, dentro del TUI de Codex, ejecuta `/plugins`, abre la entrada de marketplace `Harness Loom` e instala el plugin.
@@ -286,37 +311,6 @@ Algunos términos se repiten a través de comandos, archivos y estado. Conocerlo
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | Mejora una pareja registrada existente con el `<purpose>` posicional como eje primario de revisión, y luego incorpora higiene de rubric y evidencia actual del repo. Si una pareja se ha convertido en dos trabajos distintos, usa pasos explícitos de add/improve/remove. Vuelve a ejecutar sync después para refrescar los árboles de plataforma. |
 | `/harness-pair-dev --remove <slug>` | Da de baja de forma segura una pareja y borra solo los archivos `.harness/loom/` que pertenecen a esa pareja. Antes de mutar rechaza objetivos de foundation/singleton y referencias de ciclo activo en `## Next` o en los campos roster/current de los EPICs vivos, conserva el historial de tasks/reviews de `.harness/cycle/`, y no toca ningún árbol de provider; vuelve a ejecutar sync después. |
 | `/harness-orchestrate <file.md>` | Punto de entrada de runtime del lado del destino. Lee el archivo de request, conserva su cuerpo completo en `.harness/cycle/user-request-snapshot.md`, y corre un DFA de cuatro estados (`Planner | Pair | Finalizer | Halt`) despachando exactamente un producer por respuesta; la re-entrada por hook avanza el ciclo desde `state.md` y la ruta de snapshot existente. Cuando todo EPIC alcanza terminal y la continuación del planner está clara, el orquestador entra en el estado Finalizer y despacha el singleton `harness-finalizer` antes de detenerse. |
-
-## Fábrica y Runtime
-
-```text
-factory (this repo)                            target project
------------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          installs ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
-plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/,finalizer/tasks/}
-plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .harness/loom/skills/<slug>/SKILL.md
-plugins/harness-loom/skills/harness-auto-setup/    migrates ->      .harness/_snapshots/auto-setup/<timestamp>/
-                                                                    .harness/loom/ + .harness/cycle/ refreshed in --migration
-plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loom/agents/<slug>-producer.md
-                                                                    .harness/loom/agents/<reviewer>.md
-                                                                    .harness/loom/skills/<slug>/SKILL.md
-                                                     |
-                                                     +-- node .harness/loom/sync.ts --provider <list>
-                                                         -> .claude/{agents,skills,settings.json}
-                                                         -> .codex/
-                                                         -> .gemini/
-                                                     |
-                                                     +-- Finalizer state auto-fires at cycle halt
-                                                         -> .harness/loom/agents/harness-finalizer.md
-                                                         -> whatever that finalizer body writes
-```
-
-Esta separación es intencional:
-
-- la fábrica permanece pequeña e invocable por el usuario
-- el runtime del destino mantiene el estado de trabajo específico del proyecto
-- el hook de cierre de ciclo permanece singleton y personalizable por el proyecto
-- los árboles específicos de plataforma son artefactos derivados, no superficies de authoring
 
 ## Multi-plataforma
 

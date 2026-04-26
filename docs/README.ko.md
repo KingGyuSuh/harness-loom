@@ -14,22 +14,58 @@
 
 > 표현이 충돌할 경우 [영문 README](../README.md) 가 정본입니다.
 
-`harness-loom` 은 타깃 리포지토리에 런타임 하네스를 설치하고, 프로젝트 고유의 producer-reviewer pair를 점진적으로 키워 나가는 팩토리 플러그인입니다.
+## 무엇을 하는가
 
-오늘날의 어시스턴트 제품은 더 이상 "모델 + 프롬프트" 조합이 아닙니다. planner, hook, subagent, skill, 도구 라우팅, 제어 흐름까지 묶인 범용 하네스가 함께 출하되며, 작업이 어떻게 계획되고 위임되고 검토되고 재개되는지를 결정합니다. 그 레이어는 가치 있지만, 여러분의 프로덕션 시스템 — 어떤 리뷰가 중요한지, 어떤 산출물이 영속화돼야 하는지, 작업이 어떻게 분해되는지, 권한 경계는 어디인지 — 까지는 모릅니다.
+`harness-loom` 은 타깃 리포지토리에 런타임 하네스를 설치하고, 프로젝트 고유의 producer-reviewer pair를 점진적으로 키워 나가는 팩토리 플러그인입니다. 팩토리는 사용자가 호출하는 슬래시 커맨드 4개 (`/harness-init`, `/harness-auto-setup`, `/harness-pair-dev`, `/harness-goal-interview`) 와 `sync.ts` 스크립트를 출하합니다. 설치되면 타깃은 planner, orchestrator, `.harness/` 아래의 공유 컨트롤 플레인, 그리고 시간이 지나며 추가하는 프로젝트 고유 producer-reviewer pair 자리를 갖게 됩니다.
 
-선택한 모델 스택이 이미 프로덕션 품질을 만들어낼 만큼 충분히 강력하다면, 레버리지의 무게중심은 모델 선택에서 **하네스 엔지니어링** 으로 옮겨갑니다 — 즉 리포지토리의 리뷰 기준, 작업 형태, "완료" 정의를 매 세션마다 재프롬프팅하는 대신 버전 관리되는 인프라에 인코딩하는 일입니다. 이것이 모델 파인튜닝이 아닌 하네스 파인튜닝입니다.
+이것은 모델 파인튜닝이 아닌 하네스 파인튜닝입니다 — 리포의 리뷰 기준, 작업 형태, "완료" 정의를 매 세션마다 재프롬프팅하는 대신 버전 관리되는 인프라에 인코딩합니다. `harness-loom` 은 어시스턴트 스택의 프로덕션 품질 가능성을 이미 확인했고, 그것이 세션이 아닌 시스템처럼 동작하길 원하는 팀을 위한 것입니다.
 
-`harness-loom` 은 어시스턴트 스택의 프로덕션 품질 가능성을 이미 확인한 팀, 그리고 그것이 세션이 아닌 시스템처럼 동작하길 원하는 팀을 위한 것입니다.
+## 빠른 시작
 
-이 리포는 팩토리입니다. 다음 구성 요소로 이뤄진 타깃 측 런타임 하네스를 시드하거나 수렴시킵니다:
+팩토리를 Claude Code 에 설치합니다. Codex 와 Gemini 도 비슷한 흐름 — [팩토리 설치](#팩토리-설치) 참고.
 
-- planner와 orchestrator
-- `.harness/` 아래의 공유 컨트롤 플레인
-- 모든 subagent를 위한 공통 런타임 컨텍스트
-- 시간이 지나며 추가하는 프로젝트 고유 producer-reviewer pair
+```text
+/plugin marketplace add KingGyuSuh/harness-loom
+/plugin install harness-loom@harness-loom-marketplace
+```
 
-타깃의 `.harness/` 는 두 형제 네임스페이스로 나뉩니다 — `loom/` 은 setup과 pair authoring이 소유하는 정본 staging tree이고, `cycle/` 은 orchestrator가 소유하는 런타임 상태입니다. 사이클 외부 산출물(타깃 루트의 `*.md`, `docs/`, 릴리스 노트, 감사 출력 등) 은 사이클 종료의 **Finalizer** 턴이 `.harness/` 안이 아닌 타깃 루트에 직접 작성합니다. 플랫폼 트리(`.claude/`, `.codex/`, `.gemini/`) 는 필요할 때 `.harness/loom/` 에서 파생됩니다.
+타깃 리포지토리 안에서:
+
+```bash
+# 1. .harness/ 시드 또는 마이그레이션
+/harness-auto-setup --setup
+
+# 2. 어시스턴트 런타임 트리 파생
+node .harness/loom/sync.ts --provider claude
+#   (멀티 플랫폼은 codex,gemini 추가)
+```
+
+여기까지가 foundation 셋업입니다. 프로젝트 고유 producer-reviewer pair 추가와 첫 사이클 실행은 [타깃 프로젝트 시작하기](#타깃-프로젝트-시작하기) 를 보세요.
+
+## 동작 방식
+
+```mermaid
+flowchart LR
+    subgraph Factory["harness-loom (factory plugin)"]
+        AS["/harness-auto-setup"]
+        PD["/harness-pair-dev"]
+        GI["/harness-goal-interview"]
+        OR["/harness-orchestrate"]
+    end
+    subgraph Target["target repository"]
+        L[".harness/loom/<br/>canonical staging"]
+        C[".harness/cycle/<br/>runtime state"]
+        P[".claude/ / .codex/ / .gemini/<br/>derived provider trees"]
+    end
+    AS -->|seed / migrate| L
+    PD -->|author pairs| L
+    GI -->|writes goal file| Target
+    L -->|node sync.ts --provider| P
+    OR -->|reads| L
+    OR -->|writes| C
+```
+
+팩토리 플러그인은 어시스턴트 CLI 안에 살고, 타깃 리포지토리 안에서 슬래시 커맨드를 실행하면 `.harness/loom/` (setup 과 pair authoring 이 소유하는 정본 staging) 과 `.harness/cycle/` (orchestrator 가 소유하는 런타임 상태) 에 작성합니다. 플랫폼 트리 (`.claude/`, `.codex/`, `.gemini/`) 는 정본 staging이 변할 때마다 `sync.ts` 로 다시 파생하는 산출물 — 직접 편집하지 마세요. 사이클 종료의 **Finalizer** 턴은 타깃 루트 산출물 (문서, 감사, 릴리스 노트) 을 `.harness/` 안이 아닌 타깃에 직접 작성합니다.
 
 ## 왜 이 모양인가
 
@@ -41,35 +77,24 @@
 
 ## 무엇이 설치되는가
 
-타깃 리포지토리 안에서 `/harness-init` 을 실행하면, `harness-loom` 은 일회성 프롬프트 템플릿이 아닌 런타임 하네스를 설치합니다. `/harness-auto-setup` 을 실행하면 동일한 foundation 설치자를 더 안전한 setup/migration 워크플로우 안에서 사용합니다.
-
 ```text
 target project
 └── .harness/
     ├── loom/                    # canonical staging (setup + pair authoring own; sync reads)
-    │   ├── skills/
-    │   │   ├── harness-orchestrate/
-    │   │   ├── harness-planning/
-    │   │   └── harness-context/
-    │   ├── agents/
-    │   │   ├── harness-planner.md
-    │   │   └── harness-finalizer.md     # generic cycle-end skeleton; project fills in
+    │   ├── skills/{harness-orchestrate, harness-planning, harness-context}/
+    │   ├── agents/{harness-planner, harness-finalizer}.md
     │   ├── hook.sh
     │   └── sync.ts
     ├── cycle/                   # runtime state (orchestrator owns)
-    │   ├── state.md
-    │   ├── events.md
-    │   ├── epics/
-    │   └── finalizer/
-    │       └── tasks/
-    ├── _snapshots/              # auto-setup provenance, when convergence runs
-    │   └── auto-setup/
-    └── _archive/                # past cycles, created on goal-different reset
+    │   ├── state.md, events.md
+    │   └── epics/, finalizer/tasks/
+    ├── _snapshots/              # auto-setup provenance (when migration runs)
+    └── _archive/                # past cycles (created on goal-different reset)
 ```
 
-프로젝트 문서(타깃 루트의 `*.md` 파일, `docs/`) 는 `.harness/` 안이 아닌 **타깃 안에 직접** 작성합니다. 그런 다음 `node .harness/loom/sync.ts --provider claude` (멀티 플랫폼이 필요하면 `codex,gemini` 추가) 로 최소 하나의 플랫폼 트리를 파생하고, `/harness-pair-dev` 로 도메인 특화 pair를 추가합니다. 설치 scaffold는 request 스냅샷을 만들지 않습니다. `/harness-orchestrate <file.md>` 로 직접 진입하면, orchestrator가 전체 request 본문을 `.harness/cycle/user-request-snapshot.md` 에 보존하고 `state.md` 의 `Goal` 헤더는 압축된 요약으로 유지합니다. orchestrator는 4-state DFA — `Planner | Pair | Finalizer | Halt` — 로 동작합니다. 모든 EPIC이 terminal에 도달하고 planner가 더 이어갈 게 없을 때, **Finalizer 상태** 로 진입해 singleton `harness-finalizer` 에이전트를 dispatch한 뒤 정지합니다. 시드된 `harness-finalizer` 는 generic skeleton입니다; 프로젝트가 필요로 하는 구체적 사이클 종료 작업 — 문서 갱신(`CLAUDE.md`, `AGENTS.md`, `docs/`), `events.md` 와 user request 스냅샷에 대비한 request coverage 점검, 릴리스 준비, 감사 출력 등 — 으로 본문을 교체합니다. finalizer를 직접 호출하지 않고, orchestrator가 정지 직전의 사이클 종료 턴으로 dispatch합니다.
+프로젝트 문서 (타깃 루트의 `*.md`, `docs/`) 는 `.harness/` 안이 아닌 **타깃 안에 직접** 작성합니다. orchestrator는 4-state DFA — `Planner | Pair | Finalizer | Halt` — 로 동작합니다. 모든 EPIC이 terminal에 도달하고 planner가 더 이어갈 게 없을 때, singleton `harness-finalizer` 에이전트를 dispatch한 뒤 정지합니다; 본문은 프로젝트가 필요로 하는 사이클 종료 작업 (문서 갱신, request coverage 점검, 릴리스 준비, 감사 출력) 으로 교체합니다.
 
-`/harness-auto-setup` 은 첫 설치, 프로젝트 형태에 맞춘 구성, 또는 기존 하네스 마이그레이션의 더 안전한 진입점입니다. `--setup` (기본값) 은 fresh target을 부트스트랩하고, 기존 `.harness/` 가 있으면 foundation은 건드리지 않은 채 프로젝트 분석과 필요한 사용자 명확화 후 추가적인 pair/finalizer authoring을 이어갑니다. `--migration` 은 기존 foundation을 다루는 모드입니다: `.harness/loom/` 과 `.harness/cycle/` 의 라이브 상태를 스냅샷하고, foundation을 갱신하고, pair가 아닌 사용자 정의 loom 항목을 복원하고, 호환되는 pair/finalizer 가이드를 보존하면서 contract 소유의 런타임 표면만 다시 작성합니다. `.claude/`, `.codex/`, `.gemini/` 는 직접 쓰지 않습니다.
+`/harness-auto-setup` 은 더 안전한 진입점입니다: `--setup` (기본) 은 fresh target을 부트스트랩하거나 기존 하네스를 추가적(additive) 으로 확장합니다; `--migration` 은 라이브 `.harness/loom/` 과 `.harness/cycle/` 을 스냅샷하고, foundation을 갱신하고, 호환되는 사용자 정의 pair/finalizer 가이드를 보존합니다.
 
 ## 요구사항
 
@@ -126,13 +151,13 @@ claude --plugin-dir ./plugins/harness-loom
 
 ```bash
 # 로컬 체크아웃
-codex marketplace add /path/to/harness-loom
+codex plugin marketplace add /path/to/harness-loom
 
 # 공개 git 리포
-codex marketplace add KingGyuSuh/harness-loom
+codex plugin marketplace add KingGyuSuh/harness-loom
 
 # 필요하면 태그 핀
-codex marketplace add KingGyuSuh/harness-loom@<tag>
+codex plugin marketplace add KingGyuSuh/harness-loom@<tag>
 ```
 
 그런 다음 Codex TUI 안에서 `/plugins` 를 실행하고 `Harness Loom` 마켓플레이스 항목을 열어 플러그인을 설치합니다.
@@ -286,37 +311,6 @@ EOF
 | `/harness-pair-dev --improve <slug> "<purpose>" [--before <slug> \| --after <slug>]` | positional `<purpose>` 를 주된 개정 축으로 등록된 pair를 개선하고, 그 다음 rubric 정비와 현재 리포 증거를 접목합니다. 한 pair가 두 개의 다른 일이 됐다면 명시적인 add/improve/remove 단계를 사용하세요. 이후 sync를 다시 실행해 플랫폼 트리를 갱신하세요. |
 | `/harness-pair-dev --remove <slug>` | pair를 안전하게 등록 해제하고 pair 소유의 `.harness/loom/` 파일만 삭제합니다. 변형 전 foundation/singleton 타깃과 `## Next` 또는 라이브 EPIC roster/current 필드의 active-cycle 참조를 거부하고, `.harness/cycle/` task/review 히스토리는 보존하며, 어떤 provider 트리도 건드리지 않습니다; 이후 sync를 다시 실행하세요. |
 | `/harness-orchestrate <file.md>` | 타깃 측 런타임 진입점. request 파일을 읽고 그 전체 본문을 `.harness/cycle/user-request-snapshot.md` 에 보존한 뒤, 응답마다 정확히 한 명의 producer를 dispatch하는 4-state DFA(`Planner | Pair | Finalizer | Halt`) 를 실행합니다; hook 재진입은 `state.md` 와 기존 스냅샷 경로에서 사이클을 진행합니다. 모든 EPIC이 terminal에 도달하고 planner 연속성이 분명할 때, orchestrator가 Finalizer 상태로 진입해 singleton `harness-finalizer` 를 dispatch한 뒤 정지합니다. |
-
-## 팩토리와 런타임
-
-```text
-factory (this repo)                            target project
------------------------------------------      ----------------------------------
-plugins/harness-loom/skills/harness-init/          installs ->      .harness/loom/{skills,agents,hook.sh,sync.ts}
-plugins/harness-loom/skills/harness-init/                            .harness/cycle/{state.md,events.md,epics/,finalizer/tasks/}
-plugins/harness-loom/skills/harness-init/references/runtime/ seeds -> .harness/loom/skills/<slug>/SKILL.md
-plugins/harness-loom/skills/harness-auto-setup/    migrates ->      .harness/_snapshots/auto-setup/<timestamp>/
-                                                                    .harness/loom/ + .harness/cycle/ refreshed in --migration
-plugins/harness-loom/skills/harness-pair-dev/      authors  ->      .harness/loom/agents/<slug>-producer.md
-                                                                    .harness/loom/agents/<reviewer>.md
-                                                                    .harness/loom/skills/<slug>/SKILL.md
-                                                     |
-                                                     +-- node .harness/loom/sync.ts --provider <list>
-                                                         -> .claude/{agents,skills,settings.json}
-                                                         -> .codex/
-                                                         -> .gemini/
-                                                     |
-                                                     +-- Finalizer state auto-fires at cycle halt
-                                                         -> .harness/loom/agents/harness-finalizer.md
-                                                         -> whatever that finalizer body writes
-```
-
-이 분리는 의도적입니다:
-
-- 팩토리는 작고 사용자가 직접 호출 가능한 상태로 유지
-- 타깃 런타임은 프로젝트 고유의 작업 상태를 보유
-- 사이클 종료 hook은 singleton이며 프로젝트가 커스터마이즈 가능
-- 플랫폼 고유 트리는 파생 산출물이지 authoring surface가 아님
 
 ## 멀티 플랫폼
 
