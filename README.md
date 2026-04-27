@@ -44,18 +44,18 @@ That gets the foundation in place. To add project-specific producer-reviewer pai
 
 ```mermaid
 flowchart LR
-    subgraph Factory["harness-loom (factory plugin)"]
+    subgraph Factory [harness-loom factory plugin]
         AS["/harness-auto-setup"]
         PD["/harness-pair-dev"]
         GI["/harness-goal-interview"]
         OR["/harness-orchestrate"]
     end
-    subgraph Target["target repository"]
+    subgraph Target [target repository]
         L[".harness/loom/<br/>canonical staging"]
         C[".harness/cycle/<br/>runtime state"]
-        P[".claude/ / .codex/ / .gemini/<br/>derived provider trees"]
+        P[".claude / .codex / .gemini<br/>derived provider trees"]
     end
-    AS -->|seed / migrate| L
+    AS -->|seed or migrate| L
     PD -->|author pairs| L
     GI -->|writes goal file| Target
     L -->|node sync.ts --provider| P
